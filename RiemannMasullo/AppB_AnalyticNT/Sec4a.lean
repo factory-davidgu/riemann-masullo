@@ -950,7 +950,11 @@ theorem hasSum_localDiracComb_apply (χ : U[F]) (v : HeightOneSpectrum (𝓞 F))
 to the local comb in the weak topology. -/
 theorem hasSum_localDiracComb (χ : U[F]) (v : HeightOneSpectrum (𝓞 F))
     (hχ : χ₀(χ).IsUnramifiedAt v) (σ : ℝ) :
-    HasSum (combTerm (χ₀(χ).localValue v) q(v) σ) (localDiracComb χ v hχ σ) := by sorry
+    HasSum (combTerm (χ₀(χ).localValue v) q(v) σ) (localDiracComb χ v hχ σ) := by
+  apply PointwiseConvergenceCLM.tendsto_iff_forall_tendsto.mpr
+  intro f
+  simpa only [HasSum, sum_apply, smul_apply, TemperedDistribution.delta_apply, smul_eq_mul]
+    using hasSum_localDiracComb_apply χ v hχ σ f
 
 local notation "toStrongSchwartzDual" =>
   (WeakDual.toStrongDual ∘ PointwiseConvergenceCLM.equivWeakDual ℂ 𝓢(ℝ, ℂ))
