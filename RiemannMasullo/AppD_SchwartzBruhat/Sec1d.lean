@@ -404,7 +404,8 @@ theorem GeneratesLpSeminorms.isVonNBounded_iff
     [MeasurableSpace X] {μ : Measure X} {p : ℝ≥0∞} {u : ι → E → X → ℂ}
     (h : GeneratesLpSeminorms μ p u) (B : Set E) :
     IsVonNBounded ℂ B ↔
-      ∀ i, ∃ C : ℝ≥0, ∀ f ∈ B, eLpNorm (u i f) p μ ≤ (C : ℝ≥0∞) := by sorry
+      ∀ i, ∃ C : ℝ≥0, ∀ f ∈ B, eLpNorm (u i f) p μ ≤ (C : ℝ≥0∞) := by
+  exact h.2.isVonNBounded_iff B
 
 /-- Paper: (D.1.10.3), p. 784. Apply the nth derivative, Fourier transform,
 and then apply the mth derivative. -/
