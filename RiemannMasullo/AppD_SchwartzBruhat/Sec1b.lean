@@ -2152,11 +2152,159 @@ for every finite order p. -/
 def IsBruhatSmooth (f : G → ℂ) : Prop :=
   ∀ p : ℕ, IsBruhatContDiff p f
 
+/-- A good subgroup of the real line is trivial, since a compact subgroup cannot
+contain all integer multiples of a nonzero real number. -/
+private theorem isBruhatGoodSubgroup_real_eq_bot {k : Subgroup (Multiplicative ℝ)}
+    (hk : IsBruhatGoodSubgroup k) : k = ⊥ := by
+  have hc : IsCompact (k : Set (Multiplicative ℝ)) := by
+    rw [← lcaDualAnnihilator_annihilator k hk.1]
+    exact isCompact_lcaDualAnnihilator _ hk.2.1
+  obtain ⟨C, hC⟩ := isBounded_iff_forall_norm_le.mp (hc.image
+    (show Continuous (Multiplicative.toAdd : Multiplicative ℝ → ℝ) from continuous_id)).isBounded
+  refine le_antisymm (fun x hx ↦ Subgroup.mem_bot.mpr ?_) bot_le
+  by_contra h
+  have hxpos : 0 < |x.toAdd| := abs_pos.mpr (show x.toAdd ≠ 0 from h)
+  obtain ⟨n, hn⟩ := exists_nat_gt (C / |x.toAdd|)
+  have hbound := hC (x ^ n).toAdd ⟨x ^ n, k.pow_mem hx n, rfl⟩
+  change ‖n • x.toAdd‖ ≤ C at hbound
+  rw [nsmul_eq_mul, Real.norm_eq_abs, abs_mul,
+    abs_of_nonneg (Nat.cast_nonneg n)] at hbound
+  exact (not_lt_of_ge hbound) ((div_lt_iff₀ hxpos).mp hn)
+
+/-- The interval from `-1` to `1` is a compact generating neighborhood of the real line. -/
+private theorem isCompactlyGeneratedGroup_real :
+    IsCompactlyGeneratedGroup (Multiplicative ℝ) := by
+  let U : Set (Multiplicative ℝ) := Multiplicative.toAdd ⁻¹' Icc (-1 : ℝ) 1
+  refine ⟨U, ?_, ?_, eq_top_iff.mpr fun x _ ↦ ?_⟩
+  · change Icc (-1 : ℝ) 1 ∈ 𝓝 (0 : ℝ)
+    exact Icc_mem_nhds (by norm_num : (-1 : ℝ) < 0) (by norm_num : (0 : ℝ) < 1)
+  · change IsCompact (Icc (-1 : ℝ) 1)
+    exact isCompact_Icc
+  · obtain ⟨n, hn⟩ := exists_nat_gt (|x.toAdd|)
+    have hnpos : (0 : ℝ) < n := (abs_nonneg _).trans_lt hn
+    let y := Multiplicative.ofAdd (x.toAdd / n)
+    have hy : y ∈ U := by
+      change x.toAdd / n ∈ Icc (-1 : ℝ) 1
+      apply abs_le.mp
+      rw [abs_div, abs_of_pos hnpos, div_le_iff₀ hnpos, one_mul]
+      exact hn.le
+    have he : (y ^ n : Multiplicative ℝ) = x := by
+      apply Multiplicative.toAdd.injective
+      change n • (x.toAdd / n) = x.toAdd
+      rw [nsmul_eq_mul]
+      change (n : ℝ) * (x.toAdd / n) = x.toAdd
+      rw [mul_comm, div_mul_cancel₀ _ hnpos.ne']
+    exact he ▸ (Subgroup.closure U).pow_mem (Subgroup.subset_closure hy) n
+
+/-- For a real structural pair with trivial good subgroup, the quotient identifies
+with the real line by sending the class of each element to that element. -/
+private theorem exists_bruhatQuotientEquiv_real (a : BruhatStructuralPair (Multiplicative ℝ))
+    (hk : OrderDual.ofDual a.val.2 = ⊥) :
+    ∃ q : a.quotient ≃ₜ* Multiplicative ℝ, ∀ x : a.val.1, q (QuotientGroup.mk x) = x.val := by
+  letI : PreconnectedSpace (Multiplicative ℝ) := inferInstanceAs (PreconnectedSpace ℝ)
+  have hTop : (a.val.1 : Set (Multiplicative ℝ)) = univ :=
+    (show IsClopen (a.val.1 : Set (Multiplicative ℝ)) from
+      ⟨a.val.1.isClosed_of_isOpen a.property.1, a.property.1⟩).eq_univ ⟨1, a.val.1.one_mem⟩
+  let incl (x : Multiplicative ℝ) : a.val.1 := ⟨x, by
+    change x ∈ (a.val.1 : Set (Multiplicative ℝ))
+    rw [hTop]
+    exact mem_univ x⟩
+  let N := (OrderDual.ofDual a.val.2).comap a.val.1.subtype
+  have hN : N = a.val.1.subtype.ker := by
+    change (OrderDual.ofDual a.val.2).comap a.val.1.subtype = _
+    rw [hk]
+    rfl
+  let e : a.quotient ≃* Multiplicative ℝ :=
+    (QuotientGroup.quotientMulEquivOfEq hN).trans
+      (QuotientGroup.quotientKerEquivOfRightInverse a.val.1.subtype incl fun _ ↦ rfl)
+  have he (x : a.val.1) : e (QuotientGroup.mk x) = x.val := rfl
+  refine ⟨{ e with
+    continuous_toFun := (QuotientGroup.isQuotientMap_mk N).continuous_iff.mpr
+      (show Continuous (fun x : a.val.1 ↦ e (QuotientGroup.mk x)) by
+        simp only [he]
+        exact continuous_subtype_val)
+    continuous_invFun := ?_ }, he⟩
+  have hinv (x : Multiplicative ℝ) :
+      e.symm x = QuotientGroup.mk (incl x) :=
+    e.symm_apply_eq.mpr (he (incl x)).symm
+  change Continuous (fun x ↦ e.symm x)
+  simp only [hinv]
+  exact QuotientGroup.continuous_mk.comp (continuous_id.subtype_mk _)
+
 /-- Paper: Definition D.1.5.3(1), p. 762. On the real additive group, finite
 orders of Bruhat differentiability agree with ordinary differentiability.
 Deviation: Sanity check on the real group. -/
 theorem isBruhatContDiff_real_iff (p : ℕ) (f : Multiplicative ℝ → ℂ) :
-    IsBruhatContDiff p f ↔ ContDiff ℝ (p : ℕ∞) (f ∘ Multiplicative.ofAdd) := by sorry
+    IsBruhatContDiff p f ↔ ContDiff ℝ (p : ℕ∞) (f ∘ Multiplicative.ofAdd) := by
+  let line := (EuclideanSpace.equiv (Fin 1) ℝ).trans
+    (ContinuousLinearEquiv.funUnique (Fin 1) ℝ ℝ)
+  let chart : EuclideanSpace ℝ (Fin 1) ≃ₜ Multiplicative ℝ := line.toHomeomorph
+  have hGood : IsBruhatGoodSubgroup (⊥ : Subgroup (Multiplicative ℝ)) :=
+    isBruhatGoodSubgroup_bot_iff.mpr ⟨1, ⟨chart.chartedSpace⟩⟩
+  constructor
+  · rintro ⟨k, hk, -, h⟩
+    have hkbot := isBruhatGoodSubgroup_real_eq_bot hk
+    subst k
+    let topEquiv : (⊤ : Subgroup (Multiplicative ℝ)) ≃ₜ* Multiplicative ℝ :=
+      { Subgroup.topEquiv with
+        continuous_toFun := continuous_subtype_val
+        continuous_invFun := continuous_id.subtype_mk _ }
+    let a : BruhatStructuralPair (Multiplicative ℝ) :=
+      ⟨(⊤, OrderDual.toDual ⊥), by simp,
+        isCompactlyGeneratedGroup_of_continuousMulEquiv topEquiv.symm isCompactlyGeneratedGroup_real,
+        hGood, bot_le⟩
+    obtain ⟨q, hq⟩ := exists_bruhatQuotientEquiv_real a rfl
+    -- Test differentiability on the presentation with only one real coordinate.
+    let : Unique ((Fin 0 → AddCircle (1 : ℝ)) × (Fin 0 → ℤ) × PUnit) :=
+      uniqueOfSubsingleton 0
+    let m : Multiplicative (ElementaryLieGroup 1 0 0 PUnit) ≃ₜ* Multiplicative ℝ :=
+      ContinuousMulEquiv.mk' ((Homeomorph.prodUnique _ _).trans line.toHomeomorph)
+        (fun x y ↦ line.map_add x.toAdd.1 y.toAdd.1)
+    let e : ElementaryLCAPresentation a.quotient := ⟨1, 0, 0, PUnit, q.trans m.symm⟩
+    obtain ⟨g, hg, hs⟩ := h a rfl
+    have hg' (y : a.quotient) : g y = f (q y) := by
+      obtain ⟨x, rfl⟩ := QuotientGroup.mk_surjective y
+      exact (hg x).trans (congrArg f (hq x).symm)
+    have hcomp := (hs e 0 0).comp
+      (line.symm.contDiff.prodMk (contDiff_const (c := (0 : EuclideanSpace ℝ (Fin 0)))))
+    convert hcomp using 1
+    funext t
+    simp only [Function.comp_apply, hg']
+    change f (Multiplicative.ofAdd t) =
+      f (q (q.symm (m (Multiplicative.ofAdd (elementaryCover (line.symm t, 0) 0 0)))))
+    rw [q.apply_symm_apply]
+    exact congrArg (f ∘ Multiplicative.ofAdd) (line.apply_symm_apply t).symm
+  · intro hf
+    refine ⟨⊥, hGood, ?_, fun a ha ↦ ?_⟩
+    · intro h x
+      rw [Subgroup.mem_bot.mp h.property, one_mul]
+    obtain ⟨q, hq⟩ := exists_bruhatQuotientEquiv_real a ha
+    refine ⟨f ∘ q, fun x ↦ congrArg f (hq x), ?_⟩
+    intro e z b
+    -- In the cover of each discrete fiber, the map to the real quotient is affine.
+    let ψ := AddMonoidHom.toMultiplicative.symm
+      ((e.equiv.symm.trans q).toMulEquiv.toMonoidHom)
+    let cover : EuclideanSpace ℝ (Fin e.realDim) × EuclideanSpace ℝ (Fin e.torusDim) →+
+        ElementaryLieGroup e.realDim e.torusDim e.latticeRank e.finiteFactor :=
+      { toFun := fun u ↦ elementaryCover u 0 0
+        map_zero' := by simp [elementaryCover, Pi.zero_def]
+        map_add' := fun u v ↦ by simp [elementaryCover, Pi.add_def] }
+    have hcover : Continuous cover :=
+      continuous_fst.prodMk ((continuous_pi fun i ↦
+        (AddCircle.continuous_mk' (1 : ℝ)).comp
+          ((continuous_apply i).comp (EuclideanSpace.equiv _ ℝ).continuous |>.comp
+            continuous_snd)).prodMk
+        continuous_const)
+    have hψ : Continuous ψ := (e.equiv.symm.trans q).continuous
+    have hlin := ((ψ.comp cover).toRealLinearMap (hψ.comp hcover)).contDiff
+      (n := (p : ℕ∞))
+    have hshift (u : EuclideanSpace ℝ (Fin e.realDim) × EuclideanSpace ℝ (Fin e.torusDim)) :
+        elementaryCover u z b = cover u + (0, 0, z, b) := by
+      simp [cover, elementaryCover]
+    simp_rw [hshift]
+    exact hf.comp (show ContDiff ℝ (p : ℕ∞) (fun u ↦ ψ (cover u + (0, 0, z, b))) by
+      simp only [map_add]
+      exact hlin.add contDiff_const)
 
 /-- Paper: Definition D.1.5.3(1), p. 762. On the real additive group, Bruhat
 smoothness agrees with ordinary smoothness.
@@ -2166,8 +2314,61 @@ theorem isBruhatSmooth_real_iff (f : Multiplicative ℝ → ℂ) :
 
 variable [hTop : IsTopologicalGroup G] [hT2 : T2Space G] [hLC : LocallyCompactSpace G]
 
+/-- An LCA group has a good subgroup. The annihilator of an open compactly generated
+subgroup of the dual is compact. Evaluation gives a continuous injection from the quotient
+into a group with no small subgroups, so the quotient is locally Euclidean. -/
+private theorem exists_bruhatGoodSubgroup : ∃ k : Subgroup G, IsBruhatGoodSubgroup k := by
+  obtain ⟨H, _⟩ := (openCompactlyGeneratedSubgroups_colimit (G := PontryaginDual G)).2.1 1
+  let k := lcaDualAnnihilator H.val
+  have hk := isCompact_lcaDualAnnihilator H.val H.property.1
+  refine ⟨k, hk.isClosed, isOpen_lcaAnnihilator k hk, ?_⟩
+  let : T1Space (G ⧸ k) := QuotientGroup.t1Space_iff.mpr hk.isClosed
+  let r := PontryaginDual.map (⟨H.val.subtype, continuous_subtype_val⟩ : H.val →ₜ* PontryaginDual G)
+  let γ := r.comp (pontryaginDual_eval (G := G))
+  have hker : γ.toMonoidHom.ker = k := by
+    ext x
+    rw [MonoidHom.mem_ker, mem_lcaDualAnnihilator_iff]
+    exact ⟨fun h χ ↦ congrArg (fun ψ : PontryaginDual H.val ↦ ψ χ) h,
+      fun h ↦ PontryaginDual.ext h⟩
+  let f : G ⧸ k →ₜ* PontryaginDual H.val :=
+    ⟨QuotientGroup.lift k γ.toMonoidHom hker.ge,
+      (QuotientGroup.isQuotientMap_mk k).continuous_iff.mpr γ.continuous⟩
+  have hf : Function.Injective f :=
+    (QuotientGroup.injective_lift_iff k γ.toMonoidHom hker.ge).mpr hker.symm
+  obtain ⟨C, _, hC, hGen⟩ := H.property.2
+  have hArc : Circle.centeredArc (Real.pi / 2) ∈ 𝓝 (1 : Circle) := by
+    simpa using Circle.hasBasis_centeredArc_div_two_pow.mem_of_mem (i := 0) trivial
+  let W : Set (PontryaginDual H.val) := {ψ | MapsTo ψ C (Circle.centeredArc (Real.pi / 2))}
+  have hW : W ∈ 𝓝 (1 : PontryaginDual H.val) :=
+    pontryaginDual_nhds_one_hasBasis.mem_of_mem (i := (C, _)) ⟨hC, hArc⟩
+  have hW' : W ∈ 𝓝 (f 1) := by rwa [map_one]
+  have hPre : f ⁻¹' W ∈ 𝓝 (1 : G ⧸ k) :=
+    f.continuous.continuousAt.preimage_mem_nhds hW'
+  have hPow (x : G ⧸ k) (hx : ∀ n : ℕ, x ^ n ∈ f ⁻¹' W) : x = 1 := by
+    have hCker : C ⊆ (f x).toMonoidHom.ker := by
+      intro χ hχ
+      apply MonoidHom.mem_ker.mpr
+      apply Circle.eq_one_of_forall_pow_mem_centeredArc_pi_div_two
+      intro n _
+      have hn : f (x ^ n) χ ∈ Circle.centeredArc (Real.pi / 2) := hx n hχ
+      rw [map_pow] at hn
+      exact (ContinuousMonoidHom.pow_apply (f x) n χ) ▸ hn
+    have hTop : ⊤ ≤ (f x).toMonoidHom.ker := hGen ▸ (Subgroup.closure_le _).mpr hCker
+    apply hf
+    rw [map_one]
+    exact PontryaginDual.ext fun χ ↦ MonoidHom.mem_ker.mp (hTop (Subgroup.mem_top χ))
+  obtain ⟨_, φ, _, hφ⟩ := exists_torusHom_of_noSmallCyclicSubgroups hPre hPow
+  obtain ⟨e, _⟩ := lcaQuotientDual_equiv_annihilator k hk.isClosed
+  exact isCompactlyGeneratedGroup_of_continuousMulEquiv e
+    (isCompactlyGeneratedGroup_dual_of_isLocallyEuclidean
+      (isLocallyEuclidean_of_torusHom_discreteKernel φ hφ))
+
 /-- Paper: Definition D.1.5.3(1), p. 762. The zero function is of class Cᵖ. -/
-theorem isBruhatContDiff_zero (p : ℕ) : IsBruhatContDiff p (0 : G → ℂ) := by sorry
+theorem isBruhatContDiff_zero (p : ℕ) : IsBruhatContDiff p (0 : G → ℂ) := by
+  obtain ⟨k, hk⟩ := exists_bruhatGoodSubgroup (G := G)
+  refine ⟨k, hk, fun _ _ ↦ rfl, fun a _ ↦ ⟨(0 : a.quotient → ℂ), fun _ ↦ rfl, ?_⟩⟩
+  intro e z b
+  exact contDiff_const
 
 /-- Paper: Definition D.1.5.3(1), p. 762. The sum of two functions of class Cᵖ
 is of class Cᵖ. -/
