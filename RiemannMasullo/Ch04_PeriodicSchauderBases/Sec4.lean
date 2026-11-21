@@ -279,7 +279,17 @@ include hm in
 /-- Paper: Definition 4.4.2.1, p. 192. For every lift and every integer
 translate the compact average is integrable. -/
 theorem modulatedIsotypicPeriodization_integrable (f : E) (n : ℤ) (x : G) :
-    Integrable (fun k : K ↦ (χ k.val : ℂ) * f.val (γ ^ n * (k.val * x))) μ₁ := by sorry
+    Integrable (fun k : K ↦ (χ k.val : ℂ) * f.val (γ ^ n * (k.val * x))) μ₁ := by
+  have hmem : f.val ∈ schwartzBruhatSubmodule G := by
+    have h := (Submodule.mem_iInf _).mp f.property ⟨0, mem_univ 0⟩
+    rwa [Submodule.mem_comap, modulationWeight_zero] at h
+  have hf : Continuous f.val := schwartzBruhat_continuous (G := G) ⟨f.val, hmem⟩
+  have : CompactSpace K :=
+    isCompact_iff_compactSpace.mp (hm.1.isCompact_preimage (isCompact_singleton (x := 1)))
+  have hcont : Continuous (fun k : K ↦ (χ k.val : ℂ) * f.val (γ ^ n * (k.val * x))) :=
+    (continuous_subtype_val.comp ((map_continuous χ).comp continuous_subtype_val)).mul
+      (hf.comp (continuous_const.mul (continuous_subtype_val.mul continuous_const)))
+  exact hcont.integrable_of_hasCompactSupport (HasCompactSupport.of_compactSpace _)
 
 /-- Paper: Definition 4.4.2.1, p. 192. At every lift the orbit series of the
 compact averages converges to the homogeneous periodization. -/
@@ -373,7 +383,39 @@ theorem modulatedCyclicSubgroup_closed (hγ : 1 < (m γ).val) :
 
 /-- Paper: Lemma 4.4.2.5, p. 193. The quotient by the cyclic subgroup is compact. -/
 theorem modulatedCyclicQuotient_compact (hm : IsModulation m) (hγ : 1 < (m γ).val) :
-    CompactSpace Q := by sorry
+    CompactSpace Q := by
+  have hpos (x : G) : 0 < ((m x).val : ℝ) := NNReal.coe_pos.mpr (Units.zero_lt (m x))
+  have hproper : IsProperMap (fun x : G ↦ Real.log ((m x).val : ℝ)) := by
+    let e : ℝ≥0ˣ ≃ₜ ℝ :=
+      (Nonneg.unitsHomeomorphPos ℝ).trans Real.expOrderIso.symm.toHomeomorph
+    have he : (e ∘ m) = fun x : G ↦ Real.log ((m x).val : ℝ) :=
+      funext fun g ↦ (Real.log_of_pos (hpos g)).symm
+    exact he ▸ e.isProperMap.comp hm.1
+  have hL : 0 < L := Real.log_pos (by exact_mod_cast hγ)
+  have hC := hproper.isCompact_preimage (isCompact_Icc (a := (0 : ℝ)) (b := L))
+  have himg :
+      ((↑) : G → Q) '' ((fun x : G ↦ Real.log ((m x).val : ℝ)) ⁻¹' Icc 0 L) = univ := by
+    refine eq_univ_of_forall fun z ↦ ?_
+    obtain ⟨x, rfl⟩ := QuotientGroup.mk_surjective z
+    have h1 := (le_div_iff₀ hL).mp (Int.floor_le (Real.log ((m x).val : ℝ) / L))
+    have h2 := (div_lt_iff₀ hL).mp (Int.lt_floor_add_one (Real.log ((m x).val : ℝ) / L))
+    generalize ⌊Real.log ((m x).val : ℝ) / L⌋ = n at h1 h2
+    rw [add_one_mul] at h2
+    refine ⟨γ ^ (-n) * x, ?_, ?_⟩
+    · have hlog : Real.log ((m (γ ^ (-n) * x)).val : ℝ) =
+          Real.log ((m x).val : ℝ) - n * L := by
+        rw [map_mul m, map_zpow m, Units.val_mul, Units.val_zpow_eq_zpow_val, NNReal.coe_mul,
+          NNReal.coe_zpow, Real.log_mul (zpow_ne_zero _ (hpos γ).ne') (hpos x).ne',
+          Real.log_zpow]
+        push_cast
+        ring
+      change Real.log ((m (γ ^ (-n) * x)).val : ℝ) ∈ Icc 0 L
+      rw [hlog]
+      constructor <;> linarith
+    · rw [QuotientGroup.mk_mul,
+        (QuotientGroup.eq_one_iff _).mpr (Subgroup.zpow_mem_zpowers γ _), one_mul]
+  rw [← isCompact_univ_iff, ← himg]
+  exact hC.image QuotientGroup.continuous_mk
 
 include ht₀ hγ in
 /-- Paper: Lemma 4.4.2.5, p. 193. The exponential formula is a continuous
@@ -443,7 +485,10 @@ include hm hγ in
 /-- Paper: Lemma 4.4.2.5, p. 193. The annihilator carries the discrete topology
 induced by the dual of the original group. -/
 theorem modulatedCyclicAnnihilator_discrete :
-    DiscreteTopology (lcaAnnihilator Γ) := by sorry
+    DiscreteTopology (lcaAnnihilator Γ) := by
+  have := modulatedCyclicQuotient_compact m γ hm hγ
+  obtain ⟨d, -⟩ := lcaQuotientDual_equiv_annihilator Γ (modulatedCyclicSubgroup_closed m γ hγ)
+  exact d.toHomeomorph.discreteTopology_iff.mp inferInstance
 
 end CyclicCharacters
 
