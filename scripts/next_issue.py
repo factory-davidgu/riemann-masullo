@@ -42,7 +42,7 @@ def in_review():
         return set()
     found = set()
     for ref in out.stdout.split():
-        m = re.fullmatch(r"(?:prover|digester)/(\d+)", ref)
+        m = re.fullmatch(r"(?:prover|digester|sweeper)/(\d+)", ref)
         if m:
             found.add(int(m.group(1)))
     return found
@@ -64,7 +64,7 @@ def depths():
 
 
 def launchers_running():
-    """How many `scripts/agent.sh prover|digester ...` launchers are running on this machine
+    """How many `scripts/agent.sh prover|digester|sweeper ...` launchers are running on this machine
     (the one asking for an issue is among them). A launcher's own subshells, which have the
     same command line, are not counted."""
     found = {}
@@ -76,7 +76,7 @@ def launchers_running():
             except (OSError, ValueError, IndexError):
                 continue
             if len(args) > 2 and args[0].endswith(b"bash") and args[1].endswith(b"scripts/agent.sh") \
-                    and args[2] in (b"prover", b"digester"):
+                    and args[2] in (b"prover", b"digester", b"sweeper"):
                 found[int(entry.name)] = parent
     return sum(1 for parent in found.values() if parent not in found)
 

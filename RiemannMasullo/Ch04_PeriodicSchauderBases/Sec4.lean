@@ -167,7 +167,26 @@ the inverse generator to dilation of the positive-real profile by its module,
 weighted by the character of the inverse generator's compact component. -/
 theorem modulatedMellin_average_translate (f : D) (t : ℝ≥0ˣ) :
     (∫ k : K, (χ k.val : ℂ) * f.val (γ * (k.val * τ t)) ∂μ₁) =
-      (χ (τ (m γ) * γ⁻¹) : ℂ) * avg⟦f, m γ * t⟧ := by sorry
+      (χ (τ (m γ) * γ⁻¹) : ℂ) * avg⟦f, m γ * t⟧ := by
+  have hk₀ : γ * (τ (m γ))⁻¹ ∈ K := by
+    change m (γ * (τ (m γ))⁻¹) = 1
+    rw [map_mul, map_inv m (τ (m γ)), hτ (m γ), mul_inv_cancel]
+  obtain ⟨k₀, hk₀v⟩ : ∃ k₀ : K, k₀.val = γ * (τ (m γ))⁻¹ := ⟨⟨_, hk₀⟩, rfl⟩
+  have hpt (k : K) : (χ k.val : ℂ) * f.val (γ * (k.val * τ t)) =
+      (χ (τ (m γ) * γ⁻¹) : ℂ) *
+        ((χ (k₀ * k).val : ℂ) * f.val ((k₀ * k).val * τ (m γ * t))) := by
+    have h1 : γ * (k.val * τ t) = (k₀ * k).val * τ (m γ * t) := by
+      rw [Subgroup.coe_mul, hk₀v, map_mul τ, mul_assoc γ, mul_assoc γ, mul_comm _ k.val,
+        mul_assoc k.val, inv_mul_cancel_left]
+    have h2 : k.val = τ (m γ) * γ⁻¹ * (k₀ * k).val := by
+      rw [Subgroup.coe_mul, hk₀v, mul_assoc γ, mul_assoc, inv_mul_cancel_left,
+        mul_inv_cancel_left]
+    rw [h1, ← mul_assoc, ← Circle.coe_mul, ← map_mul, ← h2]
+  simp_rw [hpt]
+  rw [integral_const_mul]
+  congr 1
+  exact integral_mul_left_eq_self
+    (fun k : K ↦ (χ k.val : ℂ) * f.val (k.val * τ (m γ * t))) k₀
 
 include hτ in
 /-- Paper: Discussion 4.4.1.1(3), p. 191. The cyclic translation action descends

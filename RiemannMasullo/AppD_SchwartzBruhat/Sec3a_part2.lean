@@ -751,6 +751,91 @@ theorem modulatedExponentialDecay_tensor_equiv :
     (modulatedExponentialDecay_completedTensor_mul_isInducing m I hm hInt hne τ hτ)
 
 
+open scoped SchwartzMap in
+/-- Paper: Remark D.3.2.2, p. 801. Translation in logarithmic coordinates acts on each
+weighted Schwartz profile by Schwartz translation followed by multiplication by a constant. -/
+private theorem exists_positiveRealExponentialDecay_translate (c : ℝ) (hI : I.Nonempty) :
+    ∃ L : P →L[ℂ] P, ∀ f x, (L f).val x = f.val (x - c) := by
+  let shift : ℝ → ℝ := fun x ↦ x - c
+  have hIsometry : Isometry shift := by
+    apply Isometry.of_dist_eq
+    intro x y
+    simp only [shift, dist_eq_norm, sub_sub_sub_cancel_right]
+  let S : 𝓢(ℝ, ℂ) →L[ℂ] 𝓢(ℝ, ℂ) := SchwartzMap.compCLMOfAntilipschitz ℂ
+    (Function.HasTemperateGrowth.id'.sub (Function.HasTemperateGrowth.const c))
+    hIsometry.antilipschitzWith
+  let weighted (a : I) : 𝓢(ℝ, ℂ) →L[ℂ] 𝓢(ℝ, ℂ) :=
+    (Real.exp ((a : ℝ) * c) : ℂ) • S
+  have hw (a : I) (f : P) (x : ℝ) :
+      weighted a (logExponentialDecayTwist I a f) x =
+        (Real.exp ((a : ℝ) * x) : ℂ) * f.val (x - c) := by
+    have hexp : (a : ℝ) * c + (a : ℝ) * (x - c) = (a : ℝ) * x := by ring
+    change (Real.exp ((a : ℝ) * c) : ℂ) * logExponentialDecayTwist I a f (x - c) = _
+    rw [logExponentialDecayTwist_apply I a f (x - c), ← mul_assoc, ← Complex.ofReal_mul,
+      ← Real.exp_add, hexp]
+  let shiftLinear : P →ₗ[ℂ] (ℝ → ℂ) :=
+    (LinearMap.pi fun x ↦ LinearMap.proj (x - c)).comp (logExponentialDecaySubmodule I).subtype
+  let L : P →ₗ[ℂ] P := shiftLinear.codRestrict (logExponentialDecaySubmodule I) (by
+    intro f
+    refine (Submodule.mem_iInf _).mpr fun a ↦ Submodule.mem_comap.mpr ?_
+    exact ⟨weighted a (logExponentialDecayTwist I a f), funext (hw a f)⟩)
+  refine ⟨⟨L, ?_⟩, fun _ _ ↦ rfl⟩
+  have hInd := (positiveRealExponentialDecay_isEmbedding I hI).isInducing
+  apply hInd.continuous_iff.mpr
+  apply continuous_pi
+  intro a
+  refine ((weighted a).continuous.comp ((continuous_apply a).comp hInd.continuous)).congr
+    fun f ↦ ?_
+  exact SchwartzMap.ext fun x ↦ (hw a f x).trans (logExponentialDecayTwist_apply I a (L f) x).symm
+
+set_option linter.unusedSectionVars false in
+/-- Point evaluation on the decay space is continuous because on each quotient
+stage it is a constant multiple of evaluation of any one weighted profile. -/
+private theorem continuous_modulatedExponentialDecay_eval (hI : I.Nonempty) (g : G) :
+    Continuous (fun f : E ↦ f.val g) := by
+  let b : I := ⟨hI.choose, hI.choose_spec⟩
+  let ev : E →ₗ[ℂ] ℂ := (LinearMap.proj g).comp (modulatedExponentialDecaySubmodule m I).subtype
+  let p : Seminorm ℂ E := (normSeminorm ℂ ℂ).comp ev
+  have hp : Continuous p := by
+    apply (withGeneratingSeminorms_spec _ _).continuous_seminorm
+      (⟨p, ?_⟩ : {q : Seminorm ℂ (modulatedExponentialDecaySubmodule m I) //
+        ∀ k : GoodCompact, Continuous (q ∘ modulatedExponentialDecayStageInclusion m I k)})
+    intro k
+    let x : G ⧸ k.val := g
+    let n := quotientModulation m k.val k.property.1
+    let w : ℂ := ((((n x).val : ℝ) ^ (b : ℝ) : ℝ) : ℂ)
+    have hw : w ≠ 0 := Complex.ofReal_ne_zero.mpr
+      (Real.rpow_pos_of_pos (NNReal.coe_pos.mpr (Units.zero_lt (n x))) b).ne'
+    let twists (f : ModulatedExponentialDecayStage m I k) (b : I) :
+        SchwartzBruhat (G ⧸ k.val) := modulatedExponentialDecayTwist n I b f
+    have hInd : IsInducing twists := modulatedExponentialDecayStage_twists_isInducing m I k
+    have hproj : Continuous (fun F : I → SchwartzBruhat (G ⧸ k.val) ↦ F b) := continuous_apply b
+    have hx : Continuous (fun f : ModulatedExponentialDecayStage m I k ↦ twists f b x) :=
+      (continuous_schwartzBruhat_eval x).comp (hproj.comp hInd.continuous)
+    change Continuous (fun f : ModulatedExponentialDecayStage m I k ↦ ‖f.val x‖)
+    refine (continuous_const (y := w⁻¹).mul hx).norm.congr ?_
+    intro f
+    change ‖w⁻¹ * (w * f.val x)‖ = ‖f.val x‖
+    rw [← mul_assoc, inv_mul_cancel₀ hw, one_mul]
+  exact (norm_withSeminorms ℂ ℂ).continuous_of_continuous_comp ev (fun _ ↦ hp)
+
+include hτ in
+/-- Equivariance on the image of the algebraic tensor product, where it follows
+from the split-coordinate formula on pure tensors and linearity. -/
+private theorem modulatedExponentialDecay_tensor_equivariant_coe
+    [CompactSpace K] [SecondCountableTopology K]
+    (e : Completion T ≃L[ℂ] E)
+    (he : ∀ (h : SchwartzBruhat K) (f : P) (u : K) (t : ℝ≥0ˣ),
+      (e (Completion.coe' (α := T) (h ⊗ₜ[ℂ] f))).val ((u : G) * τ t) =
+        h u * f.val (Real.log (t.val : ℝ)))
+    (u : K) (t : ℝ≥0ˣ) (L : P →L[ℂ] P)
+    (hL : ∀ f x, (L f).val x = f.val (x - Real.log (t.val : ℝ)))
+    (x : T) (g : G) :
+    (e (Completion.map (inductiveTensorMap
+      ((schwartzBruhatTranslationAction (G := K)) u).toLinearMap L.toLinearMap : T → T)
+      (Completion.coe' x))).val g = (e (Completion.coe' x)).val (((u : G) * τ t)⁻¹ * g) := by sorry
+
+set_option linter.unusedSectionVars false in
 include hm hInt hne hτ in
 /-- Paper: Theorem D.3.3.7(1), p. 806. The tensor isomorphism intertwines
 translation in each factor with translation on G. -/
@@ -766,7 +851,24 @@ theorem modulatedExponentialDecay_tensor_equivariant
       ∀ z : Completion T, ∀ g : G,
         (e (Completion.map (inductiveTensorMap
           ((schwartzBruhatTranslationAction (G := K)) u).toLinearMap L.toLinearMap : T → T) z)
-          ).val g = (e z).val (((u : G) * τ t)⁻¹ * g) := by sorry
+          ).val g = (e z).val (((u : G) * τ t)⁻¹ * g) := by
+  intro u t
+  let : CompactSpace K := isCompact_iff_compactSpace.mp hm.isCompact_ker
+  let : SecondCountableTopology K := TopologicalSpace.Subtype.secondCountableTopology (K : Set G)
+  have hTranslate := exists_positiveRealExponentialDecay_translate I (Real.log (t.val : ℝ)) hne
+  let L : P →L[ℂ] P := hTranslate.choose
+  have hL := hTranslate.choose_spec
+  refine ⟨L, hL, fun z g ↦ ?_⟩
+  let g' := ((u : G) * τ t)⁻¹ * g
+  induction z using Completion.induction_on with
+  | hp =>
+    apply isClosed_eq (X := ℂ)
+    · exact (continuous_modulatedExponentialDecay_eval m I hne g).comp
+        (e.continuous.comp Completion.continuous_map)
+    · exact (continuous_modulatedExponentialDecay_eval m I hne g').comp e.continuous
+  | ih x =>
+    apply modulatedExponentialDecay_tensor_equivariant_coe m I τ hτ e he u t L
+    exact hL
 
 include hSC hm hInt hne hτ in
 /-- Paper: Theorem D.3.3.7(1), p. 806. The tensor isomorphism on a quotient

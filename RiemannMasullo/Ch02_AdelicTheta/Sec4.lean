@@ -1130,7 +1130,42 @@ times a positive norm power holds below S-idelic norm one. -/
 theorem sLocalAdelicTheta_norm_pow_bounded_threshold_one
     (B : Set ℬₛ) (hB : IsVonNBounded ℂ B) :
     ∃ C : ℝ, 0 < C ∧ ∀ f ∈ B, ∀ g : Iₛ, normℝ g < 1 →
-      ‖(normℝ g ^ ε) • sLocalAdelicTheta F S f g‖ ≤ C := by sorry
+      ‖(normℝ g ^ ε) • sLocalAdelicTheta F S f g‖ ≤ C := by
+  refine (sLocalAdelicTheta_log_growth_bounded F S B hB).elim fun C₁ h₁ ↦ ?_
+  refine h₁.elim fun C₂ h₂ ↦ ?_
+  have hC₁ := h₂.1
+  have hC₂ := h₂.2.1
+  have htheta := h₂.2.2
+  let n := Fintype.card (InfinitePlace F) + S.card - 1
+  let D : ℝ := (n.factorial : ℝ) / ε ^ n
+  have hD : 0 < D := by dsimp [D]; positivity
+  have hweighted (t : ℝ) (ht : 0 < t) (ht₁ : t ≤ 1) : t ^ ε * |Real.log t| ^ n ≤ D := by
+    have hexp : Real.exp (|Real.log t| * ε) = (t ^ ε)⁻¹ := by
+      rw [abs_of_nonpos (Real.log_nonpos ht.le ht₁), neg_mul, Real.exp_neg,
+        ← Real.rpow_def_of_pos ht]
+    -- Use the nth term of the exponential series to bound the weighted log power.
+    have hlog := Real.pow_div_factorial_le_exp (|Real.log t| * ε)
+      (mul_nonneg (abs_nonneg (Real.log t)) hε.le) n
+    rw [hexp, mul_pow] at hlog
+    have hfact : 0 < (n.factorial : ℝ) := by positivity
+    have hmul := (le_inv_mul_iff₀ (Real.rpow_pos_of_pos ht ε)).mp ((div_le_iff₀ hfact).mp hlog)
+    exact (le_div_iff₀ (pow_pos hε n)).mpr
+      ((mul_assoc (t ^ ε) (|Real.log t| ^ n) (ε ^ n)).le.trans hmul)
+  have hbound (t : ℝ) (ht : 0 < t) (ht₁ : t ≤ 1) (z : ℂ)
+      (hz : ‖z‖ ≤ C₁ * |Real.log t| ^ n + C₂) : ‖(t ^ ε) • z‖ ≤ C₁ * D + C₂ := by
+    have htε := (Real.rpow_pos_of_pos ht ε).le
+    rw [norm_smul, Real.norm_of_nonneg htε]
+    calc
+      _ ≤ t ^ ε * (C₁ * |Real.log t| ^ n + C₂) := mul_le_mul_of_nonneg_left hz htε
+      _ = C₁ * (t ^ ε * |Real.log t| ^ n) + C₂ * t ^ ε := by
+        rw [mul_add, mul_left_comm (t ^ ε) C₁, mul_comm (t ^ ε) C₂]
+      _ ≤ C₁ * D + C₂ :=
+        add_le_add (mul_le_mul_of_nonneg_left (hweighted t ht ht₁) hC₁.le)
+          (mul_le_of_le_one_right hC₂.le (Real.rpow_le_one ht.le ht₁ hε.le))
+  refine ⟨C₁ * D + C₂, add_pos (mul_pos hC₁ hD) hC₂, ?_⟩
+  intro f hf g hg
+  have hgpos : 0 < normℝ g := NNReal.coe_pos.mpr (Units.zero_lt (sIdeleNorm F S g))
+  exact hbound (normℝ g) hgpos hg.le (sLocalAdelicTheta F S f g) (htheta f hf g hg)
 
 /-- Paper: Proposition 2.4.3.1(3), p. 113. The corresponding uniform
 homogeneous bound holds below S-idelic norm one.

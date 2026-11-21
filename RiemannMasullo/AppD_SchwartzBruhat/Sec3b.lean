@@ -447,7 +447,12 @@ elementary stage realizes to a smooth compactly supported function on the group.
 theorem bruhatCompactSupportStage_realization_mem (a : BruhatStructuralPair G)
     (e : ElementaryLCAPresentation a.quotient) (C : Compacts G)
     (f : bruhatCompactSupportStage a e C) :
-    schwartzBruhatStageRealization a e f.val ∈ bruhatCompactSupportSubmodule G := by sorry
+    schwartzBruhatStageRealization a e f.val ∈ bruhatCompactSupportSubmodule G := by
+  refine ⟨?_, C.isCompact.of_isClosed_subset isClosed_closure
+    ((mem_bruhatCompactSupportStage_iff a e C f.val).1 f.property)⟩
+  rw [mem_bruhatSmoothSubmodule_iff]
+  exact schwartzBruhat_isBruhatSmooth
+    (show SchwartzBruhat G from schwartzBruhatStageInclusion a e f.val)
 
 /-- Paper: Lemma D.3.6.1, p. 819. The stage inclusion is the Schwartz
 realization by pullback and extension by zero, with values in the test space. -/

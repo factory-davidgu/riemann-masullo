@@ -187,7 +187,22 @@ theorem norm_hardySobolevTranslation_le (a b s : ℝ) (hab : a ≤ b) (hs : 0 �
 measurable function of the translating element.
 Deviation: This retains the measurable operator-norm case established on p. 422. -/
 theorem measurable_hardySobolevTranslation_norm (a b s : ℝ) (hab : a ≤ b) (hs : 0 ≤ s) :
-    Measurable (fun g ↦ ‖hardySobolevTranslation μ m a b s hab hs g‖) := by sorry
+    Measurable (fun g ↦ ‖hardySobolevTranslation μ m a b s hab hs g‖) := by
+  have hcont (u : W a b s) : Continuous (fun g ↦ hardySobolevTranslation μ m a b s hab hs g u) :=
+    (exists_hardySobolevTranslation μ m a b s hab hs).choose_spec.2.comp
+      (Continuous.prodMk_left u)
+  have hEq : (fun g ↦ ‖hardySobolevTranslation μ m a b s hab hs g‖) =
+      fun g ↦ ⨆ u : Metric.closedBall (0 : W a b s) 1,
+        ‖hardySobolevTranslation μ m a b s hab hs g u‖ := by
+    funext g
+    rw [← ContinuousLinearMap.sSup_unitClosedBall_eq_norm, sSup_image', iSup]
+  rw [hEq]
+  refine LowerSemicontinuous.measurable (lowerSemicontinuous_ciSup (fun g ↦ ?_) fun u ↦ ?_)
+  · refine ⟨‖hardySobolevTranslation μ m a b s hab hs g‖, ?_⟩
+    rintro _ ⟨u, rfl⟩
+    exact ((hardySobolevTranslation μ m a b s hab hs g).le_opNorm_of_le
+      (mem_closedBall_zero_iff.mp u.2)).trans_eq (mul_one _)
+  · exact ((hcont u).norm).lowerSemicontinuous
 
 end RegularizedAction
 

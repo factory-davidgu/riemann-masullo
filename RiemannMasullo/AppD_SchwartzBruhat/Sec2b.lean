@@ -801,6 +801,184 @@ theorem schwartzBruhatIsotype_extension_intertwines (hd : DenseRange i)
 
 end CoarserTopology
 
+section Transport
+
+variable {A B : Type*} [CommGroup A] [TopologicalSpace A]
+    [CommGroup B] [TopologicalSpace B]
+
+/-- A topological group isomorphism restricts to a subgroup and its image. -/
+private def continuousSubgroupMap (d : A ≃ₜ* B) (U : Subgroup A) :
+    U ≃ₜ* U.map d.toMulEquiv.toMonoidHom where
+  toMulEquiv := d.toMulEquiv.subgroupMap U
+  continuous_toFun := (d.continuous.comp continuous_subtype_val).subtype_mk _
+  continuous_invFun := (d.symm.continuous.comp continuous_subtype_val).subtype_mk _
+
+variable [IsTopologicalGroup A] [T2Space A] [LocallyCompactSpace A]
+    [IsTopologicalGroup B] [T2Space B] [LocallyCompactSpace B]
+
+/-- Transport of structural pairs preserves their open subgroups and good kernels. -/
+private def transportBruhatPair (d : A ≃ₜ* B) (a : BruhatStructuralPair A) :
+    BruhatStructuralPair B := by
+  let U := a.val.1
+  let N := OrderDual.ofDual a.val.2
+  let D := d.toMulEquiv.toMonoidHom
+  let φ := PontryaginDual.map (d.symm : B →ₜ* A)
+  let ψ := PontryaginDual.map (d : A →ₜ* B)
+  let δ : PontryaginDual A ≃ₜ* PontryaginDual B :=
+    { φ with
+      toFun := φ
+      invFun := ψ
+      left_inv := fun χ ↦ PontryaginDual.ext fun x ↦ by
+        change χ (d.symm (d x)) = χ x
+        rw [d.symm_apply_apply]
+      right_inv := fun χ ↦ PontryaginDual.ext fun x ↦ by
+        change χ (d (d.symm x)) = χ x
+        rw [d.apply_symm_apply]
+      continuous_invFun := ψ.continuous }
+  have hann : (lcaAnnihilator N).map δ.toMulEquiv.toMonoidHom = lcaAnnihilator (N.map D) := by
+    ext χ
+    rw [Subgroup.map_equiv_eq_comap_symm', Subgroup.mem_comap, mem_lcaAnnihilator_iff,
+      mem_lcaAnnihilator_iff]
+    constructor
+    · intro h x
+      obtain ⟨y, hy, hxy⟩ := x.property
+      calc
+        χ (x : B) = χ (D y) := (congrArg χ hxy).symm
+        _ = 1 := h ⟨y, hy⟩
+    · intro h x
+      exact h ⟨D x, Subgroup.mem_map_of_mem D x.property⟩
+  refine ⟨(U.map D, OrderDual.toDual (N.map D)), ?_, ?_, ⟨?_, ?_, ?_⟩, ?_⟩
+  · exact d.toHomeomorph.isOpenMap _ a.property.1
+  · exact isCompactlyGeneratedGroup_of_continuousMulEquiv (continuousSubgroupMap d U)
+      a.property.2.1
+  · exact d.toHomeomorph.isClosedMap _ a.property.2.2.1.1
+  · change IsOpen (lcaAnnihilator (N.map D) : Set (PontryaginDual B))
+    rw [← hann]
+    exact δ.toHomeomorph.isOpenMap _ a.property.2.2.1.2.1
+  · change IsCompactlyGeneratedGroup (lcaAnnihilator (N.map D))
+    rw [← hann]
+    exact isCompactlyGeneratedGroup_of_continuousMulEquiv
+      (continuousSubgroupMap δ (lcaAnnihilator N)) a.property.2.2.1.2.2
+  · exact Subgroup.map_mono a.property.2.2.2
+
+/-- Transport of pairs induces the corresponding isomorphism on their quotients. -/
+private def transportBruhatQuotient (d : A ≃ₜ* B) (a : BruhatStructuralPair A) :
+    a.quotient ≃ₜ* (transportBruhatPair d a).quotient := by
+  let b := transportBruhatPair d a
+  let dU : a.val.1 ≃ₜ* b.val.1 := continuousSubgroupMap d a.val.1
+  let N := (OrderDual.ofDual a.val.2).comap a.val.1.subtype
+  let M := (OrderDual.ofDual b.val.2).comap b.val.1.subtype
+  have hNM : N.map dU.toMulEquiv.toMonoidHom = M := by
+    ext y
+    rw [Subgroup.map_equiv_eq_comap_symm', Subgroup.mem_comap]
+    change d.symm (y : B) ∈ OrderDual.ofDual a.val.2 ↔
+      (y : B) ∈ (OrderDual.ofDual a.val.2).map d.toMulEquiv.toMonoidHom
+    exact Subgroup.mem_map_equiv.symm
+  let q := QuotientGroup.congr N M dU.toMulEquiv hNM
+  exact
+    { toMulEquiv := q
+      continuous_toFun := isQuotientMap_quotient_mk'.continuous_iff.mpr
+        (QuotientGroup.continuous_mk.comp dU.continuous)
+      continuous_invFun := isQuotientMap_quotient_mk'.continuous_iff.mpr
+        (QuotientGroup.continuous_mk.comp dU.symm.continuous) }
+
+/-- The transported presentation uses the same elementary coordinates. -/
+private abbrev transportBruhatPresentation (d : A ≃ₜ* B) (a : BruhatStructuralPair A)
+    (e : ElementaryLCAPresentation a.quotient) :
+    ElementaryLCAPresentation (transportBruhatPair d a).quotient :=
+  { e with equiv := (transportBruhatQuotient d a).symm.trans e.equiv }
+
+/-- Pushing a realized stage through a group isomorphism just changes its quotient
+presentation, leaving its elementary Schwartz space unchanged. -/
+private theorem transportBruhatStage (d : A ≃ₜ* B) (a : BruhatStructuralPair A)
+    (e : ElementaryLCAPresentation a.quotient) :
+    (LinearMap.funLeft ℂ ℂ d.symm).comp (schwartzBruhatStageRealization a e) =
+      schwartzBruhatStageRealization (transportBruhatPair d a) (transportBruhatPresentation d a e) := by
+  classical
+  let b := transportBruhatPair d a
+  let q := transportBruhatQuotient d a
+  let e' := transportBruhatPresentation d a e
+  refine LinearMap.ext fun s ↦ funext (d.surjective.forall.mpr ?_)
+  intro x
+  have hmem : d x ∈ b.val.1 ↔ x ∈ a.val.1 := by
+    change d x ∈ a.val.1.map d.toMulEquiv.toMonoidHom ↔ _
+    exact Subgroup.mem_map_iff_mem d.injective
+  change schwartzBruhatStageRealization a e s (d.symm (d x)) =
+    schwartzBruhatStageRealization b e' s (d x)
+  rw [d.symm_apply_apply, schwartzBruhatStageRealization_apply, schwartzBruhatStageRealization_apply]
+  by_cases hx : x ∈ a.val.1
+  · rw [dite_eq_left hx, dite_eq_left (hmem.mpr hx)]
+    have hq : q (QuotientGroup.mk ⟨x, hx⟩) = QuotientGroup.mk ⟨d x, hmem.mpr hx⟩ := rfl
+    change s (Multiplicative.toAdd (e.equiv (QuotientGroup.mk ⟨x, hx⟩))) =
+      s (Multiplicative.toAdd (e.equiv (q.symm (QuotientGroup.mk ⟨d x, hmem.mpr hx⟩))))
+    rw [← hq, q.symm_apply_apply]
+  · rw [dite_eq_right hx, dite_eq_right (hx ∘ hmem.mp)]
+
+set_option maxHeartbeats 400000 in
+/-- Pushing a function through a group isomorphism is continuous for the
+Schwartz–Bruhat topology because it carries each stage into a stage. -/
+private theorem schwartzBruhat_transport (d : A ≃ₜ* B) :
+    ∃ T : SchwartzBruhat A →L[ℂ] SchwartzBruhat B,
+      ∀ (f : SchwartzBruhat A) (y : B), T f y = f (d.symm y) := by
+  let L := LinearMap.funLeft ℂ ℂ d.symm
+  have hL : (schwartzBruhatSubmodule A).map L ≤ schwartzBruhatSubmodule B := by
+    simp only [schwartzBruhatSubmodule, Submodule.map_iSup, iSup_le_iff]
+    intro a e
+    rintro w ⟨_, ⟨s, rfl⟩, rfl⟩
+    exact Submodule.mem_iSup_of_mem (transportBruhatPair d a)
+      (Submodule.mem_iSup_of_mem (transportBruhatPresentation d a e)
+        ⟨s, (LinearMap.congr_fun (transportBruhatStage d a e) s).symm⟩)
+  let T : SchwartzBruhat A →ₗ[ℂ] SchwartzBruhat B :=
+    (L.comp (schwartzBruhatSubmodule A).subtype).codRestrict (schwartzBruhatSubmodule B)
+      (fun f ↦ hL ⟨f, f.property, rfl⟩)
+  refine ⟨⟨T, ?_⟩, fun _ _ ↦ rfl⟩
+  let pB : {p : Seminorm ℂ (schwartzBruhatSubmodule B) //
+      ∀ (b : BruhatStructuralPair B) (e : ElementaryLCAPresentation b.quotient),
+        Continuous (p ∘ schwartzBruhatStageInclusion b e)} →
+          Seminorm ℂ (schwartzBruhatSubmodule B) := Subtype.val
+  refine (withGeneratingSeminorms_spec _ pB).continuous_of_continuous_comp T fun p ↦ ?_
+  let q := p.val.comp T
+  have hq (a : BruhatStructuralPair A) (e : ElementaryLCAPresentation a.quotient) :
+      Continuous (q ∘ schwartzBruhatStageInclusion a e) := by
+    let b := transportBruhatPair d a
+    let e' := transportBruhatPresentation d a e
+    have heq (s : SchwartzBruhatStage e) :
+        schwartzBruhatStageInclusion b e' s = T (schwartzBruhatStageInclusion a e s) :=
+      Subtype.ext (LinearMap.congr_fun (transportBruhatStage d a e) s).symm
+    exact (p.property b e').congr fun s ↦ congrArg (fun f ↦ p.val f) (heq s)
+  let i : {p : Seminorm ℂ (schwartzBruhatSubmodule A) //
+      ∀ (a : BruhatStructuralPair A) (e : ElementaryLCAPresentation a.quotient),
+        Continuous (p ∘ schwartzBruhatStageInclusion a e)} := ⟨q, hq⟩
+  exact (withGeneratingSeminorms_spec _ Subtype.val).continuous_seminorm i
+
+/-- A topological group isomorphism transports Schwartz–Bruhat functions by
+precomposition with its inverse. -/
+private theorem schwartzBruhat_congr (d : A ≃ₜ* B) :
+    ∃ T : SchwartzBruhat A ≃L[ℂ] SchwartzBruhat B,
+      ∀ (f : SchwartzBruhat A) (x : A), T f (d x) = f x := by
+  let T := (schwartzBruhat_transport d).choose
+  have hT := (schwartzBruhat_transport d).choose_spec
+  let U := (schwartzBruhat_transport d.symm).choose
+  have hU := (schwartzBruhat_transport d.symm).choose_spec
+  let E : SchwartzBruhat A ≃L[ℂ] SchwartzBruhat B :=
+    { toLinearMap := T.toLinearMap
+      invFun := U
+      left_inv := fun f ↦ Subtype.ext (funext fun x ↦ calc
+        U (T f) x = T f (d x) := hU (T f) x
+        _ = f (d.symm (d x)) := hT f (d x)
+        _ = f x := congrArg (fun a ↦ f a) (d.symm_apply_apply x))
+      right_inv := fun f ↦ Subtype.ext (funext fun y ↦ calc
+        T (U f) y = U f (d.symm y) := hT (U f) y
+        _ = f (d (d.symm y)) := hU f (d.symm y)
+        _ = f y := congrArg (fun b ↦ f b) (d.apply_symm_apply y))
+      continuous_toFun := T.continuous
+      continuous_invFun := U.continuous }
+  refine ⟨E, fun f x ↦ ?_⟩
+  change T f (d x) = f x
+  exact (hT f (d x)).trans (congrArg (fun a ↦ f a) (d.symm_apply_apply x))
+
+end Transport
+
 section SplitModule
 
 attribute [local instance] uniformContinuousConstSMul_of_continuousConstSMul
@@ -808,6 +986,80 @@ attribute [local instance] uniformContinuousConstSMul_of_continuousConstSMul
 local instance {X : Type*} [AddCommGroup X] [Module ℂ X] {ι : Type*}
     (p : SeminormFamily ℂ X ι) : ContinuousSMul ℂ (WithGeneratingSeminorms X p) :=
   (withGeneratingSeminorms_spec X p).continuousSMul
+
+section TensorTranslation
+
+variable {X Y G : Type*}
+    [CommGroup X] [TopologicalSpace X] [IsTopologicalGroup X] [T2Space X]
+    [LocallyCompactSpace X] [SecondCountableTopology X]
+    [CommGroup Y] [TopologicalSpace Y] [IsTopologicalGroup Y] [T2Space Y]
+    [LocallyCompactSpace Y] [SecondCountableTopology Y]
+    [CommGroup G] [TopologicalSpace G] [IsTopologicalGroup G] [T2Space G]
+    [LocallyCompactSpace G] [SecondCountableTopology G]
+
+local notation "HS" => InductiveTensor (SchwartzBruhat X) (SchwartzBruhat Y)
+local notation "S" => SchwartzBruhat G
+
+/-- Point evaluations separate Schwartz–Bruhat functions. -/
+private theorem schwartzBruhat_eval_t2 {A : Type*} [CommGroup A] [TopologicalSpace A] :
+    T2Space (SchwartzBruhat A) :=
+  T2Space.of_injective_continuous
+    (f := fun f : SchwartzBruhat A ↦ (f : A → ℂ)) (fun _ _ h ↦ Subtype.ext h)
+    (continuous_pi continuous_schwartzBruhat_eval)
+
+/-- If a tensor isomorphism multiplies evaluations in product coordinates, it
+intertwines left translation on the completion. -/
+private theorem schwartzBruhat_tensor_intertwines
+    (d : X × Y ≃ₜ* G) (e : Completion HS ≃L[ℂ] S)
+    (he : ∀ (f : SchwartzBruhat X) (h : SchwartzBruhat Y) (k : X) (t : Y),
+        e (Completion.coe' (α := HS) (f ⊗ₜ[ℂ] h)) (d (k, t)) = f k * h t)
+    (k : X) (t : Y) (z : Completion HS) :
+    e (Completion.map (inductiveTensorMap
+      ((schwartzBruhatTranslationAction (G := X)) k).toLinearMap
+      ((schwartzBruhatTranslationAction (G := Y)) t).toLinearMap : HS → HS) z) =
+    schwartzBruhatTranslate (d (k, t)) (e z) := by
+  let A := schwartzBruhatTranslationAction (G := X) k
+  let B := schwartzBruhatTranslationAction (G := Y) t
+  let C := schwartzBruhatTranslationAction (G := G) (d (k, t))
+  let M : HS →ₗ[ℂ] HS := inductiveTensorMap A.toLinearMap B.toLinearMap
+  let j : HS →L[ℂ] Completion HS := Completion.toComplL
+  let F : HS →ₗ[ℂ] S := e.toLinearEquiv.toLinearMap.comp j.toLinearMap
+  have hlin : F.comp M = C.toLinearMap.comp F := by
+    refine TensorProduct.ext' fun f h ↦ ?_
+    refine Subtype.ext (funext (d.surjective.forall.mpr ?_))
+    rintro ⟨a, b⟩
+    have hshift : (d (k, t))⁻¹ * d (a, b) = d (k⁻¹ * a, t⁻¹ * b) :=
+      ((map_mul d (k, t)⁻¹ (a, b)).trans
+        (congrArg (· * d (a, b)) (map_inv d (k, t)))).symm
+    have htensor : M (f ⊗ₜ[ℂ] h) = A f ⊗ₜ[ℂ] B h :=
+      TensorProduct.map_tmul A.toLinearMap B.toLinearMap f h
+    calc
+      e (j (M (f ⊗ₜ[ℂ] h))) (d (a, b)) =
+          e (j (A f ⊗ₜ[ℂ] B h)) (d (a, b)) :=
+        congrArg (fun w : HS ↦ e (j w) (d (a, b))) htensor
+      _ = A f a * B h b := he (A f) (B h) a b
+      _ = f (k⁻¹ * a) * h (t⁻¹ * b) :=
+        congrArg₂ (· * ·) (schwartzBruhatTranslationAction_apply k a f)
+          (schwartzBruhatTranslationAction_apply t b h)
+      _ = e (j (f ⊗ₜ[ℂ] h)) (d (k⁻¹ * a, t⁻¹ * b)) := (he f h _ _).symm
+      _ = e (j (f ⊗ₜ[ℂ] h)) ((d (k, t))⁻¹ * d (a, b)) :=
+        congrArg (fun x : G ↦ e (j (f ⊗ₜ[ℂ] h)) x) hshift.symm
+      _ = C (e (j (f ⊗ₜ[ℂ] h))) (d (a, b)) :=
+        (schwartzBruhatTranslationAction_apply _ _ _).symm
+  let : T2Space (SchwartzBruhat X) := schwartzBruhat_eval_t2
+  let : T2Space (SchwartzBruhat Y) := schwartzBruhat_eval_t2
+  let : T2Space S := schwartzBruhat_eval_t2
+  have hMcont : Continuous M := inductiveTensorMap_continuous A B
+  have hM : UniformContinuous M := uniformContinuous_addMonoidHom_of_continuous hMcont
+  have hcomp : ∀ w : Completion HS, e (Completion.map M w) = C (e w) :=
+    Completion.ext' (e.continuous.comp Completion.continuous_map)
+      (C.continuous.comp e.continuous) fun w ↦
+        (congrArg (fun y : Completion HS ↦ e y) (Completion.map_coe hM w)).trans
+          (LinearMap.congr_fun hlin w)
+  refine (hcomp z).trans (Subtype.ext (funext fun x ↦ ?_))
+  exact schwartzBruhatTranslationAction_apply (d (k, t)) x (e z)
+
+end TensorTranslation
 
 variable {G : Type*} [CommGroup G] [TopologicalSpace G] [IsTopologicalGroup G]
   [T2Space G] [LocallyCompactSpace G] [SecondCountableTopology G]
@@ -840,7 +1092,28 @@ theorem schwartzBruhat_modulation_tensor (τ : Γ →ₜ* G)
         e (Completion.map (inductiveTensorMap
           ((schwartzBruhatTranslationAction (G := K)) k).toLinearMap
           ((schwartzBruhatTranslationAction (G := Γ)) t).toLinearMap : HS → HS) z) =
-        schwartzBruhatTranslate ((k : G) * τ t) (e z) := by sorry
+        schwartzBruhatTranslate ((k : G) * τ t) (e z) := by
+  let : CompactSpace K := isCompact_iff_compactSpace.mp hm.isCompact_ker
+  let : SecondCountableTopology K := TopologicalSpace.Subtype.secondCountableTopology (K : Set G)
+  let : SecondCountableTopology ℝ≥0ˣ :=
+    (Units.isEmbedding_val₀ (G₀ := ℝ≥0)).secondCountableTopology
+  let : SecondCountableTopology Γ := TopologicalSpace.Subtype.secondCountableTopology (Γ : Set ℝ≥0ˣ)
+  let : LocallyCompactSpace Γ := hm.isClosed_range.locallyCompactSpace
+  let d := (hm.exists_prod_equiv τ hτ).choose
+  have hd := (hm.exists_prod_equiv τ hτ).choose_spec
+  let P := (schwartzBruhat_kernel_equiv (G := K) (H := Γ)).choose
+  have hP := (schwartzBruhat_kernel_equiv (G := K) (H := Γ)).choose_spec
+  let T := (schwartzBruhat_congr d).choose
+  have hT := (schwartzBruhat_congr d).choose_spec
+  let e := P.trans T
+  have he (f : SchwartzBruhat K) (h : SΓ) (k : K) (t : Γ) :
+      e (Completion.coe' (α := HS) (f ⊗ₜ[ℂ] h)) (d (k, t)) = f k * h t :=
+    (hT _ (k, t)).trans (hP f h k t)
+  refine ⟨e, fun f h k t ↦ ?_, fun k t z ↦ ?_⟩
+  · exact (congrArg (fun x : G ↦ e (Completion.coe' (α := HS) (f ⊗ₜ[ℂ] h)) x)
+      (hd k t).symm).trans (he f h k t)
+  · exact (schwartzBruhat_tensor_intertwines d e he k t z).trans
+      (congrArg (fun g : G ↦ schwartzBruhatTranslate g (e z)) (hd k t))
 
 omit hm in
 /-- The constant function one is a Schwartz–Bruhat function on a compact group. -/

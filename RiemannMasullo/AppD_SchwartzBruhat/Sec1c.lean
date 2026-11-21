@@ -1465,7 +1465,27 @@ theorem bruhatDiffWord_character (w : List (LCATopologicalLie G))
     (χ : PontryaginDual G) (x : G) :
     ((bruhatDiffWord w).val ⟨_, pontryaginDual_mem_bruhatSmooth χ⟩).val x =
       (w.map (fun a ↦ bruhatDiffSymbol (bruhatDiffGenerator a) χ)).prod * (χ x : ℂ) :=
-  by sorry
+  by
+    let f : bruhatSmoothSubmodule (G := G) := ⟨_, pontryaginDual_mem_bruhatSmooth χ⟩
+    have hGenerator (a : LCATopologicalLie G) :
+        (bruhatDiffGenerator a).val f = bruhatDiffSymbol (bruhatDiffGenerator a) χ • f := by
+      apply Subtype.ext
+      funext y
+      change bruhatDirectionalDeriv a (fun z ↦ (χ z : ℂ)) y =
+        bruhatDirectionalDeriv a (fun z ↦ (χ z : ℂ)) 1 * (χ y : ℂ)
+      simp only [bruhatDirectionalDeriv, one_mul, map_mul, Circle.coe_mul, deriv_const_mul_field]
+      exact mul_comm _ _
+    change ((bruhatDiffWord w).val f).val x = _
+    induction w with
+    | nil => simp [bruhatDiffWord, f]
+    | cons a w ih =>
+      have hWord : bruhatDiffWord (a :: w) = bruhatDiffWord w * bruhatDiffGenerator a := by
+        simp [bruhatDiffWord, List.reverse_cons, List.prod_append]
+      rw [hWord]
+      change ((bruhatDiffWord w).val ((bruhatDiffGenerator a).val f)).val x = _
+      rw [hGenerator, map_smul]
+      change bruhatDiffSymbol (bruhatDiffGenerator a) χ * ((bruhatDiffWord w).val f).val x = _
+      rw [ih, List.map_cons, List.prod_cons, mul_assoc]
 
 /-- Paper: Lemma D.1.6.13, p. 769. The symbol of a word is the product
 of its first-order symbols. -/
@@ -1478,7 +1498,41 @@ compact subgroup of the dual. -/
 theorem bruhatDiffSymbol_compact_invariant (D : bruhatDiffAlgebra G)
     (K : Subgroup (PontryaginDual G)) (hK : IsCompact (K : Set (PontryaginDual G)))
     (χ : PontryaginDual G) (k : K) :
-    bruhatDiffSymbol D (χ * k.val) = bruhatDiffSymbol D χ := by sorry
+    bruhatDiffSymbol D (χ * k.val) = bruhatDiffSymbol D χ := by
+  let U := lcaDualAnnihilator K
+  have hU : IsOpen (U : Set G) := by
+    convert (isOpen_lcaAnnihilator K hK).preimage
+      (pontryaginDual_eval (G := G)).continuous using 1
+    ext x
+    exact (mem_lcaDualAnnihilator_iff K x).trans
+      (mem_lcaAnnihilator_iff K (pontryaginDual_eval x)).symm
+  -- Every operator in the generated algebra preserves agreement on the open annihilator.
+  have hD : ∀ (f g : bruhatSmoothSubmodule (G := G)), EqOn f.val g.val U →
+      EqOn (D.val f).val (D.val g).val U := by
+    refine Algebra.adjoin_induction (s := range (bruhatFirstOrder (G := G)))
+      (p := fun A _ ↦ ∀ (f g : bruhatSmoothSubmodule (G := G)), EqOn f.val g.val U →
+        EqOn (A f).val (A g).val U) ?_ ?_ ?_ ?_ D.property
+    · rintro _ ⟨a, rfl⟩ f g hfg x hx
+      rw [bruhatFirstOrder_apply, bruhatFirstOrder_apply, bruhatDirectionalDeriv]
+      have hOrbit : Continuous (fun t : ℝ ↦ x * a (Multiplicative.ofAdd t)) :=
+        continuous_const.mul a.continuous
+      have hAt : x * a (Multiplicative.ofAdd (0 : ℝ)) = x := by
+        change x * a 1 = x
+        rw [map_one, mul_one]
+      have hNear := hOrbit.tendsto' 0 x hAt (hU.mem_nhds hx)
+      exact EventuallyEq.deriv_eq (mem_of_superset hNear fun _ ht ↦ hfg ht)
+    · intro c f g hfg x hx
+      change (c • f).val x = (c • g).val x
+      simp only [Submodule.coe_smul, Pi.smul_apply, hfg hx]
+    · intro A B _ _ hA hB f g hfg x hx
+      simp only [LinearMap.add_apply, Submodule.coe_add, Pi.add_apply, hA f g hfg hx, hB f g hfg hx]
+    · intro A B _ _ hA hB f g hfg
+      exact hA (B f) (B g) (hB f g hfg)
+  refine hD ⟨_, pontryaginDual_mem_bruhatSmooth (χ * k.val)⟩
+    ⟨_, pontryaginDual_mem_bruhatSmooth χ⟩ (fun x hx ↦ ?_) U.one_mem
+  have hkx : k.val x = 1 := (mem_lcaDualAnnihilator_iff K x).mp hx k
+  change (↑(χ x * k.val x) : ℂ) = ↑(χ x)
+  rw [hkx, mul_one]
 
 /-- Paper: Lemma D.1.6.14, p. 769. Real first-order operators correspond
 bijectively and real-linearly to continuous real-valued homomorphisms on the dual.
