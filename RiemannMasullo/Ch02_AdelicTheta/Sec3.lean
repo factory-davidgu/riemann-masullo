@@ -3,6 +3,7 @@ module
 public import RiemannMasullo.Ch02_AdelicTheta.Sec2b
 public import RiemannMasullo.Ch03_IdelicZeta.Sec1
 
+import all RiemannMasullo.Ch02_AdelicTheta.Sec2b
 import all RiemannMasullo.AppD_SchwartzBruhat.Sec1b
 import all RiemannMasullo.Ch02_AdelicTheta.Sec2a
 import Mathlib.Algebra.Module.ZLattice.Summable
@@ -1341,11 +1342,64 @@ one-parameter subgroup gives a Schwartz–Bruhat function. -/
 theorem sAdeleDirectionalDeriv_mem (f : ℬₛ) :
     orbitDeriv f ∈ schwartzBruhatSubmodule (Multiplicative Aₛ) := by sorry
 
+/-- Inserting an S-idele and multiplying an adele integral outside S preserves integrality
+outside S, so evaluating the global extension reduces to evaluating on the S-coordinates. -/
+private theorem sAdeleSchwartzToGlobal_mul_sIdeleInsertion
+    (f : ℬₛ) (g : Iₛ) (y : integralAdelesOutside F S) :
+    sAdeleSchwartzToGlobal F S f (Multiplicative.ofAdd ((sIdeleInsertion F S g).val * y.val)) =
+        f (Multiplicative.ofAdd (g.val * adeleProjection F S y.val)) := by
+  classical
+  have hInsertion := sIdeleInsertion_apply F S g
+  have hy := y.property
+  simp only [integralAdelesOutside, Subring.mem_iInf] at hy
+  have hInt (v : HeightOneSpectrum (𝓞 F)) (hv : v ∉ S) :
+      ((sIdeleInsertion F S g).val * y.val).2 v ∈ v.adicCompletionIntegers F := by
+    change (sIdeleInsertion F S g).val.2 v * y.val.2 v ∈ v.adicCompletionIntegers F
+    rw [hInsertion.2.2 v hv, one_mul]
+    exact hy v hv
+  have hProj : adeleProjection F S (sIdeleInsertion F S g).val = g.val := by
+    apply Prod.ext
+    · exact hInsertion.1
+    · funext v
+      exact hInsertion.2.1 v
+  rw [sAdeleSchwartzToGlobal_apply F S f, ite_eq_left hInt, map_mul (adeleProjection F S), hProj]
+
+/-- Paper: Lemma 2.3.2.1, p. 105. The orbit of an S-adelic test function
+along the one-parameter subgroup is differentiable at zero in the logarithmic parameter. -/
+private theorem sAdeleOrbit_differentiableAt (f : ℬₛ) (x : Multiplicative Aₛ) :
+    DifferentiableAt ℝ (fun s : ℝ ↦ f (Multiplicative.ofAdd ((γ (expUnit s)).val * x.toAdd))) 0 := by
+  have hLift (x : Multiplicative Aₛ) :
+      ∃ y : integralAdelesOutside F S, Multiplicative.ofAdd (adeleProjection F S y.val) = x := by
+    obtain ⟨e, -, -, he⟩ := integralAdelesOutside_factors F S
+    refine ⟨e.symm (x.toAdd, 0), congrArg Multiplicative.ofAdd ?_⟩
+    exact (he _).1.symm.trans (congrArg Prod.fst (e.apply_symm_apply _))
+  obtain ⟨y, rfl⟩ := hLift x
+  let Γ : ℝ≥0ˣ →ₜ* IdeleGroup (𝓞 F) F :=
+    ⟨(sIdeleInsertion F S).comp γ.toMonoidHom,
+      (isClosedEmbedding_sIdeleInsertion F S).continuous.comp γ.continuous⟩
+  let u (s : ℝ) := sAdeleSchwartzToGlobal F S f
+    (Multiplicative.ofAdd ((sIdeleInsertion F S (γ (expUnit s))).val * y.val))
+  let v (s : ℝ) := f (Multiplicative.ofAdd ((γ (expUnit s)).val * adeleProjection F S y.val))
+  have hp (s : ℝ) : u s = v s :=
+    sAdeleSchwartzToGlobal_mul_sIdeleInsertion F S f (γ (expUnit s)) y
+  have hu : DifferentiableAt ℝ u 0 :=
+    adeleOrbit_differentiableAt Γ (sAdeleSchwartzToGlobal F S f) (Multiplicative.ofAdd y.val)
+  change DifferentiableAt ℝ v 0
+  exact (funext hp) ▸ hu
+
 /-- Paper: Lemma 2.3.2.1, p. 106. Taking the directional derivative
 is complex linear on the S-local test space. -/
 theorem sAdeleDirectionalDeriv_isLinear :
-    IsLinearMap ℂ (fun f : ℬₛ ↦ (⟨orbitDeriv f, sAdeleDirectionalDeriv_mem F S γ f⟩ : ℬₛ)) :=
-  by sorry
+    IsLinearMap ℂ (fun f : ℬₛ ↦ (⟨orbitDeriv f, sAdeleDirectionalDeriv_mem F S γ f⟩ : ℬₛ)) := by
+  constructor
+  · intro f g
+    apply Subtype.ext
+    funext x
+    exact deriv_add (sAdeleOrbit_differentiableAt F S γ f x) (sAdeleOrbit_differentiableAt F S γ g x)
+  · intro c f
+    apply Subtype.ext
+    funext x
+    exact deriv_fun_const_smul_field c _
 
 /-- Paper: Equation (2.3.2.1), p. 105. The directional derivative differentiates
 the test function along the given one-parameter subgroup at the identity.
