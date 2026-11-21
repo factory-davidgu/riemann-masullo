@@ -644,6 +644,38 @@ theorem scalarIntervalSobolev_dense (a b s : ℝ) (_hab : a ≤ b) (_hs : 0 ≤ 
     ∃ j : PositiveRealExponentialDecay J →L[ℂ] CompactIntervalSobolev volume id a b s,
       Injective j ∧ DenseRange j ∧ ∀ f, (j f : ℝ → ℂ) =ᵐ[volume] f.val := by sorry
 
+/-- The square of a Schwartz function is integrable against every real power of `1 + x ^ 2`. -/
+private theorem integrable_schwartz_sq_mul_rpow (g : SchwartzMap ℝ ℂ) (s : ℝ) :
+    Integrable (fun x ↦ ‖g x‖ ^ 2 * (1 + x ^ 2) ^ (s / 2)) volume := by
+  obtain ⟨n, hn⟩ := exists_nat_ge (s / 2)
+  have h1 : ∀ x : ℝ, (1 + x ^ 2) ^ (s / 2) ≤ (1 + ‖x‖) ^ (2 * n) := fun x ↦ by
+    have hx : 1 + x ^ 2 ≤ (1 + ‖x‖) ^ 2 := by
+      rw [Real.norm_eq_abs]
+      nlinarith [abs_nonneg x, sq_abs x]
+    calc (1 + x ^ 2) ^ (s / 2) ≤ (1 + x ^ 2) ^ (n : ℝ) :=
+          Real.rpow_le_rpow_of_exponent_le (by nlinarith [sq_nonneg x]) hn
+      _ = (1 + x ^ 2) ^ n := Real.rpow_natCast _ _
+      _ ≤ ((1 + ‖x‖) ^ 2) ^ n := pow_le_pow_left₀ (by positivity) hx n
+      _ = (1 + ‖x‖) ^ (2 * n) := (pow_mul _ _ _).symm
+  obtain ⟨C, hC⟩ : ∃ C : ℝ, ∀ x : ℝ, (1 + ‖x‖) ^ (2 * n) * ‖g x‖ ≤ C := by
+    refine ⟨2 ^ (2 * n) * (Finset.Iic (2 * n, 0)).sup (fun m ↦ SchwartzMap.seminorm ℝ m.1 m.2) g,
+      fun x ↦ ?_⟩
+    have h := SchwartzMap.one_add_le_sup_seminorm_apply (𝕜 := ℝ) (m := (2 * n, 0))
+      le_rfl le_rfl g x
+    rw [norm_iteratedFDeriv_zero] at h
+    exact h
+  have hmeas : AEStronglyMeasurable (fun x ↦ ‖g x‖ ^ 2 * (1 + x ^ 2) ^ (s / 2)) volume :=
+    ((g.continuous.norm.pow 2).mul ((continuous_const.add (continuous_pow 2)).rpow_const
+      fun x ↦ Or.inl (by positivity : (0 : ℝ) < 1 + x ^ 2).ne')).aestronglyMeasurable
+  refine ((g.integrable (μ := volume)).norm.const_mul C).mono' hmeas
+    (Eventually.of_forall fun x ↦ ?_)
+  have h0 : 0 ≤ ‖g x‖ ^ 2 * (1 + x ^ 2) ^ (s / 2) := by positivity
+  rw [Real.norm_of_nonneg h0]
+  calc ‖g x‖ ^ 2 * (1 + x ^ 2) ^ (s / 2) ≤ ‖g x‖ ^ 2 * (1 + ‖x‖) ^ (2 * n) :=
+        mul_le_mul_of_nonneg_left (h1 x) (by positivity)
+    _ = (1 + ‖x‖) ^ (2 * n) * ‖g x‖ * ‖g x‖ := by ring
+    _ ≤ C * ‖g x‖ := mul_le_mul_of_nonneg_right (hC x) (norm_nonneg _)
+
 /-- Paper: Lemma 9.2.2.2(2), p. 412. For a compact base interval the supremum
 is attained at the two extreme abscissas and yields the stated weighted integral.
 Deviation: Use the logarithmic coordinate and record finiteness before taking the real norm. -/
@@ -651,7 +683,83 @@ theorem scalarIntervalSobolev_norm (a b s : ℝ) (_hab : a ≤ b) (_hs : 0 ≤ s
     (f : PositiveRealExponentialDecay univ) :
     Integrable (fun x ↦ ‖f.val x‖ ^ 2 * intervalSobolevDensity a b s x) volume ∧
       intervalSobolevENorm volume id (Icc a b) s f.val =
-        ENNReal.ofReal (Real.sqrt (∫ x, ‖f.val x‖ ^ 2 * intervalSobolevDensity a b s x)) := by sorry
+        ENNReal.ofReal (Real.sqrt (∫ x, ‖f.val x‖ ^ 2 * intervalSobolevDensity a b s x)) := by
+  have hDpos : ∀ x : ℝ, 0 < intervalSobolevDensity a b s x := fun x ↦
+    mul_pos (lt_max_of_lt_left (Real.exp_pos _)) (Real.rpow_pos_of_pos (by positivity) _)
+  -- Shrinking the endpoints inside `[a, b]` only lowers the density.
+  have hmono : ∀ a' ∈ Icc a b, ∀ b' ∈ Icc a b, ∀ x : ℝ,
+      intervalSobolevDensity a' b' s x ≤ intervalSobolevDensity a b s x := by
+    intro a' ha' b' hb' x
+    have key : ∀ c ∈ Icc a b,
+        Real.exp (2 * c * x) ≤ max (Real.exp (2 * a * x)) (Real.exp (2 * b * x)) := by
+      intro c hc
+      rcases le_total 0 x with hx | hx
+      · exact le_max_of_le_right (Real.exp_le_exp.2 (by nlinarith [hc.2]))
+      · exact le_max_of_le_left (Real.exp_le_exp.2 (by nlinarith [hc.1]))
+    exact mul_le_mul_of_nonneg_right (max_le (key a' ha') (key b' hb')) (by positivity)
+  have hval : ∀ c x : ℝ, logExponentialDecayTwist univ ⟨c, mem_univ c⟩ f x =
+      (Real.exp (c * x) : ℂ) * f.val x := fun c x ↦
+    logExponentialDecayTwist_apply univ ⟨c, mem_univ c⟩ f x
+  have hcont : Continuous f.val := by
+    have h : ⇑(logExponentialDecayTwist univ ⟨0, mem_univ 0⟩ f) = f.val := by
+      funext x
+      rw [hval, zero_mul, Real.exp_zero, Complex.ofReal_one, one_mul]
+    rw [← h]
+    exact SchwartzMap.continuous _
+  -- Each exponential twist of `f` is a Schwartz function.
+  have hg : ∀ c : ℝ, ∃ g : SchwartzMap ℝ ℂ, ∀ x : ℝ,
+      ‖g x‖ ^ 2 = Real.exp (2 * c * x) * ‖f.val x‖ ^ 2 := fun c ↦
+    ⟨logExponentialDecayTwist univ ⟨c, mem_univ c⟩ f, fun x ↦ by
+      rw [hval, norm_mul, Complex.norm_real, Real.norm_eq_abs, abs_of_pos (Real.exp_pos _),
+        mul_pow, ← Real.exp_nat_mul]
+      congr 2
+      push_cast
+      ring⟩
+  obtain ⟨ga, hga⟩ := hg a
+  obtain ⟨gb, hgb⟩ := hg b
+  have hDmeas : Measurable fun x : ℝ ↦ intervalSobolevDensity a b s x := by
+    unfold intervalSobolevDensity
+    fun_prop
+  have hint : Integrable (fun x ↦ ‖f.val x‖ ^ 2 * intervalSobolevDensity a b s x) volume := by
+    refine ((integrable_schwartz_sq_mul_rpow ga s).add
+      (integrable_schwartz_sq_mul_rpow gb s)).mono'
+      ((hcont.measurable.norm.pow_const 2).mul hDmeas).aestronglyMeasurable
+      (Eventually.of_forall fun x ↦ ?_)
+    rw [Real.norm_of_nonneg (mul_nonneg (sq_nonneg _) (hDpos x).le), Pi.add_apply, hga, hgb]
+    unfold intervalSobolevDensity
+    have hw : 0 ≤ (1 + x ^ 2) ^ (s / 2) := by positivity
+    have hmax : max (Real.exp (2 * a * x)) (Real.exp (2 * b * x)) ≤
+        Real.exp (2 * a * x) + Real.exp (2 * b * x) :=
+      max_le_add_of_nonneg (Real.exp_pos _).le (Real.exp_pos _).le
+    nlinarith [mul_le_mul_of_nonneg_left (mul_le_mul_of_nonneg_right hmax hw)
+      (sq_nonneg ‖f.val x‖)]
+  have hρ : AEMeasurable (fun x ↦ (intervalSobolevDensity a b s x).toNNReal) volume :=
+    hDmeas.real_toNNReal.aemeasurable
+  have hsmul : ∀ x, (intervalSobolevDensity a b s x).toNNReal • ‖f.val x‖ ^ 2 =
+      ‖f.val x‖ ^ 2 * intervalSobolevDensity a b s x := fun x ↦ by
+    rw [NNReal.smul_def, smul_eq_mul, Real.coe_toNNReal _ (hDpos _).le, mul_comm]
+  have hf2 : Integrable (fun x ↦ ‖f.val x‖ ^ 2)
+      (volume.withDensity fun x ↦ ((intervalSobolevDensity a b s x).toNNReal : ℝ≥0∞)) :=
+    (integrable_withDensity_iff_integrable_smul₀ hρ).2
+      (hint.congr (Eventually.of_forall fun x ↦ (hsmul x).symm))
+  have hmem : MemLp f.val 2
+      (volume.withDensity fun x ↦ ((intervalSobolevDensity a b s x).toNNReal : ℝ≥0∞)) :=
+    (memLp_two_iff_integrable_sq_norm hcont.aestronglyMeasurable).2 hf2
+  have hI : ∫ x, ‖f.val x‖ ^ 2 * intervalSobolevDensity a b s x = ∫ x, ‖f.val x‖ ^ 2
+      ∂volume.withDensity fun x ↦ ((intervalSobolevDensity a b s x).toNNReal : ℝ≥0∞) := by
+    rw [integral_withDensity_eq_integral_smul₀ hρ]
+    exact integral_congr_ae (Eventually.of_forall fun x ↦ (hsmul x).symm)
+  have hE : intervalSobolevENorm volume id (Icc a b) s f.val =
+      eLpNorm f.val 2 (volume.withDensity fun x ↦
+        ENNReal.ofReal (intervalSobolevDensity a b s x)) := by
+    unfold intervalSobolevENorm
+    refine le_antisymm (iSup₂_le fun a' b' ↦ eLpNorm_mono_measure _ (withDensity_mono
+      (Eventually.of_forall fun x ↦ ENNReal.ofReal_le_ofReal (hmono _ a'.2 _ b'.2 _)))) ?_
+    exact le_iSup₂_of_le (⟨a, left_mem_Icc.2 _hab⟩ : Icc a b) ⟨b, right_mem_Icc.2 _hab⟩ le_rfl
+  refine ⟨hint, ?_⟩
+  rw [hE, hI, Real.sqrt_eq_rpow]
+  refine (MemLp.eLpNorm_eq_integral_rpow_norm two_ne_zero ENNReal.ofNat_ne_top hmem).trans ?_
+  simp only [ENNReal.toReal_ofNat, Real.rpow_two, one_div]
 
 /-- Paper: Lemma 9.2.2.2(2), p. 412. For even order the endpoint derivative
 traces and the compact-interval weighted norm induce the same topology on the tests.
