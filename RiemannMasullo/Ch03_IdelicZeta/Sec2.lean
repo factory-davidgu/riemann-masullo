@@ -263,16 +263,6 @@ def completedHeckeL (χ : U[F]) (s : halfPlane) : ℂ :=
   heckeGammaFactor χ s * χ₀(χ).LSeries s
 
 
-/-- Paper: Proposition 3.2.1.3(3), p. 123. Reflecting the continuation of the
-inverse unitary character gives the original continuation times a nowhere-vanishing
-entire function. Inversion agrees with complex conjugation for a unitary character. -/
-theorem completedHeckeL_continuation_functionalEquation (χ : U[F]) (L Ldual : ℂ → ℂ)
-    (hL : MeromorphicNFOn L univ) (h : ∀ s : halfPlane, L s = completedHeckeL χ s)
-    (hLdual : MeromorphicNFOn Ldual univ)
-    (hdual : ∀ s : halfPlane, Ldual s = completedHeckeL χ⁻¹ s) :
-    ∃ ε : ℂ → ℂ, Differentiable ℂ ε ∧ (∀ s, ε s ≠ 0) ∧
-      ∀ s, Ldual (1 - s) = ε s * L s := by sorry
-
 /-- Paper: Proposition 3.2.1.3(4), p. 123. A zero of the continuation in
 the positive half-plane lies strictly to the left of `Re(s) = 1`. -/
 theorem completedHeckeL_continuation_zeros (χ : U[F]) (L : ℂ → ℂ)
@@ -654,77 +644,12 @@ private theorem completedHeckeL_one_order_one (L : ℂ → ℂ) (hL : Meromorphi
   have he : (-(1 : ℤ) : WithTop ℤ) + (1 : WithTop ℤ) = 0 := by norm_num
   simpa [← add_assoc, he] using congrArg (fun x : WithTop ℤ ↦ (-1) + x) horder
 
-/-- At the trivial character, reflection in the functional equation transfers the
-simple pole at one to a simple pole at zero. -/
-private theorem completedHeckeL_one_order_zero (L : ℂ → ℂ) (hL : MeromorphicNFOn L univ)
-    (h : ∀ s : halfPlane, L s = completedHeckeL (1 : U[F]) s) :
-    meromorphicOrderAt L 0 = -1 := by
-  obtain ⟨ε, hε, hεne, hfun⟩ := completedHeckeL_continuation_functionalEquation
-    (1 : U[F]) L L hL h hL (by simpa using h)
-  have hcomp : meromorphicOrderAt (fun s ↦ L (1 - s)) 0 = meromorphicOrderAt L 1 := by
-    have ha : AnalyticAt ℂ (fun s : ℂ ↦ 1 - s) 0 := by fun_prop
-    have hd : deriv (fun s : ℂ ↦ 1 - s) 0 ≠ 0 := by simp
-    simpa [Function.comp_def] using meromorphicOrderAt_comp_of_deriv_ne_zero (f := L) ha hd
-  have hεan := hε.analyticAt (z := 0)
-  have hεord : meromorphicOrderAt ε 0 = 0 :=
-    (hεan.meromorphicNFAt.meromorphicOrderAt_eq_zero_iff).mpr (hεne 0)
-  rw [show (fun s ↦ L (1 - s)) = ε * L from funext hfun,
-    meromorphicOrderAt_mul hεan.meromorphicAt (hL (mem_univ _)).meromorphicAt,
-    hεord, zero_add, completedHeckeL_one_order_one L hL h] at hcomp
-  exact hcomp
-
 /-- Paper: Proposition 3.2.1.3(2), p. 123. A continuation of the completed
 Dedekind zeta function in the trivial Hecke character normalization is
 holomorphic away from zero and one. -/
 theorem completedHeckeL_one_analyticOnNhd (L : ℂ → ℂ) (hL : MeromorphicNFOn L univ)
     (h : ∀ s : halfPlane, L s = completedHeckeL (1 : U[F]) s) :
     AnalyticOnNhd ℂ L ({0, 1}ᶜ : Set ℂ) := by sorry
-
-/-- Paper: Proposition 3.2.1.3(2), p. 123. If the character is trivial on norm-one
-classes, there is a unique real norm-twist parameter and the two indicated poles
-are simple. The continuation is analytic elsewhere.
-Deviation: The printed residue formulas have a normalization conflict described below. -/
-theorem completedHeckeL_continuation_simplePoles (χ : U[F]) (L : ℂ → ℂ)
-    (hL : MeromorphicNFOn L univ) (h : ∀ s : halfPlane, L s = completedHeckeL χ s)
-    (hχ : χ.toMonoidHom.comp (ideleClassNorm F).ker.subtype = 1) :
-    ∃! t : ℝ, χ₀(χ) = ideleClassNormTwist (1 : U[F]) (-Complex.I * (t : ℂ)) ∧
-      meromorphicOrderAt L (Complex.I * (t : ℂ)) = -1 ∧
-      meromorphicOrderAt L (1 + Complex.I * (t : ℂ)) = -1 ∧
-      AnalyticOnNhd ℂ L ({Complex.I * (t : ℂ), 1 + Complex.I * (t : ℂ)}ᶜ) := by
-  obtain ⟨t, ht, huniq⟩ := existsUnique_ideleClassNormTwist χ hχ
-  let b : ℂ := Complex.I * (t : ℂ)
-  have hbre : b.re = 0 := by simp [b, Complex.mul_re]
-  have hχ' : χ₀(χ) = ideleClassNormTwist (1 : U[F]) (-b) := by simpa [b] using ht
-  let L₀ (s : ℂ) := L (s + b)
-  have hL₀ : MeromorphicNFOn L₀ univ :=
-    fun _ _ ↦ meromorphicNFAt_fun_comp_add_const_iff_meromorphicNFAt.mpr (hL (mem_univ _))
-  have h₀ (s : halfPlane) : L₀ s = completedHeckeL (1 : U[F]) s := by
-    let w : halfPlane := ⟨(s : ℂ) + b, by
-      change 1 < (s : ℂ).re + b.re
-      rw [hbre, add_zero]
-      exact s.property⟩
-    change L w = _
-    rw [h w, completedHeckeL_of_normTwist χ (-b) (by simp [hbre]) hχ' w]
-    congr 1
-    apply Subtype.ext
-    change (s : ℂ) + b + -b = s
-    simp
-  refine ⟨t, ⟨ht, ?_, ?_, ?_⟩, fun u hu ↦ huniq u hu.1⟩
-  · have ho := completedHeckeL_one_order_zero L₀ hL₀ h₀
-    simpa [L₀, b, meromorphicOrderAt_fun_comp_add_const_eq_meromorphicOrderAt] using ho
-  · have ho := completedHeckeL_one_order_one L₀ hL₀ h₀
-    simpa [L₀, b, meromorphicOrderAt_fun_comp_add_const_eq_meromorphicOrderAt] using ho
-  · intro s hs
-    have hs₀ : s - b ∈ ({0, 1}ᶜ : Set ℂ) := by
-      simp only [mem_compl_iff, mem_insert_iff, mem_singleton_iff, not_or] at hs ⊢
-      exact ⟨fun he ↦ hs.1 (sub_eq_zero.mp he), fun he ↦ hs.2 (sub_eq_iff_eq_add.mp he)⟩
-    have ha := completedHeckeL_one_analyticOnNhd L₀ hL₀ h₀ (s - b) hs₀
-    have hb := ha.comp (f := fun z : ℂ ↦ z - b) (show AnalyticAt ℂ (fun z : ℂ ↦ z - b) s by fun_prop)
-    simpa [L₀, Function.comp_def] using hb
-
--- TODO(paper-gap): The residues printed in Proposition 3.2.1.3(2) disagree with the
--- Euler product normalization. For the trivial character of ℚ(√5), the residue at 1
--- is already the Appendix A.3.2.1 class volume, since both real gamma factors equal 1.
 
 /-- Paper: Definition 3.2.1.4, pp. 123–124. The finite Euler product
 converges uniformly on each compact subset of the half-plane. -/
@@ -996,6 +921,194 @@ and taking the norm times the inverse character preserves its global Z-function 
 theorem globalIdelicZFunction_functionalEquation (f : ℬ[F]) (c : 𝒳[F]) :
     globalIdelicZFunction f c = globalIdelicZFunction (adeleSchwartzFourier f)
       (dualQuasiCharacter (ideleClassNorm F) (isProperMap_ideleClassNorm F).continuous c) := by sorry
+
+local notation "archimedeanFourier" =>
+  fun (f : SchwartzBruhat (Multiplicative (SAdeleRing F ∅))) (y : SAdeleRing F ∅) ↦
+    @tamagawaFourier _ _ (instMeasurableSpaceSAdeleRing (F := F) (S := ∅))
+      (sAdditiveTamagawaMeasure F ∅) (sAdeleStandardCharacter F ∅)
+      (fun x ↦ f (Multiplicative.ofAdd x)) y
+
+/-- Paper: Equations (3.4.3.3)–(3.4.3.6), p. 152. Choose archimedean Gaussians
+for a unitary character and its inverse whose zeta integrals equal their gamma factors.
+The trace-pairing Fourier transform exchanges the two Gaussians up to a nonzero scalar.
+Deviation: The complex monomials have angular weight opposite to the character. -/
+theorem exists_archimedeanHeckeTest_fourier (χ : U[F]) :
+    ∃ (f fdual : SchwartzBruhat (Multiplicative (SAdeleRing F ∅))) (c : ℂ), c ≠ 0 ∧
+      (∀ y, archimedeanFourier f y = c * fdual (Multiplicative.ofAdd y)) ∧
+      (∀ s : halfPlane, archimedeanZeta f (ideleClassNormTwist χ s) = heckeGammaFactor χ s) ∧
+      (∀ s : halfPlane,
+        archimedeanZeta fdual (ideleClassNormTwist χ⁻¹ s) = heckeGammaFactor χ⁻¹ s) := by
+  sorry
+
+/-- Paper: Proposition 3.2.1.3(3), p. 123 and Equations (3.4.3.7)–(3.4.3.9),
+p. 152. Extend the archimedean test by integer-ring indicators at unramified finite places
+and inverse character weights on integer units at ramified places. In the right half-plane,
+the finite factors of the two zeta integrals are the Euler products for the character and
+its inverse. The Fourier-transformed finite test gives a nonzero scalar and a positive
+real scale raised to the exponent, from the different and the character conductor. -/
+theorem exists_globalHeckeTest_fourier (χ : U[F])
+    (fArch fArchDual : SchwartzBruhat (Multiplicative (SAdeleRing F ∅)))
+    (c : ℂ) (hc : c ≠ 0)
+    (hFourier : ∀ y, archimedeanFourier fArch y = c * fArchDual (Multiplicative.ofAdd y)) :
+    ∃ (f : ℬ[F]) (a b : ℂ) (q : ℝ), a ≠ 0 ∧ b ≠ 0 ∧ 0 < q ∧
+      (∀ s : halfPlane, globalIdelicZetaIntegral f (ideleClassNormTwist χ s) =
+        a * (archimedeanZeta fArch (ideleClassNormTwist χ s) * finiteHeckeL χ s)) ∧
+      (∀ s : halfPlane,
+        globalIdelicZetaIntegral (adeleSchwartzFourier f) (ideleClassNormTwist χ⁻¹ s) =
+          (b * (q : ℂ) ^ (s : ℂ)) *
+            (archimedeanZeta fArchDual (ideleClassNormTwist χ⁻¹ s) * finiteHeckeL χ⁻¹ s)) := by
+  sorry
+
+/-- An entire nonzero multiple of the completed series determines the corresponding
+global idelic Z-function whenever it agrees with the zeta integral on the right half-plane. -/
+private theorem globalIdelicZFunction_eq_mul_completedHeckeL_of_integral
+    (f : ℬ[F]) (χ : U[F]) (L A : ℂ → ℂ)
+    (hL : MeromorphicNFOn L univ) (h : ∀ s : halfPlane, L s = completedHeckeL χ s)
+    (hA : Differentiable ℂ A) (hA₀ : ∀ s, A s ≠ 0)
+    (hIntegral : ∀ s : halfPlane, globalIdelicZetaIntegral f (ideleClassNormTwist χ s) =
+      A s * completedHeckeL χ s) (s : ℂ) :
+    globalIdelicZFunction f (ideleClassNormTwist χ s) = A s * L s := by
+  let Z (z : ℂ) := globalIdelicZFunction f (ideleClassNormTwist χ z)
+  have hZ : MeromorphicNFOn Z univ := globalIdelicZFunction_meromorphic f χ
+  have hAL : MeromorphicNFOn (A * L) univ := fun z hz ↦
+    (meromorphicNFAt_mul_iff_right (hA.analyticAt z) (hA₀ z)).2 (hL hz)
+  have hAgree (z : halfPlane) : Z z = (A * L) z := by
+    have hz : ideleClassNormTwist χ z ∈ rightHalf := by
+      change 1 < quasiCharacterAbscissa (ideleClassNorm F) _ _ _
+      rw [quasiCharacterAbscissa_of_unitary_twist (ideleClassNorm F)
+        (isProperMap_ideleClassNorm F) (ideleClassNorm_ne_one (F := F))
+        (ideleClassNormTwist χ z) χ z (fun _ ↦ rfl)]
+      exact z.property
+    change globalIdelicZFunction f (ideleClassNormTwist χ z) = A z * L z
+    rw [globalIdelicZFunction_eq_integral f hz, hIntegral z, h z]
+  have hAtTwo : meromorphicOrderAt (Z - A * L) 2 = ⊤ := by
+    apply meromorphicOrderAt_eq_top_iff.mpr
+    have hNear : ∀ᶠ z in 𝓝 (2 : ℂ), 1 < z.re :=
+      (isOpen_lt continuous_const Complex.continuous_re).mem_nhds (by norm_num)
+    filter_upwards [hNear.filter_mono nhdsWithin_le_nhds] with z hz
+    exact sub_eq_zero.mpr (hAgree ⟨z, hz⟩)
+  have hOrder := (hZ.meromorphicOn.sub hAL.meromorphicOn).meromorphicOrderAt_eq_top_of_isPreconnected
+    isPreconnected_univ (mem_univ (2 : ℂ)) (mem_univ s) hAtTwo
+  have hPunctured : Z =ᶠ[𝓝[≠] s] A * L :=
+    (meromorphicOrderAt_eq_top_iff.mp hOrder).mono fun _ hz ↦ sub_eq_zero.mp hz
+  exact (((hZ (mem_univ s)).eventuallyEq_nhdsNE_iff_eventuallyEq_nhds
+    (hAL (mem_univ s))).mp hPunctured).eq_of_nhds
+
+/-- Paper: Equation (3.1.1.4), p. 119. Duality in the norm-twist coordinate
+takes the inverse unitary character and reflects the exponent. -/
+private theorem dualQuasiCharacter_ideleClassNormTwist (χ : U[F]) (s : ℂ) :
+    dualQuasiCharacter (ideleClassNorm F) (isProperMap_ideleClassNorm F).continuous
+      (ideleClassNormTwist χ s) = ideleClassNormTwist χ⁻¹ (1 - s) := by
+  ext1 g
+  let N : ℂ := (classNormℝ g : ℂ)
+  have hN : N ≠ 0 :=
+    Complex.ofReal_ne_zero.mpr (NNReal.coe_ne_zero.mpr (ideleClassNorm F g).ne_zero)
+  change N * ideleClassNormTwist χ s g⁻¹ = ideleClassNormTwist χ⁻¹ (1 - s) g
+  rw [map_inv]
+  change N * ((χ g : ℂ) * N ^ s)⁻¹ = (χ g : ℂ)⁻¹ * N ^ (1 - s)
+  rw [mul_inv_rev, Complex.cpow_sub 1 s hN, Complex.cpow_one, div_eq_mul_inv]
+  ac_rfl
+
+/-- Paper: Proposition 3.2.1.3(3), p. 123. Reflecting the continuation of the
+inverse unitary character gives the original continuation times a nowhere-vanishing
+entire function. Inversion agrees with complex conjugation for a unitary character. -/
+theorem completedHeckeL_continuation_functionalEquation (χ : U[F]) (L Ldual : ℂ → ℂ)
+    (hL : MeromorphicNFOn L univ) (h : ∀ s : halfPlane, L s = completedHeckeL χ s)
+    (hLdual : MeromorphicNFOn Ldual univ)
+    (hdual : ∀ s : halfPlane, Ldual s = completedHeckeL χ⁻¹ s) :
+    ∃ ε : ℂ → ℂ, Differentiable ℂ ε ∧ (∀ s, ε s ≠ 0) ∧
+      ∀ s, Ldual (1 - s) = ε s * L s := by
+  obtain ⟨fArch, fArchDual, c, hc, hFourier, hArch, hArchDual⟩ :=
+    exists_archimedeanHeckeTest_fourier χ
+  obtain ⟨f, a, b, q, ha, hb, hq, hf, hFourierIntegral⟩ :=
+    exists_globalHeckeTest_fourier χ fArch fArchDual c hc hFourier
+  let B (s : ℂ) := b * (q : ℂ) ^ s
+  have hq₀ : (q : ℂ) ≠ 0 := Complex.ofReal_ne_zero.mpr hq.ne'
+  have hB : Differentiable ℂ B :=
+    (differentiable_id.const_cpow (Or.inl hq₀)).const_mul b
+  have hB₀ (s : ℂ) : B s ≠ 0 :=
+    mul_ne_zero hb (fun hz ↦ hq₀ ((Complex.cpow_eq_zero_iff _ _).mp hz).1)
+  have hZ := globalIdelicZFunction_eq_mul_completedHeckeL_of_integral f χ L (fun _ ↦ a)
+    hL h (differentiable_const a) (fun _ ↦ ha) (fun s ↦ by
+      rw [hf s, hArch s]
+      rfl)
+  have hZdual := globalIdelicZFunction_eq_mul_completedHeckeL_of_integral
+    (adeleSchwartzFourier f) χ⁻¹ Ldual B hLdual hdual hB hB₀ (fun s ↦ by
+      rw [hFourierIntegral s, hArchDual s]
+      rfl)
+  have hReflect : Differentiable ℂ (fun s : ℂ ↦ 1 - s) :=
+    (differentiable_const (1 : ℂ)).sub differentiable_id
+  refine ⟨fun s ↦ (B (1 - s))⁻¹ * a,
+    ((hB.comp hReflect).inv (fun s ↦ hB₀ (1 - s))).mul_const a,
+    fun s ↦ mul_ne_zero (inv_ne_zero (hB₀ (1 - s))) ha, fun s ↦ ?_⟩
+  have hEq := globalIdelicZFunction_functionalEquation f (ideleClassNormTwist χ s)
+  rw [dualQuasiCharacter_ideleClassNormTwist, hZ s, hZdual (1 - s)] at hEq
+  rw [mul_assoc, hEq, ← mul_assoc, inv_mul_cancel₀ (hB₀ (1 - s)), one_mul]
+
+/-- At the trivial character, reflection in the functional equation transfers the
+simple pole at one to a simple pole at zero. -/
+private theorem completedHeckeL_one_order_zero (L : ℂ → ℂ) (hL : MeromorphicNFOn L univ)
+    (h : ∀ s : halfPlane, L s = completedHeckeL (1 : U[F]) s) :
+    meromorphicOrderAt L 0 = -1 := by
+  obtain ⟨ε, hε, hεne, hfun⟩ := completedHeckeL_continuation_functionalEquation
+    (1 : U[F]) L L hL h hL (by simpa using h)
+  have hcomp : meromorphicOrderAt (fun s ↦ L (1 - s)) 0 = meromorphicOrderAt L 1 := by
+    have ha : AnalyticAt ℂ (fun s : ℂ ↦ 1 - s) 0 := by fun_prop
+    have hd : deriv (fun s : ℂ ↦ 1 - s) 0 ≠ 0 := by simp
+    simpa [Function.comp_def] using meromorphicOrderAt_comp_of_deriv_ne_zero (f := L) ha hd
+  have hεan := hε.analyticAt (z := 0)
+  have hεord : meromorphicOrderAt ε 0 = 0 :=
+    (hεan.meromorphicNFAt.meromorphicOrderAt_eq_zero_iff).mpr (hεne 0)
+  rw [show (fun s ↦ L (1 - s)) = ε * L from funext hfun,
+    meromorphicOrderAt_mul hεan.meromorphicAt (hL (mem_univ _)).meromorphicAt,
+    hεord, zero_add, completedHeckeL_one_order_one L hL h] at hcomp
+  exact hcomp
+
+/-- Paper: Proposition 3.2.1.3(2), p. 123. If the character is trivial on norm-one
+classes, there is a unique real norm-twist parameter and the two indicated poles
+are simple. The continuation is analytic elsewhere.
+Deviation: The printed residue formulas have a normalization conflict described below. -/
+theorem completedHeckeL_continuation_simplePoles (χ : U[F]) (L : ℂ → ℂ)
+    (hL : MeromorphicNFOn L univ) (h : ∀ s : halfPlane, L s = completedHeckeL χ s)
+    (hχ : χ.toMonoidHom.comp (ideleClassNorm F).ker.subtype = 1) :
+    ∃! t : ℝ, ideleClassNormTwist χ 0 = ideleClassNormTwist (1 : U[F]) (-Complex.I * (t : ℂ)) ∧
+      meromorphicOrderAt L (Complex.I * (t : ℂ)) = -1 ∧
+      meromorphicOrderAt L (1 + Complex.I * (t : ℂ)) = -1 ∧
+      AnalyticOnNhd ℂ L ({Complex.I * (t : ℂ), 1 + Complex.I * (t : ℂ)}ᶜ) := by
+  obtain ⟨t, ht, huniq⟩ := existsUnique_ideleClassNormTwist χ hχ
+  let b : ℂ := Complex.I * (t : ℂ)
+  have hbre : b.re = 0 := by simp [b, Complex.mul_re]
+  have hχ' : ideleClassNormTwist χ 0 = ideleClassNormTwist (1 : U[F]) (-b) := by simpa [b] using ht
+  let L₀ (s : ℂ) := L (s + b)
+  have hL₀ : MeromorphicNFOn L₀ univ :=
+    fun _ _ ↦ meromorphicNFAt_fun_comp_add_const_iff_meromorphicNFAt.mpr (hL (mem_univ _))
+  have h₀ (s : halfPlane) : L₀ s = completedHeckeL (1 : U[F]) s := by
+    let w : halfPlane := ⟨(s : ℂ) + b, by
+      change 1 < (s : ℂ).re + b.re
+      rw [hbre, add_zero]
+      exact s.property⟩
+    change L w = _
+    rw [h w, completedHeckeL_of_normTwist χ (-b) (by simp [hbre]) hχ' w]
+    congr 1
+    apply Subtype.ext
+    change (s : ℂ) + b + -b = s
+    simp
+  refine ⟨t, ⟨ht, ?_, ?_, ?_⟩, fun u hu ↦ huniq u hu.1⟩
+  · have ho := completedHeckeL_one_order_zero L₀ hL₀ h₀
+    simpa [L₀, b, meromorphicOrderAt_fun_comp_add_const_eq_meromorphicOrderAt] using ho
+  · have ho := completedHeckeL_one_order_one L₀ hL₀ h₀
+    simpa [L₀, b, meromorphicOrderAt_fun_comp_add_const_eq_meromorphicOrderAt] using ho
+  · intro s hs
+    have hs₀ : s - b ∈ ({0, 1}ᶜ : Set ℂ) := by
+      simp only [mem_compl_iff, mem_insert_iff, mem_singleton_iff, not_or] at hs ⊢
+      exact ⟨fun he ↦ hs.1 (sub_eq_zero.mp he), fun he ↦ hs.2 (sub_eq_iff_eq_add.mp he)⟩
+    have ha := completedHeckeL_one_analyticOnNhd L₀ hL₀ h₀ (s - b) hs₀
+    have hb := ha.comp (f := fun z : ℂ ↦ z - b) (show AnalyticAt ℂ (fun z : ℂ ↦ z - b) s by fun_prop)
+    simpa [L₀, Function.comp_def] using hb
+
+-- TODO(paper-gap): The residues printed in Proposition 3.2.1.3(2) disagree with the
+-- Euler product normalization. For the trivial character of ℚ(√5), the residue at 1
+-- is already the Appendix A.3.2.1 class volume, since both real gamma factors equal 1.
 
 /-- Paper: Equation (3.2.2.3), p. 124. The theta Mellin integral is the idele-class
 Tamagawa integral of the global theta function against the quasi-character. -/

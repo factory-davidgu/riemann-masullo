@@ -667,6 +667,56 @@ theorem scalarIntervalSobolev_mellin_norm_bounds (a b : ℝ) (_hab : a ≤ b) (N
         MemLp (fun y : ℝ ↦ iteratedDeriv k F (verticalPoint σ y)) 2 volume) ∧
         w ≤ C * (q a + q b) ∧ q a + q b ≤ D * w := by sorry
 
+/-- On a right half-line the supremum over pairs of abscissas equals the supremum over pairs
+whose first abscissa is the left endpoint. -/
+private theorem intervalSobolevENorm_Ici {A : Type*} [MeasurableSpace A] (μ : Measure A)
+    (logNorm : A → ℝ) (a s : ℝ) (f : A → ℂ) :
+    intervalSobolevENorm μ logNorm (Ici a) s f =
+      ⨆ σ : Ici a, eLpNorm f 2 (μ.withDensity fun x ↦
+        ENNReal.ofReal (intervalSobolevDensity a σ s (logNorm x))) := by
+  unfold intervalSobolevENorm
+  refine le_antisymm (iSup₂_le fun a' b' ↦ ?_)
+    (iSup_le fun σ ↦ le_iSup₂_of_le (⟨a, self_mem_Ici⟩ : Ici a) σ le_rfl)
+  have hσ : max (a' : ℝ) b' ∈ Ici a := le_max_of_le_left a'.2
+  refine le_iSup_of_le (⟨_, hσ⟩ : Ici a) (eLpNorm_mono_measure _ (withDensity_mono
+    (Eventually.of_forall fun g ↦ ENNReal.ofReal_le_ofReal ?_)))
+  have key : ∀ c : ℝ, a ≤ c → c ≤ max (a' : ℝ) b' → ∀ x : ℝ, Real.exp (2 * c * x) ≤
+      max (Real.exp (2 * a * x)) (Real.exp (2 * max (a' : ℝ) b' * x)) := by
+    intro c hac hc x
+    rcases le_total 0 x with hx | hx
+    · exact le_max_of_le_right
+        (Real.exp_le_exp.2 (by nlinarith [mul_le_mul_of_nonneg_right hc hx]))
+    · exact le_max_of_le_left
+        (Real.exp_le_exp.2 (by nlinarith [mul_le_mul_of_nonpos_right hac hx]))
+  unfold intervalSobolevDensity
+  exact mul_le_mul_of_nonneg_right
+    (max_le (key _ a'.2 (le_max_left _ _) _) (key _ b'.2 (le_max_right _ _) _)) (by positivity)
+
+/-- On a left half-line the supremum over pairs of abscissas equals the supremum over pairs
+whose second abscissa is the right endpoint. -/
+private theorem intervalSobolevENorm_Iic {A : Type*} [MeasurableSpace A] (μ : Measure A)
+    (logNorm : A → ℝ) (b s : ℝ) (f : A → ℂ) :
+    intervalSobolevENorm μ logNorm (Iic b) s f =
+      ⨆ σ : Iic b, eLpNorm f 2 (μ.withDensity fun x ↦
+        ENNReal.ofReal (intervalSobolevDensity σ b s (logNorm x))) := by
+  unfold intervalSobolevENorm
+  refine le_antisymm (iSup₂_le fun a' b' ↦ ?_)
+    (iSup_le fun σ ↦ le_iSup₂_of_le σ (⟨b, self_mem_Iic⟩ : Iic b) le_rfl)
+  have hσ : min (a' : ℝ) b' ∈ Iic b := min_le_of_left_le a'.2
+  refine le_iSup_of_le (⟨_, hσ⟩ : Iic b) (eLpNorm_mono_measure _ (withDensity_mono
+    (Eventually.of_forall fun g ↦ ENNReal.ofReal_le_ofReal ?_)))
+  have key : ∀ c : ℝ, min (a' : ℝ) b' ≤ c → c ≤ b → ∀ x : ℝ, Real.exp (2 * c * x) ≤
+      max (Real.exp (2 * min (a' : ℝ) b' * x)) (Real.exp (2 * b * x)) := by
+    intro c hc hcb x
+    rcases le_total 0 x with hx | hx
+    · exact le_max_of_le_right
+        (Real.exp_le_exp.2 (by nlinarith [mul_le_mul_of_nonneg_right hcb hx]))
+    · exact le_max_of_le_left
+        (Real.exp_le_exp.2 (by nlinarith [mul_le_mul_of_nonpos_right hc hx]))
+  unfold intervalSobolevDensity
+  exact mul_le_mul_of_nonneg_right
+    (max_le (key _ (min_le_left _ _) a'.2 _) (key _ (min_le_right _ _) b'.2 _)) (by positivity)
+
 /-- Paper: Lemma 9.2.2.2(3)(a), p. 412. For a right half-line the endpoint
 supremum uses the left endpoint and an arbitrary point in the interval.
 Deviation: The identity is extended-valued, since the supremum can be infinite. -/
@@ -674,7 +724,8 @@ theorem scalarIntervalSobolev_enorm_Ici (a s : ℝ) (_hs : 0 ≤ s)
     (f : PositiveRealExponentialDecay univ) :
     intervalSobolevENorm volume id (Ici a) s f.val =
       ⨆ σ : Ici a, eLpNorm f.val 2 (volume.withDensity fun x ↦
-        ENNReal.ofReal (intervalSobolevDensity a σ s x)) := by sorry
+        ENNReal.ofReal (intervalSobolevDensity a σ s x)) :=
+  intervalSobolevENorm_Ici volume id a s f.val
 
 /-- Paper: Lemma 9.2.2.2(3)(b), p. 412. For a left half-line the endpoint
 supremum uses an arbitrary point in the interval and the right endpoint.
@@ -683,7 +734,8 @@ theorem scalarIntervalSobolev_enorm_Iic (b s : ℝ) (_hs : 0 ≤ s)
     (f : PositiveRealExponentialDecay univ) :
     intervalSobolevENorm volume id (Iic b) s f.val =
       ⨆ σ : Iic b, eLpNorm f.val 2 (volume.withDensity fun x ↦
-        ENNReal.ofReal (intervalSobolevDensity σ b s x)) := by sorry
+        ENNReal.ofReal (intervalSobolevDensity σ b s x)) :=
+  intervalSobolevENorm_Iic volume id b s f.val
 
 /-- Paper: Definition 9.2.2.1, p. 412. A nonzero smooth test supported on a
 compact subset of the positive logarithmic axis has infinite norm for a right half-line.
@@ -1027,7 +1079,8 @@ theorem modulatedIntervalSobolev_enorm_Ici (a s : ℝ) (_hs : 0 ≤ s)
     let μ := canonicalModulatedHaar m hm
     intervalSobolevENorm μ (logModule m) (Ici a) s f.val =
       ⨆ σ : Ici a, eLpNorm f.val 2 (μ.withDensity fun g ↦
-        ENNReal.ofReal (intervalSobolevDensity a σ s (logModule m g))) := by sorry
+        ENNReal.ofReal (intervalSobolevDensity a σ s (logModule m g))) :=
+  intervalSobolevENorm_Ici _ (logModule m) a s f.val
 
 /-- Paper: Lemma 9.2.2.10(3)(b), p. 417. The left half-line supremum can
 be indexed using one varying abscissa and the right endpoint.
@@ -1037,7 +1090,8 @@ theorem modulatedIntervalSobolev_enorm_Iic (b s : ℝ) (_hs : 0 ≤ s)
     let μ := canonicalModulatedHaar m hm
     intervalSobolevENorm μ (logModule m) (Iic b) s f.val =
       ⨆ σ : Iic b, eLpNorm f.val 2 (μ.withDensity fun g ↦
-        ENNReal.ofReal (intervalSobolevDensity σ b s (logModule m g))) := by sorry
+        ENNReal.ofReal (intervalSobolevDensity σ b s (logModule m g))) :=
+  intervalSobolevENorm_Iic _ (logModule m) b s f.val
 
 -- TODO(paper-gap): As in Proposition 9.2.1.8, the test pairing and the
 -- reciprocal-density norm are not defined on all the stated inputs.

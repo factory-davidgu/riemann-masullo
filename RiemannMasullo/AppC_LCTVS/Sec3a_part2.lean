@@ -1505,7 +1505,68 @@ theorem schattenClass_submodule_axioms (p : ℝ) (hp : 1 ≤ p) :
       {T | IsCompactOperator T ∧ Summable (fun n ↦ (approximationNumber T n) ^ p)}
     0 ∈ s ∧
       (∀ {A B : E →L[ℂ] F}, A ∈ s → B ∈ s → A + B ∈ s) ∧
-      (∀ (c : ℂ) {A : E →L[ℂ] F}, A ∈ s → c • A ∈ s) := by sorry
+      (∀ (c : ℂ) {A : E →L[ℂ] F}, A ∈ s → c • A ∈ s) := by
+  let errors (T : E →L[ℂ] F) (n : ℕ) : Set ℝ :=
+    {r | ∃ S : E →L[ℂ] F, S.toLinearMap.rank ≤ (n : Cardinal) ∧ r = ‖S - T‖}
+  have errors_nonempty (T : E →L[ℂ] F) (n : ℕ) : (errors T n).Nonempty :=
+    ⟨_, 0, by simp, rfl⟩
+  have errors_nonneg (T : E →L[ℂ] F) (n : ℕ) : (0 : ℝ) ∈ lowerBounds (errors T n) := by
+    rintro _ ⟨S, _, rfl⟩
+    exact norm_nonneg _
+  have nonneg (T : E →L[ℂ] F) (n : ℕ) : 0 ≤ approximationNumber T n :=
+    le_csInf (errors_nonempty T n) (errors_nonneg T n)
+  have le_error (T S : E →L[ℂ] F) {n : ℕ} (hS : S.toLinearMap.rank ≤ (n : Cardinal)) :
+      approximationNumber T n ≤ ‖S - T‖ :=
+    csInf_le ⟨0, errors_nonneg T n⟩ ⟨S, hS, rfl⟩
+  have exists_approximation {T : E →L[ℂ] F} {n : ℕ} {a : ℝ}
+      (ha : approximationNumber T n < a) :
+      ∃ S : E →L[ℂ] F, S.toLinearMap.rank ≤ (n : Cardinal) ∧ ‖S - T‖ < a := by
+    obtain ⟨_, ⟨S, hS, rfl⟩, hSa⟩ := exists_lt_of_csInf_lt (errors_nonempty T n) ha
+    exact ⟨S, hS, hSa⟩
+  have hp0 : 0 < p := zero_lt_one.trans_le hp
+  refine ⟨⟨isCompactOperator_zero, ?_⟩, ?_, ?_⟩
+  · have hzero (n : ℕ) : approximationNumber (0 : E →L[ℂ] F) n = 0 :=
+      le_antisymm (by simpa using le_error 0 0 (n := n) (by simp)) (nonneg _ _)
+    simp [hzero, Real.zero_rpow hp0.ne']
+  · intro A B hA hB
+    refine ⟨hA.1.add hB.1, ?_⟩
+    -- Rank bounds add when the two approximants are added.
+    have hadd (n k : ℕ) (hnk : n + n ≤ k) :
+        approximationNumber (A + B) k ≤ approximationNumber A n + approximationNumber B n := by
+      refine le_add_of_forall_lt fun a ha b hb ↦ ?_
+      obtain ⟨S, hS, hSa⟩ := exists_approximation ha
+      obtain ⟨T, hT, hTb⟩ := exists_approximation hb
+      have hrank : (S + T).toLinearMap.rank ≤ (k : Cardinal) := by
+        refine (LinearMap.rank_add_le _ _).trans ((add_le_add hS hT).trans ?_)
+        exact_mod_cast hnk
+      calc
+        approximationNumber (A + B) k ≤ ‖S + T - (A + B)‖ := le_error _ _ hrank
+        _ = ‖(S - A) + (T - B)‖ := by congr 1; abel
+        _ ≤ ‖S - A‖ + ‖T - B‖ := norm_add_le _ _
+        _ ≤ a + b := add_le_add hSa.le hTb.le
+    -- Both the even and odd subsequences have the same summable majorant.
+    have bound (n k : ℕ) (hnk : n + n ≤ k) : approximationNumber (A + B) k ^ p ≤
+        (2 : ℝ) ^ (p - 1) * (approximationNumber A n ^ p + approximationNumber B n ^ p) := by
+      refine (Real.rpow_le_rpow (nonneg _ _) (hadd n k hnk) hp0.le).trans ?_
+      exact_mod_cast NNReal.rpow_add_le_mul_rpow_add_rpow
+        ⟨approximationNumber A n, nonneg _ _⟩ ⟨approximationNumber B n, nonneg _ _⟩ hp
+    have hs := (hA.2.add hB.2).mul_left ((2 : ℝ) ^ (p - 1))
+    exact Summable.even_add_odd
+      (hs.of_nonneg_of_le (fun n ↦ Real.rpow_nonneg (nonneg _ _) _) (fun n ↦ bound n _ (by omega)))
+      (hs.of_nonneg_of_le (fun n ↦ Real.rpow_nonneg (nonneg _ _) _) (fun n ↦ bound n _ (by omega)))
+  · intro c A hA
+    refine ⟨hA.1.smul c, (hA.2.mul_left (‖c‖ ^ p)).of_nonneg_of_le
+      (fun n ↦ Real.rpow_nonneg (nonneg _ _) _) (fun n ↦ ?_)⟩
+    have hsmul : approximationNumber (c • A) n ≤ ‖c‖ * approximationNumber A n := by
+      refine le_mul_of_forall_lt₀ fun a ha b hb ↦ ?_
+      obtain ⟨S, hS, hSb⟩ := exists_approximation hb
+      have hrank : (c • S).toLinearMap.rank ≤ (n : Cardinal) :=
+        (Submodule.rank_mono (S.toLinearMap.range_smul_le_range c)).trans hS
+      refine (le_error _ _ hrank).trans ?_
+      rw [← smul_sub, norm_smul]
+      exact mul_le_mul ha.le hSb.le (norm_nonneg _) ((norm_nonneg c).trans ha.le)
+    rw [← Real.mul_rpow (norm_nonneg c) (nonneg A n)]
+    exact Real.rpow_le_rpow (nonneg _ _) hsmul hp0.le
 
 variable (E F) in
 /-- Paper: Definition C.3.6.2(1), p. 704. The Schatten class of index p is
