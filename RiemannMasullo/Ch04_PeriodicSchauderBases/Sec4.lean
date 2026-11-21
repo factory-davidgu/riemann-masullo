@@ -3,6 +3,7 @@ module
 public import RiemannMasullo.Ch04_PeriodicSchauderBases.Sec1
 public import RiemannMasullo.AppD_SchwartzBruhat.Sec3b
 public import RiemannMasullo.Ch03_IdelicZeta.Sec3
+import RiemannMasullo.ForMathlib.Analysis.SpecialFunctions.Pow.Complex
 
 /-!
 # Exponential system on monogenic quotients
@@ -94,7 +95,27 @@ theorem modulatedMellin_tensor_equiv :
 /-- Paper: Discussion 4.4.1.1, p. 191. A unitary character has a unique real
 frequency along the fixed positive-real section. -/
 theorem existsUnique_modulatedMellinSectionFrequency :
-    ∃! b : ℝ, ∀ t : ℝ≥0ˣ, χ (τ t) = Circle.exp (b * Real.log (t.val : ℝ)) := by sorry
+    ∃! b : ℝ, ∀ t : ℝ≥0ˣ, χ (τ t) = Circle.exp (b * Real.log (t.val : ℝ)) := by
+  have key (b : ℝ) (t : ℝ≥0ˣ) : ((t.val : ℝ) : ℂ) ^ ((b : ℂ) * Complex.I) =
+      (Circle.exp (b * Real.log (t.val : ℝ)) : ℂ) := by
+    have ht : 0 < (t.val : ℝ) := NNReal.coe_pos.mpr (Units.zero_lt t)
+    rw [Complex.cpow_def_of_ne_zero (Complex.ofReal_ne_zero.mpr ht.ne'),
+      ← Complex.ofReal_log ht.le, Circle.coe_exp]
+    congr 1
+    push_cast
+    ring
+  obtain ⟨z, ⟨hre, hz⟩, huniq⟩ := existsUnique_unitaryComplexPower
+    ((circleToComplex).comp (ContinuousMonoidHom.comp χ τ)) (fun t ↦ Circle.norm_coe _)
+  have hzb : z = (z.im : ℂ) * Complex.I := by
+    apply Complex.ext <;> simp [hre]
+  refine ⟨z.im, fun t ↦ Circle.ext ?_, fun b hb ↦ ?_⟩
+  · rw [← key, ← hzb]
+    exact hz t
+  · have h := huniq ((b : ℂ) * Complex.I) ⟨by simp, fun t ↦ ?_⟩
+    · rw [← h]
+      simp
+    · rw [key, ← hb t]
+      rfl
 
 -- TODO(paper-gap): The bottom arrow in (4.4.1.3) evaluates the scalar Mellin
 -- transform at s. The displayed integral on p. 191 evaluates it at s + i x₀.

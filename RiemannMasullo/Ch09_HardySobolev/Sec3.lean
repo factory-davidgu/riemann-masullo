@@ -412,7 +412,11 @@ whenever the inner module band contains one.
 Deviation: Sanity check on the plateau condition. -/
 theorem IsModulatedCutoff.apply_one {Λ ε : ℝ} {ρ : G → ℝ}
     (hρ : IsModulatedCutoff m Λ ε ρ) (_h₁ : Λ⁻¹ + ε ≤ 1) (_h₂ : 1 ≤ Λ - ε) :
-    ρ 1 = 1 := by sorry
+    ρ 1 = 1 :=
+  hρ.eq_one (by
+    change ((m 1).val : ℝ) ∈ Icc (Λ⁻¹ + ε) (Λ - ε)
+    rw [map_one, Units.val_one, NNReal.coe_one]
+    exact ⟨_h₁, _h₂⟩)
 
 /-- Paper: Definition 9.3.3.1, p. 427. The piecewise smooth profile gives a
 measurable function on the group.
