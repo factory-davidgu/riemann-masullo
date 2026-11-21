@@ -479,7 +479,37 @@ include hSC hm hms hγ ha hwidth in
 /-- Paper: Proposition 4.5.2.1(2), p. 205. A module window wider than one
 logarithmic period maps onto the cyclic quotient. -/
 theorem modulatedCompactSupport_quotient_image :
-    q '' (m ⁻¹' window) = (univ : Set Q) := by sorry
+    q '' (m ⁻¹' window) = (univ : Set Q) := by
+  have hpos (u : ℝ≥0ˣ) : 0 < ((u.val : ℝ≥0) : ℝ) := NNReal.coe_pos.mpr (Units.zero_lt u)
+  have hle (u v : ℝ≥0ˣ) : u ≤ v ↔ Real.log (u.val : ℝ) ≤ Real.log (v.val : ℝ) := by
+    rw [Real.log_le_log_iff (hpos u) (hpos v), NNReal.coe_le_coe, Units.val_le_val]
+  have hdiv : Real.log ((b / a).val : ℝ) = Real.log (b.val : ℝ) - Real.log (a.val : ℝ) := by
+    rw [Units.val_div_eq_div_val, NNReal.coe_div, Real.log_div (hpos b).ne' (hpos a).ne']
+  have hmul : Real.log ((b * a).val : ℝ) = Real.log (b.val : ℝ) + Real.log (a.val : ℝ) := by
+    rw [Units.val_mul, NNReal.coe_mul, Real.log_mul (hpos b).ne' (hpos a).ne']
+  have hL : 0 < L := Real.log_pos (by exact_mod_cast hγ)
+  refine eq_univ_of_forall fun z ↦ ?_
+  obtain ⟨x, rfl⟩ := QuotientGroup.mk_surjective z
+  have hx (n : ℤ) : Real.log ((m (γ ^ n * x)).val : ℝ) =
+      n * L + Real.log ((m x).val : ℝ) := by
+    rw [map_mul m, map_zpow m, Units.val_mul, Units.val_zpow_eq_zpow_val, NNReal.coe_mul,
+      NNReal.coe_zpow, Real.log_mul (zpow_ne_zero _ (hpos (m γ)).ne') (hpos (m x)).ne',
+      Real.log_zpow]
+  generalize ht : (Real.log (b.val : ℝ) - Real.log (a.val : ℝ) -
+    Real.log ((m x).val : ℝ)) / L = t
+  have htL : t * L = Real.log (b.val : ℝ) - Real.log (a.val : ℝ) -
+      Real.log ((m x).val : ℝ) := by
+    rw [← ht, div_mul_cancel₀ _ hL.ne']
+  have h1 := mul_lt_mul_of_pos_right (Int.lt_floor_add_one t) hL
+  have h2 := mul_le_mul_of_nonneg_right (Int.floor_le t) hL.le
+  rw [add_one_mul] at h1
+  refine ⟨γ ^ (⌊t⌋ + 1) * x, ⟨?_, ?_⟩, ?_⟩
+  · rw [hle, hdiv, hx, Int.cast_add, Int.cast_one, add_one_mul]
+    linarith
+  · rw [hle, hmul, hx, Int.cast_add, Int.cast_one, add_one_mul]
+    linarith
+  · rw [QuotientGroup.mk'_apply, QuotientGroup.mk_mul,
+      (QuotientGroup.eq_one_iff _).mpr (Subgroup.zpow_mem_zpowers γ _), one_mul]
 
 include hγ hwidth in
 /-- Paper: Proposition 4.5.2.1(2), pp. 205–206. The interior of a strict-width
