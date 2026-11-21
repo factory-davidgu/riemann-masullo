@@ -624,6 +624,64 @@ theorem modulatedCutoffOperator_norm (ν : Measure G) [SigmaFinite ν] {Λ ε : 
       · simp [hxout hx]
     exact (mul_lt_mul_of_pos_right hc hu).not_ge (hlow.trans (T.le_opNorm u))
 
+/-- Reflecting the logarithmic coordinate exchanges the base interval with its negative. -/
+private theorem intervalSobolevDensity_neg (a b s t : ℝ) :
+    intervalSobolevDensity a b s (-t) = intervalSobolevDensity (-b) (-a) s t := by
+  have ha : 2 * a * -t = 2 * -a * t := by ring
+  have hb : 2 * b * -t = 2 * -b * t := by ring
+  unfold intervalSobolevDensity
+  rw [max_comm, neg_sq, ha, hb]
+
+/-- Inversion carries the measure with the reflected density to the measure with the
+original density, for an inversion-invariant base measure. -/
+private theorem measurePreserving_inv_withDensity {H : Type*} [Group H] [MeasurableSpace H]
+    [MeasurableInv H] (ν : Measure H) [ν.IsInvInvariant] {f : H → ℝ≥0∞} (hf : Measurable f) :
+    MeasurePreserving Inv.inv (ν.withDensity fun x ↦ f x⁻¹) (ν.withDensity f) := by
+  refine ⟨measurable_inv, Measure.ext fun t ht ↦ ?_⟩
+  rw [Measure.map_apply measurable_inv ht, withDensity_apply _ (measurable_inv ht),
+    withDensity_apply _ ht]
+  exact (Measure.measurePreserving_inv ν).setLIntegral_comp_preimage ht hf
+
+/-- Composition with inversion is an isometric isomorphism between the square-integrable
+classes of two measures that inversion exchanges. -/
+private theorem exists_lpInversion {H : Type*} [InvolutiveInv H] [MeasurableSpace H]
+    {ν₁ ν₂ : Measure H} (h₁ : MeasurePreserving Inv.inv ν₂ ν₁)
+    (h₂ : MeasurePreserving Inv.inv ν₁ ν₂) :
+    ∃ J : Lp ℂ 2 ν₁ ≃ₗᵢ[ℂ] Lp ℂ 2 ν₂, ∀ u, (J u : H → ℂ) =ᵐ[ν₂] fun x ↦ u x⁻¹ := by
+  let F : Lp ℂ 2 ν₁ →ₗᵢ[ℂ] Lp ℂ 2 ν₂ := Lp.compMeasurePreservingₗᵢ ℂ Inv.inv h₁
+  let B : Lp ℂ 2 ν₂ →ₗᵢ[ℂ] Lp ℂ 2 ν₁ := Lp.compMeasurePreservingₗᵢ ℂ Inv.inv h₂
+  have hF (u : Lp ℂ 2 ν₁) : (F u : H → ℂ) =ᵐ[ν₂] fun x ↦ u x⁻¹ :=
+    Lp.coeFn_compMeasurePreserving u h₁
+  have hB (v : Lp ℂ 2 ν₂) : (B v : H → ℂ) =ᵐ[ν₁] fun x ↦ v x⁻¹ :=
+    Lp.coeFn_compMeasurePreserving v h₂
+  have hBF (u : Lp ℂ 2 ν₁) : B (F u) = u := by
+    apply Lp.ext
+    filter_upwards [hB (F u), h₂.quasiMeasurePreserving.ae_eq_comp (hF u)] with x hx hx'
+    rw [hx]
+    simpa only [comp_apply, inv_inv] using hx'
+  have hFB (v : Lp ℂ 2 ν₂) : F (B v) = v := by
+    apply Lp.ext
+    filter_upwards [hF (B v), h₁.quasiMeasurePreserving.ae_eq_comp (hB v)] with x hx hx'
+    rw [hx]
+    simpa only [comp_apply, inv_inv] using hx'
+  exact ⟨{ toLinearEquiv := LinearEquiv.ofLinearMap F.toLinearMap B.toLinearMap
+            (LinearMap.ext hFB) (LinearMap.ext hBF)
+           norm_map' := F.norm_map }, hF⟩
+
+/-- An isometry acting by inversion on representatives intertwines the multipliers
+of an inversion-invariant symbol. -/
+private theorem lpCutoffMultiplier_inversion {ν₁ ν₂ : Measure G}
+    (h₁ : MeasurePreserving Inv.inv ν₂ ν₁) (J : Lp ℂ 2 ν₁ ≃ₗᵢ[ℂ] Lp ℂ 2 ν₂)
+    (hJ : ∀ u, (J u : G → ℂ) =ᵐ[ν₂] fun x ↦ u x⁻¹) (ρ : G → ℝ) (hm : Measurable ρ)
+    (hb : ∀ x, |ρ x| ≤ 1) (hinv : ∀ x, ρ x = ρ x⁻¹) (u : Lp ℂ 2 ν₁) :
+    J (lpCutoffMultiplier ν₁ ρ hm hb u) = lpCutoffMultiplier ν₂ ρ hm hb (J u) := by
+  apply Lp.ext
+  filter_upwards [hJ (lpCutoffMultiplier ν₁ ρ hm hb u),
+    h₁.quasiMeasurePreserving.ae_eq_comp (lpCutoffMultiplier_apply ν₁ ρ hm hb u),
+    lpCutoffMultiplier_apply ν₂ ρ hm hb (J u), hJ u] with x hx₁ hx₂ hx₃ hx₄
+  rw [hx₁, hx₃, hx₄, hinv x]
+  exact hx₂
+
 /-- Paper: (9.3.3.3), p. 427. Inversion interchanges the two reflected
 interval spaces and intertwines their cutoff multipliers. -/
 theorem modulatedCutoffOperator_inversion (a b s : ℝ) (_hab : a ≤ b) (_hs : 0 ≤ s)
@@ -631,7 +689,42 @@ theorem modulatedCutoffOperator_inversion (a b s : ℝ) (_hab : a ≤ b) (_hs : 
     ∃ J : W a b s ≃ₗᵢ[ℂ] W (-b) (-a) s,
       (∀ u, (J u : G → ℂ) =ᵐ[μ] fun x ↦ u x⁻¹) ∧
       ∀ u, J (modulatedCutoffOperator m (weightedMeasure a b s) hρ u) =
-        modulatedCutoffOperator m (weightedMeasure (-b) (-a) s) hρ (J u) := by sorry
+        modulatedCutoffOperator m (weightedMeasure (-b) (-a) s) hρ (J u) := by
+  have hmeas (a b : ℝ) : Measurable fun x : G ↦
+      ENNReal.ofReal (intervalSobolevDensity a b s (Real.log ((m x).val : ℝ))) := by
+    have hlog : Measurable fun x : G ↦ Real.log ((m x).val : ℝ) :=
+      Real.measurable_log.comp
+        (NNReal.continuous_coe.comp (Units.continuous_val.comp m.continuous)).measurable
+    have hdensity : Measurable (intervalSobolevDensity a b s) := by
+      unfold intervalSobolevDensity
+      fun_prop
+    exact (hdensity.comp hlog).ennreal_ofReal
+  have hpres (a b : ℝ) : MeasurePreserving Inv.inv
+      (μ.withDensity fun x ↦
+        ENNReal.ofReal (intervalSobolevDensity (-b) (-a) s (Real.log ((m x).val : ℝ))))
+      (μ.withDensity fun x ↦
+        ENNReal.ofReal (intervalSobolevDensity a b s (Real.log ((m x).val : ℝ)))) := by
+    have hreflect : (fun x : G ↦
+        ENNReal.ofReal (intervalSobolevDensity (-b) (-a) s (Real.log ((m x).val : ℝ)))) =
+        fun x ↦ ENNReal.ofReal (intervalSobolevDensity a b s (Real.log ((m x⁻¹).val : ℝ))) := by
+      funext x
+      rw [map_inv, Units.val_inv_eq_inv_val, NNReal.coe_inv, Real.log_inv,
+        intervalSobolevDensity_neg]
+    have h := measurePreserving_inv_withDensity μ (hmeas a b)
+    rw [hreflect]
+    exact h
+  have h₁ := hpres a b
+  have h₂ := hpres (-b) (-a)
+  rw [neg_neg, neg_neg] at h₂
+  obtain ⟨J, hJ⟩ := exists_lpInversion h₁ h₂
+  refine ⟨J, fun u ↦ ?_, fun u ↦ ?_⟩
+  · refine (withDensity_absolutelyContinuous' (hmeas (-b) (-a)).aemeasurable
+      (.of_forall fun x ↦ ?_)).ae_eq (hJ u)
+    have hpos : 0 < intervalSobolevDensity (-b) (-a) s (Real.log ((m x).val : ℝ)) := by
+      unfold intervalSobolevDensity
+      exact mul_pos (lt_max_of_lt_left (Real.exp_pos _)) (Real.rpow_pos_of_pos (by positivity) _)
+    exact (ENNReal.ofReal_pos.mpr hpos).ne'
+  · exact lpCutoffMultiplier_inversion h₁ J hJ ρ hρ.measurable hρ.abs_le_one hρ.inv_eq u
 
 /-- Paper: Definition 9.3.3.3, p. 428. The absolute cutoff associated to a set
 of module values is the indicator of its inverse image.

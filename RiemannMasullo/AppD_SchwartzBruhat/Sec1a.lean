@@ -26,6 +26,7 @@ import Mathlib.Topology.ContinuousMap.StoneWeierstrass
 import Mathlib.Topology.TietzeExtension
 import Mathlib.Analysis.Calculus.ContDiff.Comp
 import Mathlib.Analysis.Calculus.ContDiff.Operations
+import Mathlib.Analysis.Calculus.UniformLimitsDeriv
 import Mathlib.Analysis.Convex.Contractible
 import Mathlib.MeasureTheory.Measure.Haar.Unique
 import RiemannMasullo.ForMathlib.MeasureTheory.Measure.Haar.Extension
@@ -5031,8 +5032,285 @@ theorem elementarySchwartz_withSeminorms_sum :
     by_cases h : good N (idx N i) <;> simp [term, h]
 
 
+/-- A multilinear map is bounded by its values on tuples from a finite spanning family whose
+coefficient functions are bounded by the norm. -/
+private theorem norm_multilinear_le_sum_of_repr {ι κ X G : Type*} [Fintype ι] [Fintype κ]
+    [DecidableEq ι] [NormedAddCommGroup X] [NormedSpace ℝ X] [NormedAddCommGroup G] [NormedSpace ℝ G]
+    (e : κ → X) (c : X → κ → ℝ) (hrepr : ∀ v, ∑ j, c v j • e j = v)
+    (hc : ∀ v j, ‖c v j‖ ≤ ‖v‖)
+    (T : ContinuousMultilinearMap ℝ (fun _ : ι ↦ X) G) :
+    ‖T‖ ≤ ∑ t : ι → κ, ‖T (fun i ↦ e (t i))‖ := by
+  classical
+  apply T.opNorm_le_bound (Finset.sum_nonneg fun _ _ ↦ norm_nonneg _)
+  intro v
+  have hT : T v = ∑ t : ι → κ, (∏ i, c (v i) (t i)) • T (fun i ↦ e (t i)) := by
+    calc
+      T v = T.toMultilinearMap (fun i ↦ ∑ j, c (v i) j • e j) := by simp only [hrepr]; rfl
+      _ = _ := by
+        rw [T.toMultilinearMap.map_sum (fun i j ↦ c (v i) j • e j)]
+        exact Finset.sum_congr rfl fun t _ ↦ T.toMultilinearMap.map_smul_univ _ _
+  rw [hT, Finset.sum_mul]
+  refine (norm_sum_le _ _).trans (Finset.sum_le_sum fun t _ ↦ ?_)
+  rw [norm_smul, norm_prod, mul_comm]
+  exact mul_le_mul_of_nonneg_left
+    (Finset.prod_le_prod₀ (fun _ _ ↦ norm_nonneg _) (fun i _ ↦ hc _ _))
+    (norm_nonneg _)
+
+omit [AddCommGroup F] [TopologicalSpace F] [DiscreteTopology F] [Finite F] in
+/-- An iterated derivative of a fibre along a tuple of coordinate vectors is the mixed partial
+whose exponents count how often each coordinate vector occurs. -/
+private theorem elementary_iteratedFDeriv_coord_eq (k : ℕ) (t : Fin k → Fin m ⊕ Fin n) :
+    ∃ (β : Fin m → ℕ) (γ : Fin n → ℕ), ∀ (f : ElementaryLieGroup m n r F → ℂ) a b,
+      ContDiff ℝ ∞ (fun x ↦ f (elementaryCover x a b)) → ∀ x,
+      iteratedFDeriv ℝ k (fun z ↦ f (elementaryCover z a b)) x
+          (fun i ↦ Sum.elim
+            (fun j ↦ ((EuclideanSpace.single j 1 : EuclideanSpace ℝ (Fin m)),
+              (0 : EuclideanSpace ℝ (Fin n))))
+            (fun j ↦ ((0 : EuclideanSpace ℝ (Fin m)),
+              (EuclideanSpace.single j 1 : EuclideanSpace ℝ (Fin n)))) (t i)) =
+        elementaryPartial f β γ x a b := by
+  classical
+  let X := EuclideanSpace ℝ (Fin m) × EuclideanSpace ℝ (Fin n)
+  let J := Fin m ⊕ Fin n
+  let e : J → X := Sum.elim
+    (fun j ↦ ((EuclideanSpace.single j 1 : EuclideanSpace ℝ (Fin m)), 0))
+    (fun j ↦ (0, (EuclideanSpace.single j 1 : EuclideanSpace ℝ (Fin n))))
+  let dirs (b : Fin m → ℕ) (g : Fin n → ℕ) : List J :=
+    (List.ofFn fun i ↦ List.replicate (b i) (Sum.inl i)).flatten ++
+      (List.ofFn fun i ↦ List.replicate (g i) (Sum.inr i)).flatten
+  have hdirs (b : Fin m → ℕ) (g : Fin n → ℕ) :
+      (dirs b g).map e =
+        (List.ofFn fun i ↦ List.replicate (b i) (EuclideanSpace.single i 1, 0)).flatten ++
+        (List.ofFn fun i ↦ List.replicate (g i) (0, EuclideanSpace.single i 1)).flatten := by
+    simp only [dirs, List.map_append, List.map_flatten, List.map_ofFn, Function.comp_def,
+      List.map_replicate, e, Sum.elim_inl, Sum.elim_inr]
+  have hpartial (f : ElementaryLieGroup m n r F → ℂ) (a : Fin r → ℤ) (b : F)
+      (d : Fin m → ℕ) (g : Fin n → ℕ) (x : X) :
+      elementaryPartial f d g x a b =
+        iteratedFDeriv ℝ (dirs d g).length (fun z ↦ f (elementaryCover z a b)) x
+          (fun i ↦ e ((dirs d g).get i)) := by
+    dsimp only [elementaryPartial]
+    rw [← hdirs d g]
+    have hlength (k : ℕ) (hk : k = (dirs d g).length) :
+        iteratedFDeriv ℝ k (fun z ↦ f (elementaryCover z a b)) x
+          (fun i ↦ e ((dirs d g).get (Fin.cast hk i))) =
+          iteratedFDeriv ℝ (dirs d g).length (fun z ↦ f (elementaryCover z a b)) x
+            (fun i ↦ e ((dirs d g).get i)) := by
+      subst k
+      rfl
+    have hlen : ((dirs d g).map e).length = (dirs d g).length := List.length_map e
+    have hget : ((dirs d g).map e).get =
+        fun i ↦ e ((dirs d g).get (Fin.cast hlen i)) := by
+      funext i
+      simp only [List.get_eq_getElem, List.getElem_map, Fin.val_cast]
+    rw [hget]
+    exact hlength _ hlen
+  let β (i : Fin m) := (List.ofFn t).count (.inl i)
+  let γ (j : Fin n) := (List.ofFn t).count (.inr j)
+  have hPerm : (List.ofFn t).Perm (dirs β γ) := by
+    apply List.perm_iff_count.mpr
+    intro j
+    cases j with
+    | inl i =>
+      simp [dirs, β, γ, List.count_flatten, List.map_ofFn, List.count_replicate, List.sum_ofFn]
+    | inr i =>
+      simp [dirs, β, γ, List.count_flatten, List.map_ofFn, List.count_replicate, List.sum_ofFn]
+  refine ⟨β, γ, fun f a b hf x ↦ ?_⟩
+  rw [hpartial]
+  have hlength (k' : ℕ) (hk : k' = k) :
+      iteratedFDeriv ℝ k' (fun z ↦ f (elementaryCover z a b)) x
+          (fun i ↦ e (t (Fin.cast hk i))) =
+        iteratedFDeriv ℝ k (fun z ↦ f (elementaryCover z a b)) x (fun i ↦ e (t i)) := by
+    subst hk
+    rfl
+  change _ = iteratedFDeriv ℝ (dirs β γ).length (fun z ↦ f (elementaryCover z a b)) x
+    (fun i ↦ e ((dirs β γ).get i))
+  rw [← hlength _ List.length_ofFn]
+  simpa only [List.get_ofFn] using iteratedFDeriv_apply_list_perm hf e hPerm x
+
+omit [AddCommGroup F] [TopologicalSpace F] [DiscreteTopology F] [Finite F] in
+/-- A point of the cover is the sum of its coordinates times the coordinate vectors. -/
+private theorem elementary_coord_repr (v : EuclideanSpace ℝ (Fin m) × EuclideanSpace ℝ (Fin n)) :
+    ∑ j : Fin m ⊕ Fin n, Sum.elim (fun j ↦ v.1 j) (fun j ↦ v.2 j) j •
+      Sum.elim (fun j ↦ ((EuclideanSpace.single j 1 : EuclideanSpace ℝ (Fin m)),
+        (0 : EuclideanSpace ℝ (Fin n))))
+        (fun j ↦ ((0 : EuclideanSpace ℝ (Fin m)),
+          (EuclideanSpace.single j 1 : EuclideanSpace ℝ (Fin n)))) j = v := by
+  have h1 := (EuclideanSpace.basisFun (Fin m) ℝ).sum_repr v.1
+  have h2 := (EuclideanSpace.basisFun (Fin n) ℝ).sum_repr v.2
+  simp only [EuclideanSpace.basisFun_repr, EuclideanSpace.basisFun_apply] at h1 h2
+  rw [Fintype.sum_sum_type]
+  refine Prod.ext ?_ ?_
+  · simpa [Prod.fst_sum] using h1
+  · simpa [Prod.snd_sum] using h2
+
+/-- The elementary Schwartz space is complete. -/
+private theorem elementarySchwartz_complete : CompleteSpace (ElementarySchwartz m n r F) := by
+  classical
+  let E := ElementarySchwartz m n r F
+  let X := EuclideanSpace ℝ (Fin m) × EuclideanSpace ℝ (Fin n)
+  let J := Fin m ⊕ Fin n
+  let e : J → X := Sum.elim
+    (fun j ↦ ((EuclideanSpace.single j 1 : EuclideanSpace ℝ (Fin m)), 0))
+    (fun j ↦ (0, (EuclideanSpace.single j 1 : EuclideanSpace ℝ (Fin n))))
+  let c (v : X) : J → ℝ := Sum.elim (fun j ↦ v.1 j) (fun j ↦ v.2 j)
+  have hrepr (v : X) : ∑ j, c v j • e j = v := elementary_coord_repr v
+  have hc (v : X) (j : J) : ‖c v j‖ ≤ ‖v‖ := by
+    cases j with
+    | inl j => exact (PiLp.norm_apply_le v.1 j).trans (norm_fst_le v)
+    | inr j => exact (PiLp.norm_apply_le v.2 j).trans (norm_snd_le v)
+  have hp : WithSeminorms (E := E) elementarySchwartzSeminorm := elementarySchwartz_withSeminorms
+  have : FirstCountableTopology E := hp.firstCountableTopology
+  have : (uniformity E).IsCountablyGenerated := IsUniformAddGroup.uniformity_countably_generated
+  apply UniformSpace.complete_of_cauchySeq_tendsto
+  intro u hu
+  -- Every continuous seminorm has uniformly small differences along the tail.
+  have htail (q : Seminorm ℂ E) (hq : Continuous q) {ε : ℝ} (hε : 0 < ε) :
+      ∃ N, ∀ i ≥ N, ∀ j ≥ N, q (u i - u j) < ε := by
+    have hU : {z : E × E | q (z.1 - z.2) < ε} ∈ uniformity E := by
+      rw [uniformity_eq_comap_nhds_zero_swapped]
+      have hV : {f | q f < ε} ∈ 𝓝 (0 : E) :=
+        hq.continuousAt (x := 0) (Iio_mem_nhds (by simpa using hε))
+      exact preimage_mem_comap hV
+    obtain ⟨N, hN⟩ := cauchySeq_iff.mp hu _ hU
+    exact ⟨N, fun i hi j hj ↦ hN i hi j hj⟩
+  have hDsub (f g : E) (k : ℕ) (a : Fin r → ℤ) (b : F) (x : X) :
+      iteratedFDeriv ℝ k (fun v ↦ (f - g).val (elementaryCover v a b)) x =
+        iteratedFDeriv ℝ k (fun v ↦ f.val (elementaryCover v a b)) x -
+        iteratedFDeriv ℝ k (fun v ↦ g.val (elementaryCover v a b)) x :=
+    iteratedFDeriv_sub_apply ((f.property.1 a b).of_le (by simp)).contDiffAt
+      ((g.property.1 a b).of_le (by simp)).contDiffAt
+  have hsub (f g : E) β γ (x : X) a b :
+      elementaryPartial (f - g).val β γ x a b =
+        elementaryPartial f.val β γ x a b - elementaryPartial g.val β γ x a b := by
+    dsimp only [elementaryPartial]
+    rw [hDsub]
+    rfl
+  choose βs γs hcoord using fun (k : ℕ) (t : Fin k → J) ↦
+    elementary_iteratedFDeriv_coord_eq (r := r) (F := F) k t
+  let q (k : ℕ) : Seminorm ℂ E :=
+    ∑ t : Fin k → J, elementarySchwartzSeminorm (0, βs k t, γs k t, 0)
+  have hq (k : ℕ) : Continuous (q k) :=
+    Seminorm.continuous_finsetSum fun t _ ↦ hp.continuous_seminorm _
+  have hqapply (k : ℕ) (f : E) :
+      q k f = ∑ t : Fin k → J, elementarySchwartzSeminorm (0, βs k t, γs k t, 0) f := by
+    change FunLike.coeAddMonoidHom _ _ _
+      (∑ t : Fin k → J, elementarySchwartzSeminorm (0, βs k t, γs k t, 0)) f = _
+    rw [map_sum, Finset.sum_apply]
+    rfl
+  have hbound (f : E) (k : ℕ) (x : X) (a : Fin r → ℤ) (b : F) :
+      ‖iteratedFDeriv ℝ k (fun z ↦ f.val (elementaryCover z a b)) x‖ ≤ q k f := by
+    refine (norm_multilinear_le_sum_of_repr e c hrepr hc _).trans ?_
+    rw [hqapply]
+    refine Finset.sum_le_sum fun t _ ↦ ?_
+    rw [hcoord k t f.val a b (f.property.1 a b) x]
+    simpa using monomial_partial_le_seminorm 0 (βs k t) (γs k t) 0 f x a b
+  -- The iterated derivatives of each fibre converge uniformly.
+  let d (j k : ℕ) (a : Fin r → ℤ) (b : F) (x : X) :=
+    iteratedFDeriv ℝ k (fun z ↦ (u j).val (elementaryCover z a b)) x
+  have hcauchy (k : ℕ) (a : Fin r → ℤ) (b : F) :
+      UniformCauchySeqOn (fun j ↦ d j k a b) atTop univ := by
+    apply Metric.uniformCauchySeqOn_iff.mpr
+    intro ε hε
+    obtain ⟨N, hN⟩ := htail (q k) (hq k) hε
+    refine ⟨N, fun i hi j hj x _ ↦ ?_⟩
+    rw [dist_eq_norm]
+    exact ((hDsub (u i) (u j) k a b x).symm ▸ hbound (u i - u j) k x a b).trans_lt
+      (hN i hi j hj)
+  have _ (k : ℕ) : CompleteSpace (ContinuousMultilinearMap ℝ (fun _ : Fin k ↦ X) ℂ) :=
+    ContinuousMultilinearMap.instCompleteSpace
+  choose p hpt using fun (k : ℕ) (a : Fin r → ℤ) (b : F) (x : X) ↦
+    cauchySeq_tendsto_of_complete ((hcauchy k a b).cauchySeq (mem_univ x))
+  have huni (k : ℕ) (a : Fin r → ℤ) (b : F) :
+      TendstoUniformly (fun j ↦ d j k a b) (p k a b) atTop :=
+    tendstoUniformlyOn_univ.mp ((hcauchy k a b).tendstoUniformlyOn_of_tendsto
+      fun x _ ↦ hpt k a b x)
+  -- The limits form the Taylor series of their zeroth term.
+  let G (a : Fin r → ℤ) (b : F) (x : X) : ℂ := (p 0 a b x).curry0
+  have hseries (a : Fin r → ℤ) (b : F) :
+      HasFTaylorSeriesUpTo ∞ (G a b) (fun x k ↦ p k a b x) := by
+    refine ⟨fun _ ↦ rfl, ?_, ?_⟩
+    · intro k hk x
+      refine hasFDerivAt_of_tendstoUniformly
+        (f' := fun j x ↦ (d j (k + 1) a b x).curryLeft)
+        (g' := fun x ↦ (p (k + 1) a b x).curryLeft) ?_ ?_ (fun y ↦ hpt k a b y) x
+      · let curry := continuousMultilinearCurryLeftEquiv ℝ (fun _ : Fin (k + 1) ↦ X) ℂ
+        exact curry.isometry.uniformContinuous.comp_tendstoUniformly (huni (k + 1) a b)
+      · intro j y
+        exact ((u j).property.1 a b).ftaylorSeries.fderiv k hk y
+    · intro k hk
+      exact (huni k a b).continuous (Eventually.of_forall fun j ↦
+        ((u j).property.1 a b).ftaylorSeries.cont k hk).frequently
+  -- The pointwise limit on the group.
+  let lim (y : ElementaryLieGroup m n r F) : ℂ := limUnder atTop (fun j ↦ (u j).val y)
+  have hG (x : X) (a : Fin r → ℤ) (b : F) : lim (elementaryCover x a b) = G a b x := by
+    have h : Tendsto (fun j ↦ (u j).val (elementaryCover x a b)) atTop (𝓝 (G a b x)) := by
+      have hc := ((continuousMultilinearCurryFin0 ℝ X ℂ).continuous.tendsto _).comp
+        (hpt 0 a b x)
+      refine hc.congr fun j ↦ ?_
+      exact ((u j).property.1 a b).ftaylorSeries.zero_eq x
+    exact tendsto_nhds_unique (tendsto_nhds_limUnder ⟨_, h⟩) h
+  have hGfun (a : Fin r → ℤ) (b : F) : (fun x ↦ lim (elementaryCover x a b)) = G a b :=
+    funext fun x ↦ hG x a b
+  have heq (k : ℕ) (a : Fin r → ℤ) (b : F) (x : X) :
+      p k a b x = iteratedFDeriv ℝ k (fun z ↦ lim (elementaryCover z a b)) x := by
+    rw [hGfun]
+    exact (hseries a b).eq_iteratedFDeriv (by simp) x
+  have hconv (β : Fin m → ℕ) (γ : Fin n → ℕ) (x : X) (a : Fin r → ℤ) (b : F) :
+      Tendsto (fun j ↦ elementaryPartial (u j).val β γ x a b) atTop
+        (𝓝 (elementaryPartial lim β γ x a b)) := by
+    dsimp only [elementaryPartial]
+    rw [← heq]
+    exact ((ContinuousMultilinearMap.apply ℝ _ ℂ _).continuous.tendsto _).comp (hpt _ a b x)
+  let w (i : ElementarySchwartzIndex m n r) (x : X) (a : Fin r → ℤ) : ℂ :=
+    (∏ k, (x.1 k : ℂ) ^ i.1 k) * (∏ k, (a k : ℂ) ^ i.2.2.2 k)
+  have hclose (i : ElementarySchwartzIndex m n r) {ε : ℝ} (hε : 0 < ε) :
+      ∃ N, ∀ j ≥ N, ∀ x a b, ‖w i x a * (elementaryPartial (u j).val i.2.1 i.2.2.1 x a b -
+        elementaryPartial lim i.2.1 i.2.2.1 x a b)‖ ≤ ε := by
+    obtain ⟨N, hN⟩ := htail (elementarySchwartzSeminorm i) (hp.continuous_seminorm i) hε
+    refine ⟨N, fun j hj x a b ↦ le_of_tendsto
+      ((tendsto_const_nhds.mul (tendsto_const_nhds.sub (hconv _ _ x a b))).norm) ?_⟩
+    filter_upwards [eventually_ge_atTop N] with l hl
+    rw [← hsub]
+    exact (monomial_partial_le_seminorm i.1 i.2.1 i.2.2.1 i.2.2.2 (u j - u l) x a b).trans
+      (hN j hj l hl).le
+  have hmem : lim ∈ elementarySchwartzSubmodule m n r F := by
+    refine ⟨fun a b ↦ (hGfun a b).symm ▸ (hseries a b).contDiff, fun i ↦ ?_⟩
+    obtain ⟨N, hN⟩ := hclose i one_pos
+    refine lt_of_le_of_lt (b := ENNReal.ofReal (elementarySchwartzSeminorm i (u N) + 1)) ?_
+      ENNReal.ofReal_lt_top
+    refine iSup_le fun x ↦ iSup_le fun a ↦ iSup_le fun b ↦ ?_
+    rw [ENNReal.coe_nnreal_eq, coe_nnNorm]
+    apply ENNReal.ofReal_le_ofReal
+    have hsplit : w i x a * elementaryPartial lim i.2.1 i.2.2.1 x a b =
+        w i x a * elementaryPartial (u N).val i.2.1 i.2.2.1 x a b -
+          w i x a * (elementaryPartial (u N).val i.2.1 i.2.2.1 x a b -
+            elementaryPartial lim i.2.1 i.2.2.1 x a b) := by ring
+    change ‖w i x a * elementaryPartial lim i.2.1 i.2.2.1 x a b‖ ≤ _
+    rw [hsplit]
+    exact (norm_sub_le _ _).trans (add_le_add
+      (monomial_partial_le_seminorm i.1 i.2.1 i.2.2.1 i.2.2.2 (u N) x a b) (hN N le_rfl x a b))
+  let fE : E := (⟨lim, hmem⟩ : elementarySchwartzSubmodule m n r F)
+  refine ⟨fE, (hp.tendsto_nhds_atTop u fE).mpr fun i ε hε ↦ ?_⟩
+  obtain ⟨N, hN⟩ := hclose i (half_pos hε)
+  refine ⟨N, fun j hj ↦ lt_of_le_of_lt ?_ (half_lt_self hε)⟩
+  change (elementarySchwartzBound (u j - fE).val i).toReal ≤ ε / 2
+  apply ENNReal.toReal_le_of_le_ofReal (half_pos hε).le
+  refine iSup_le fun x ↦ iSup_le fun a ↦ iSup_le fun b ↦ ?_
+  rw [ENNReal.coe_nnreal_eq, coe_nnNorm]
+  apply ENNReal.ofReal_le_ofReal
+  rw [hsub]
+  exact hN j hj x a b
+
 /-- Paper: Lemma D.1.3.5(2), p. 752. The elementary Schwartz space is Fréchet. -/
-theorem elementarySchwartz_isFrechet : IsFrechetTVS (ElementarySchwartz m n r F) := by sorry
+theorem elementarySchwartz_isFrechet : IsFrechetTVS (ElementarySchwartz m n r F) := by
+  have hp : WithSeminorms (E := ElementarySchwartz m n r F) elementarySchwartzSeminorm :=
+    elementarySchwartz_withSeminorms
+  have : FirstCountableTopology (ElementarySchwartz m n r F) := hp.firstCountableTopology
+  have : (uniformity (ElementarySchwartz m n r F)).IsCountablyGenerated :=
+    IsUniformAddGroup.uniformity_countably_generated
+  have : T2Space (ElementarySchwartz m n r F) := elementarySchwartz_t2
+  exact ⟨inferInstance, inferInstance, UniformSpace.metrizableSpace, elementarySchwartz_complete⟩
 
 end Elementary
 

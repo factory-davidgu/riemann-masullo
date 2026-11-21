@@ -745,7 +745,9 @@ local notation "Δ₀" => schwartzBruhatCyclicDifference γ
 /-- Paper: Equation (4.5.3.3), p. 208. The ordinary cyclic difference at x
 subtracts the function's value at γx. -/
 theorem schwartzBruhatCyclicDifference_apply (f : S₀) (x : G) :
-    Δ₀ f x = f x - f (γ * x) := by sorry
+    Δ₀ f x = f x - f (γ * x) := by
+  change f x - ρG γ⁻¹ f x = _
+  rw [schwartzBruhatTranslationAction_apply, inv_inv]
 
 include hm hms in
 /-- Paper: Corollary 4.5.3.1(2), pp. 208–209. On ordinary Schwartz–Bruhat

@@ -411,7 +411,16 @@ theorem schwartzBruhatEigendistributions_zeroEval :
 /-- Paper: Definition 3.4.3.1(1)–(2), p. 151. The weight subspace is
 closed in the strong topology of the continuous dual. -/
 theorem schwartzBruhatEigendistributions_isClosed (c : QuasiCharacter Rˣ) :
-    IsClosed (schwartzBruhatEigendistributions c : Set (StrongDual ℂ ℬ(R))) := by sorry
+    IsClosed (schwartzBruhatEigendistributions c : Set (StrongDual ℂ ℬ(R))) := by
+  have h : (schwartzBruhatEigendistributions c : Set (StrongDual ℂ ℬ(R))) =
+      ⋂ (g : Rˣ) (f : ℬ(R)), {T | T (schwartzBruhatUnitTranslate g f) = c g * T f} := by
+    ext T
+    simp only [Set.mem_iInter]
+    rfl
+  -- Rewriting with `h` takes minutes, so transport closedness along it instead.
+  exact (congrArg (fun s : Set (StrongDual ℂ ℬ(R)) ↦ IsClosed s) h).mpr
+    (isClosed_iInter fun g ↦ isClosed_iInter fun f ↦
+      isClosed_eq (continuous_eval_const _) ((continuous_eval_const f).const_mul _))
 
 end Eigendistributions
 
