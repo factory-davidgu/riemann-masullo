@@ -14,9 +14,11 @@ public import Mathlib.Analysis.SpecialFunctions.Trigonometric.Bounds
 public import Mathlib.Topology.Order.Lattice
 
 import Mathlib.Analysis.Complex.AbsMax
+import Mathlib.Analysis.Complex.Liouville
 import Mathlib.Analysis.Convex.Continuous
 import Mathlib.NumberTheory.LSeries.Injectivity
 import RiemannMasullo.ForMathlib.Analysis.Complex.Hadamard
+import RiemannMasullo.ForMathlib.Analysis.SpecialFunctions.Gamma.Bounds
 import RiemannMasullo.ForMathlib.NumberTheory.NumberField.HeckeLFunction
 
 /-!
@@ -1305,6 +1307,65 @@ private theorem exists_analyticOnNhd_isTheta_finiteHeckeL_continuation
       have hm : m = -1 := by omega
       simp [hm]
 
+/-- The product of the reciprocal archimedean factors has an exponential bound on each
+closed strip. A complex factor is handled as two real factors via the duplication formula. -/
+private theorem inv_heckeGammaFactor_isBigO_exp (χ : U[F]) (a b : ℝ) :
+    ∃ B : ℝ, 0 < B ∧
+      (fun s ↦ (heckeGammaFactor χ s)⁻¹) =O[atHeight ⊓ 𝓟 (Complex.re ⁻¹' Icc a b)]
+        fun s ↦ Real.exp (B * |s.im|) := by
+  classical
+  let l := atHeight ⊓ 𝓟 (Complex.re ⁻¹' Icc a b)
+  let P (v : InfinitePlace F) (s : ℂ) :=
+    (if hv : v.IsReal then
+      let d := (realHeckeCharacter_parameters χ v hv).exists.choose
+      Complex.Gammaℝ (s + d.1 + (d.2.val : ℂ))
+    else
+      let d := (complexHeckeCharacter_parameters χ v
+        (InfinitePlace.not_isReal_iff_isComplex.mp hv)).exists.choose
+      Complex.Gammaℂ (s + d.1 + (d.2.natAbs : ℂ) / 2) / 2)⁻¹
+  have hP (v : InfinitePlace F) : P v =O[l] fun s ↦ Real.exp (Real.pi * |s.im|) := by
+    by_cases hv : v.IsReal
+    · let d := (realHeckeCharacter_parameters χ v hv).exists.choose
+      have h := inv_Gammaℝ_add_isBigO_exp a b (d.1 + (d.2.val : ℂ))
+      refine (show P v =O[l] fun s ↦ Real.exp ((Real.pi / 2) * |s.im|) by
+        simpa only [P, dite_eq_left hv, d, add_assoc] using h).trans ?_
+      refine Asymptotics.IsBigO.of_bound 1 (Eventually.of_forall fun s ↦ ?_)
+      rw [one_mul, Real.norm_of_nonneg (Real.exp_pos _).le,
+        Real.norm_of_nonneg (Real.exp_pos _).le]
+      gcongr
+      linarith [Real.pi_pos]
+    · let d := (complexHeckeCharacter_parameters χ v
+        (InfinitePlace.not_isReal_iff_isComplex.mp hv)).exists.choose
+      let w := d.1 + (d.2.natAbs : ℂ) / 2
+      have h := ((inv_Gammaℝ_add_isBigO_exp a b w).mul
+        (inv_Gammaℝ_add_isBigO_exp a b (w + 1))).const_mul_left (2 : ℂ)
+      have hLocal (s : ℂ) : P v s =
+          2 * ((Complex.Gammaℝ (s + w))⁻¹ * (Complex.Gammaℝ (s + (w + 1)))⁻¹) := by
+        simp only [P, dite_eq_right hv, d, w, ← add_assoc, div_eq_mul_inv, mul_inv_rev, inv_inv,
+          ← Complex.Gammaℝ_mul_Gammaℝ_add_one]
+        ring
+      simpa only [← hLocal, ← Real.exp_add, ← add_mul, add_halves] using h
+  have hProd := Asymptotics.IsBigO.finsetProd (s := Finset.univ) (fun v _ ↦ hP v)
+  have hInv : (fun s ↦ (heckeGammaFactor χ s)⁻¹) =O[l]
+      fun s ↦ Real.exp ((Fintype.card (InfinitePlace F) * Real.pi) * |s.im|) := by
+    simpa only [P, heckeGammaFactor, Finset.prod_inv_distrib, Finset.prod_const,
+      Finset.card_univ, ← Real.exp_nat_mul, mul_assoc] using hProd
+  refine ⟨Fintype.card (InfinitePlace F) * Real.pi + 1, by positivity, hInv.trans ?_⟩
+  refine Asymptotics.IsBigO.of_bound 1 (Eventually.of_forall fun s ↦ ?_)
+  rw [one_mul, Real.norm_of_nonneg (Real.exp_pos _).le, Real.norm_of_nonneg (Real.exp_pos _).le]
+  gcongr
+  exact le_add_of_nonneg_right zero_le_one
+
+/-- The completed Hecke continuation is uniformly bounded at large absolute height on
+each fixed closed vertical strip. In Tate's split zeta integral the two integrals over
+idele classes of norm at least one are bounded by absolute integrals at the extreme real
+exponents, and the simple polar terms are bounded away from their pole heights. -/
+private theorem completedHeckeL_continuation_isBigO_one (χ : U[F]) (Λ : ℂ → ℂ)
+    (hΛ : MeromorphicNFOn Λ univ) (hSeries : ∀ s : halfPlane, Λ s = completedHeckeL χ s)
+    (a b : ℝ) (hab : a < b) :
+    Λ =O[atHeight ⊓ 𝓟 (Complex.re ⁻¹' Icc a b)] fun _ ↦ (1 : ℝ) := by
+  sorry
+
 /-- A preliminary exponential bound for the finite continuation on a fixed strip.
 Tate's split zeta integral gives boundedness of the completed function at large height, and
 reciprocal gamma factors cost at most an exponential in the absolute height. -/
@@ -1313,7 +1374,51 @@ theorem finiteHeckeL_continuation_isBigO_exp (χ : U[F]) (L : ℂ → ℂ)
     (a b : ℝ) (hab : a < b) :
     ∃ B : ℝ, 0 < B ∧ L =O[atHeight ⊓ 𝓟 (Complex.re ⁻¹' Icc a b)]
       fun s ↦ Real.exp (B * |s.im|) := by
-  sorry
+  obtain ⟨Λ, hΛ, hΛSeries⟩ := completedHeckeL_exists_continuation χ
+  let R (s : ℂ) := (heckeGammaFactor χ s)⁻¹
+  let H := Λ * R
+  have hR := differentiable_inv_heckeGammaFactor χ
+  have hH : MeromorphicOn H univ := fun s hs ↦
+    (hΛ hs).meromorphicAt.mul (hR.analyticAt s).meromorphicAt
+  have hAtTwo : meromorphicOrderAt (L - H) (2 : ℂ) = ⊤ := by
+    apply meromorphicOrderAt_eq_top_iff.mpr
+    have hn : ∀ᶠ s : ℂ in 𝓝 (2 : ℂ), 1 < s.re :=
+      (isOpen_lt continuous_const Complex.continuous_re).mem_nhds (by norm_num)
+    filter_upwards [hn.filter_mono nhdsWithin_le_nhds] with s hs
+    have hne := heckeGammaFactor_ne_zero_of_re_pos χ (zero_lt_one.trans hs)
+    change L s - Λ s * (heckeGammaFactor χ s)⁻¹ = 0
+    rw [hSeries ⟨s, hs⟩, hΛSeries ⟨s, hs⟩, completedHeckeL, finiteHeckeL]
+    rw [mul_comm (heckeGammaFactor χ s), mul_assoc, mul_inv_cancel₀ hne, mul_one, sub_self]
+  have hAnalytic : ∀ᶠ s in atHeight, AnalyticAt ℂ Λ s := by
+    by_cases hχ : χ.toMonoidHom.comp (ideleClassNorm F).ker.subtype = 1
+    · obtain ⟨t, ⟨_, _, _, ha⟩, _⟩ :=
+        completedHeckeL_continuation_simplePoles χ Λ hΛ hΛSeries hχ
+      filter_upwards [tendsto_comap.eventually_gt_atTop |t|] with s hs
+      apply ha
+      have hp : s ≠ Complex.I * (t : ℂ) := by
+        rintro rfl
+        simp at hs
+      have hq : s ≠ 1 + Complex.I * (t : ℂ) := by
+        rintro rfl
+        simp at hs
+      simp [hp, hq]
+    · exact Eventually.of_forall (completedHeckeL_continuation_entire χ Λ hΛ hΛSeries hχ).analyticAt
+  let l := atHeight ⊓ 𝓟 (Complex.re ⁻¹' Icc a b)
+  have hAgree : L =ᶠ[l] H := by
+    filter_upwards [hAnalytic.filter_mono (show l ≤ atHeight from inf_le_left)] with s hs
+    have ho := (hL.meromorphicOn.sub hH).meromorphicOrderAt_eq_top_of_isPreconnected
+      isPreconnected_univ (mem_univ (2 : ℂ)) (mem_univ s) hAtTwo
+    have he : L =ᶠ[𝓝[≠] s] H := (meromorphicOrderAt_eq_top_iff.mp ho).mono fun z hz ↦
+      sub_eq_zero.mp hz
+    exact (((hL (mem_univ s)).eventuallyEq_nhdsNE_iff_eventuallyEq_nhds
+      (hs.mul (hR.analyticAt s)).meromorphicNFAt).mp he).eq_of_nhds
+  obtain ⟨B, hB, hΓ⟩ := inv_heckeGammaFactor_isBigO_exp χ a b
+  refine ⟨B, hB, ?_⟩
+  have hBound := (completedHeckeL_continuation_isBigO_one χ Λ hΛ hΛSeries a b hab).mul hΓ
+  have hHO : H =O[l] fun s ↦ Real.exp (B * |s.im|) := by
+    change (fun s ↦ Λ s * (heckeGammaFactor χ s)⁻¹) =O[l] _
+    simpa only [one_mul] using hBound
+  exact hHO.congr' hAgree.symm EventuallyEq.rfl
 
 /-- Paper: Equations (B.1.1.9)–(B.1.1.11), p. 590. On each negative half-integer line,
 the explicit functional equation bounds the finite continuation by a power of the height.
@@ -1634,7 +1739,65 @@ theorem finiteHeckeL_continuation_iteratedDeriv_isBigO_rpow (χ : U[F]) (L : ℂ
     (k : ℕ) (σ : ℝ) :
     ∃ M C : ℝ, 0 < M ∧ 0 < C ∧
       ∀ᶠ s in atHeight ⊓ 𝓟 (Complex.re ⁻¹' {σ}),
-        AnalyticAt ℂ L s ∧ ‖iteratedDeriv k L s‖ ≤ C * |s.im| ^ M := by sorry
+        AnalyticAt ℂ L s ∧ ‖iteratedDeriv k L s‖ ≤ C * |s.im| ^ M := by
+  obtain ⟨M, hM, hGrowth⟩ := finiteHeckeL_continuation_isBigO_rpow χ L hL hSeries
+    (σ - 2) (σ + 2) (by linarith)
+  obtain ⟨D, hD, T, hT⟩ := (isBigO_height_iff (p := fun _ ↦ M)).mp hGrowth
+  have hIm : Continuous (fun w : ℂ ↦ |w.im|) := Complex.continuous_im.abs
+  -- A pole would contradict the local bound in the interior of the strip.
+  have hAnalytic {w : ℂ} (hRe : w.re ∈ Ioo (σ - 2) (σ + 2)) (hHeight : T < |w.im|) :
+      AnalyticAt ℂ L w := by
+    apply (hL (mem_univ w)).meromorphicOrderAt_nonneg_iff_analyticAt.mp
+    by_contra! hPole
+    have hNearRe : ∀ᶠ z : ℂ in 𝓝 w, z.re ∈ Ioo (σ - 2) (σ + 2) :=
+      (isOpen_Ioo.preimage Complex.continuous_re).mem_nhds hRe
+    have hNearIm : ∀ᶠ z : ℂ in 𝓝 w, |z.im| ∈ Ioo T (|w.im| + 1) :=
+      (isOpen_Ioo.preimage hIm).mem_nhds ⟨hHeight, lt_add_of_pos_right _ zero_lt_one⟩
+    have hBound : ∀ᶠ z in 𝓝 w, ‖L z‖ ≤ D * (|w.im| + 1) ^ M := by
+      filter_upwards [hNearRe, hNearIm] with z hzRe hzIm
+      exact (hT z (Ioo_subset_Icc_self hzRe) hzIm.1.le).trans
+        (mul_le_mul_of_nonneg_left (Real.rpow_le_rpow (abs_nonneg _) hzIm.2.le hM.le) hD.le)
+    have hBlowup := (tendsto_norm_cobounded_atTop.comp
+      (tendsto_cobounded_of_meromorphicOrderAt_neg hPole)).eventually_gt_atTop
+        (D * (|w.im| + 1) ^ M)
+    obtain ⟨z, hz, h'z⟩ := ((hBound.filter_mono nhdsWithin_le_nhds).and hBlowup).exists
+    exact h'z.not_ge hz
+  refine ⟨M, (k.factorial : ℝ) * (D * (2 : ℝ) ^ M), hM, by positivity, ?_⟩
+  have hLine : ∀ᶠ s in atHeight ⊓ 𝓟 (Complex.re ⁻¹' {σ}), s.re = σ :=
+    eventually_inf_principal.mpr (Eventually.of_forall fun _ hs ↦ hs)
+  have hHeight : Tendsto (fun s : ℂ ↦ |s.im|) (atHeight ⊓ 𝓟 (Complex.re ⁻¹' {σ})) atTop :=
+    tendsto_inf_left tendsto_comap
+  filter_upwards [hLine, hHeight.eventually_ge_atTop (max 1 (T + 2))] with s hs hts
+  have hOne : 1 ≤ |s.im| := (le_max_left _ _).trans hts
+  have hLarge : T + 2 ≤ |s.im| := (le_max_right _ _).trans hts
+  -- The unit disk stays inside the strip and its boundary heights are at most twice the center's.
+  have hDisk {w : ℂ} (hw : w ∈ Metric.closedBall s 1) :
+      w.re ∈ Ioo (σ - 2) (σ + 2) ∧ T < |w.im| ∧ |w.im| ≤ 2 * |s.im| := by
+    have hdist := mem_closedBall_iff_norm.mp hw
+    have hre := (Complex.abs_re_le_norm (w - s)).trans hdist
+    have him := (Complex.abs_im_le_norm (w - s)).trans hdist
+    rw [Complex.sub_re, hs, abs_le] at hre
+    rw [Complex.sub_im] at him
+    refine ⟨⟨by linarith [hre.1], by linarith [hre.2]⟩, ?_, ?_⟩
+    · linarith [(abs_sub_abs_le_abs_sub s.im w.im).trans (by simpa [abs_sub_comm] using him)]
+    · linarith [(abs_sub_abs_le_abs_sub w.im s.im).trans him]
+  have hDiskAnalytic (w : ℂ) (hw : w ∈ Metric.closedBall s 1) : AnalyticAt ℂ L w :=
+    hAnalytic (hDisk hw).1 (hDisk hw).2.1
+  refine ⟨hDiskAnalytic s (Metric.mem_closedBall_self zero_le_one), ?_⟩
+  have hDiff : DiffContOnCl ℂ L (Metric.ball s 1) :=
+    (show DifferentiableOn ℂ L (Metric.closedBall s 1) from fun w hw ↦
+      (hDiskAnalytic w hw).differentiableAt.differentiableWithinAt).diffContOnCl_ball subset_rfl
+  have hCircle (w : ℂ) (hw : w ∈ Metric.sphere s 1) :
+      ‖L w‖ ≤ (D * (2 : ℝ) ^ M) * |s.im| ^ M := by
+    obtain ⟨hRe, hLow, hHigh⟩ := hDisk (Metric.sphere_subset_closedBall hw)
+    calc
+      ‖L w‖ ≤ D * |w.im| ^ M := hT w (Ioo_subset_Icc_self hRe) hLow.le
+      _ ≤ D * (2 * |s.im|) ^ M :=
+        mul_le_mul_of_nonneg_left (Real.rpow_le_rpow (abs_nonneg _) hHigh hM.le) hD.le
+      _ = (D * (2 : ℝ) ^ M) * |s.im| ^ M := by
+        rw [Real.mul_rpow (by norm_num : 0 ≤ (2 : ℝ)) (abs_nonneg _), mul_assoc]
+  simpa only [one_pow, div_one, mul_assoc] using
+    Complex.norm_iteratedDeriv_le_of_forall_mem_sphere_norm_le k zero_lt_one hDiff hCircle
 
 -- TODO(paper-gap): Footnotes 3 and 4 leave the intended uniform derivative
 -- bounds on strips open. Proposition 3.3.1.5 is stated on fixed lines with σ > 0.
