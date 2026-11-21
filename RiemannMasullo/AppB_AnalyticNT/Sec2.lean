@@ -2591,7 +2591,63 @@ theorem mul_shiftedMellin_eventualHeightBound (hn : 1 ≤ n)
     (A B : ℝ) (hA : 0 < A) (hB : 0 < B)
     (hGrowth : ∀ᶠ y : ℝ in atAbsInfty, ∀ σ ∈ Ioo a b, ‖F (verticalPoint σ y)‖ ≤ A * |y| ^ B)
     (N : ℕ) (hN : 1 ≤ N) :
-    eventualHeightBound (fun s ↦ F s * shiftedMellin n δ s) (Ioo a b) N := by sorry
+    eventualHeightBound (fun s ↦ F s * shiftedMellin n δ s) (Ioo a b) N := by
+  obtain ⟨M, hM⟩ : ∃ M : ℝ, M = max |a| |b| := ⟨_, rfl⟩
+  have hM0 : 0 < M := by
+    rw [hM, lt_max_iff, abs_pos, abs_pos]
+    by_contra h
+    rw [not_or, not_not, not_not] at h
+    rw [h.1, h.2] at hab
+    exact lt_irrefl _ hab
+  -- A height bound of order `N + K` for the Mellin transform absorbs the growth `|y| ^ B`.
+  obtain ⟨K, hK⟩ : ∃ K : ℕ, B ≤ K := exists_nat_ge B
+  obtain ⟨C, hC, hBound⟩ := mellin_heightBound_of_exponentialDecay f hf
+    ((n : ℝ) - M) ((n : ℝ) + M) (by linarith) (N + K) (by omega)
+  have hy1 : ∀ᶠ y : ℝ in atAbsInfty, 1 ≤ |y| := tendsto_comap.eventually (eventually_ge_atTop 1)
+  refine ⟨A * C, mul_pos hA hC, ?_⟩
+  filter_upwards [hGrowth, hy1] with y hFy hy σ hσ
+  have hypos : 0 < |y| := zero_lt_one.trans_le hy
+  have hy0 : y ≠ 0 := abs_pos.mp hypos
+  have hδy : δ * y ≠ 0 := mul_ne_zero (by rcases hδ with rfl | rfl <;> norm_num) hy0
+  have habs : |δ * y| = |y| := by rcases hδ with rfl | rfl <;> simp
+  have hσM : |δ * σ| ≤ M := by
+    have h : |σ| ≤ M := by
+      rw [hM]
+      exact abs_le_max_abs_abs hσ.1.le hσ.2.le
+    rcases hδ with rfl | rfl <;> simpa using h
+  have hmem : (n : ℝ) + δ * σ ∈ Icc ((n : ℝ) - M) ((n : ℝ) + M) := by
+    have h := abs_le.mp hσM
+    constructor <;> linarith
+  obtain ⟨u, hu⟩ : ∃ u : ℝ, u = ‖F ((σ : ℂ) + (y : ℂ) * Complex.I)‖ := ⟨_, rfl⟩
+  obtain ⟨w, hw⟩ : ∃ w : ℝ, w = ‖mellin (fromLog f)
+      ((n : ℂ) + (δ : ℂ) * ((σ : ℂ) + (y : ℂ) * Complex.I))‖ := ⟨_, rfl⟩
+  have hw0 : 0 ≤ w := by
+    rw [hw]
+    exact norm_nonneg _
+  have hpowN : 0 < |y| ^ N := pow_pos hypos _
+  have hrpow : |y| ^ B ≤ |y| ^ K := by
+    rw [← Real.rpow_natCast]
+    exact Real.rpow_le_rpow_of_exponent_le hy hK
+  have hu' : u ≤ A * |y| ^ K := by
+    rw [hu]
+    exact (hFy σ hσ).trans (mul_le_mul_of_nonneg_left hrpow hA.le)
+  have hw' : w * (|y| ^ N * |y| ^ K) ≤ C := by
+    have hpt : (n : ℂ) + (δ : ℂ) * ((σ : ℂ) + (y : ℂ) * Complex.I) =
+        (((n : ℝ) + δ * σ : ℝ) : ℂ) + ((δ * y : ℝ) : ℂ) * Complex.I := by
+      push_cast
+      ring
+    have h : w ≤ C / |y| ^ (N + K) := by
+      rw [hw, hpt, ← habs]
+      exact hBound ((n : ℝ) + δ * σ) hmem (δ * y) hδy
+    rw [← pow_add]
+    exact (le_div_iff₀ (pow_pos hypos _)).mp h
+  change ‖F ((σ : ℂ) + (y : ℂ) * Complex.I) * mellin (fromLog f)
+    ((n : ℂ) + (δ : ℂ) * ((σ : ℂ) + (y : ℂ) * Complex.I))‖ ≤ A * C / |y| ^ N
+  rw [norm_mul, ← hu, ← hw, le_div_iff₀ hpowN]
+  calc u * w * |y| ^ N ≤ A * |y| ^ K * w * |y| ^ N :=
+        mul_le_mul_of_nonneg_right (mul_le_mul_of_nonneg_right hu' hw0) hpowN.le
+    _ = A * (w * (|y| ^ N * |y| ^ K)) := by ring
+    _ ≤ A * C := mul_le_mul_of_nonneg_left hw' hA.le
 
 end ExponentialMellin
 
