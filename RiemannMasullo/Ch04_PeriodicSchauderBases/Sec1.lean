@@ -7,6 +7,7 @@ public import Mathlib.Topology.Algebra.Equicontinuity
 public import Mathlib.Topology.Algebra.Module.Complement
 import Mathlib.Analysis.LocallyConvex.StrongTopology
 import Mathlib.Analysis.PSeries
+import Mathlib.Analysis.InnerProductSpace.Dual
 import Mathlib.Topology.Baire.LocallyCompactRegular
 import RiemannMasullo.ForMathlib.Analysis.LocallyConvex.SeparatingDual
 import RiemannMasullo.ForMathlib.Analysis.Normed.Module.WeakDual
@@ -420,7 +421,23 @@ theorem pi_isBoundedlyComplete : IsBoundedlyComplete coordinateVector := by
 shrinking, with its coefficients given by the inner products against its vectors. -/
 theorem hilbertBasis_isShrinking {H : Type*} [NormedAddCommGroup H] [InnerProductSpace ℂ H]
     [CompleteSpace H] (b : HilbertBasis ℕ ℂ H) :
-    IsShrinking (fun n ↦ b n) (fun n ↦ innerSL ℂ (b n)) := by sorry
+    IsShrinking (fun n ↦ b n) (fun n ↦ innerSL ℂ (b n)) := by
+  unfold IsShrinking IsSchauderBasis IsTopologicalBasis
+  constructor
+  · intro m n
+    change inner ℂ (b n) (b m) = _
+    simpa [eq_comm] using (orthonormal_iff_ite.mp b.orthonormal n m)
+  · intro u
+    let v := (InnerProductSpace.toDual ℂ H).symm u
+    have h := (b.hasSum_repr v).mapL (innerSL ℂ)
+    simp only [map_smulₛₗ] at h
+    have hh : HasSum (fun m ↦ u (b m) • innerSL ℂ (b m)) u := by
+      convert h using 1
+      · funext m
+        simp only [HilbertBasis.repr_apply_apply, inner_conj_symm]
+        rw [show inner ℂ v (b m) = u (b m) from InnerProductSpace.toDual_symm_apply]
+      · exact ((InnerProductSpace.toDual ℂ H).apply_symm_apply u).symm
+    exact hh.mono_left (SummationFilter.LeAtTop.le_atTop (L := SummationFilter.conditional ℕ))
 
 /-- Paper: Definition 4.1.2.1(6), p. 158. Every zero neighborhood in the complex
 sequence space with the product topology contains a coordinate basis vector. -/
@@ -1221,13 +1238,53 @@ theorem strongDual_isShrinking_of_isAbsolute (hNuclear : IsNuclearTVS.{v, u} E) 
 
 end AbsoluteDuality
 
+/-- On a barrelled space, pointwise absolute summability under each continuous
+seminorm gives a continuous seminorm bound on the absolute sums. -/
+private theorem isAbsolute_iff_summable_of_barrelled [IsTopologicalAddGroup E]
+    [ContinuousSMul ℂ E] [BarrelledSpace ℂ E] :
+    IsAbsolute x f ↔
+      ∀ (q : Seminorm ℂ E), Continuous q → ∀ u, Summable (fun m ↦ q (f m u • x m)) := by
+  constructor
+  · intro h q hq u
+    obtain ⟨_, _, hbound⟩ := h q hq
+    exact (hbound u).1
+  · intro hsum q hq
+    let L (m : ℕ) : E →L[ℂ] E := (f m).smulRight (x m)
+    let p (s : Finset ℕ) : Seminorm ℂ E := ∑ m ∈ s, q.comp (L m).toLinearMap
+    have hp (s : Finset ℕ) : Continuous (p s) :=
+      Seminorm.continuous_finsetSum fun m _ ↦ hq.comp (L m).continuous
+    have hp_apply (s : Finset ℕ) (u : E) : p s u = ∑ m ∈ s, q (f m u • x m) := by
+      change FunLike.coeAddMonoidHom (Seminorm ℂ E) E ℝ
+        (∑ m ∈ s, q.comp (L m).toLinearMap) u = _
+      rw [map_sum, Finset.sum_apply]
+      rfl
+    -- Pointwise summability bounds every finite partial sum.
+    have hbdd : BddAbove (range p) := Seminorm.bddAbove_range_iff.mpr fun u ↦
+      ⟨∑' m, q (f m u • x m), forall_mem_range.mpr fun s ↦ by
+        rw [hp_apply]
+        exact (hsum q hq u).sum_le_tsum s fun m _ ↦ apply_nonneg q _⟩
+    -- Barrelledness makes the supremum of these seminorms continuous.
+    refine ⟨⨆ s, p s, ?_, fun u ↦ ⟨hsum q hq u, (hsum q hq u).tsum_le_of_sum_le ?_⟩⟩
+    · rw [Seminorm.coe_iSup_eq hbdd]
+      exact Seminorm.continuous_iSup p hp hbdd
+    · intro s
+      rw [← hp_apply]
+      exact (show p s ≤ ⨆ t, p t from le_ciSup hbdd s) u
+
+-- The proof only needs the continuity of the coefficient maps bundled in `StrongDual`.
+set_option linter.unusedVariables false in
 /-- Paper: Remark 4.1.2.5, p. 160. On a Fréchet space, the pointwise absolute
 summability of all coordinate series under continuous seminorms is equivalent
 to the absolute basis condition with continuous seminorm bounds. -/
 theorem isAbsolute_iff_summable_of_frechet (hE : IsFrechetTVS E) (hb : IsSchauderBasis x f) :
     IsAbsolute x f ↔
-      ∀ (q : Seminorm ℂ E), Continuous q → ∀ u, Summable (fun m ↦ q (f m u • x m)) := by sorry
+      ∀ (q : Seminorm ℂ E), Continuous q → ∀ u, Summable (fun m ↦ q (f m u • x m)) := by
+  have : BarrelledSpace ℂ E := isFrechetTVS_barrelled hE
+  obtain ⟨_, hpoly, _, _⟩ := hE
+  exact isAbsolute_iff_summable_of_barrelled
 
+-- Barrelledness follows from stagewise continuity in the final topology.
+set_option linter.unusedVariables false in
 /-- Paper: Remark 4.1.2.5, p. 161. The two absolute basis conditions also
 agree in a strict countable inductive limit of nuclear Fréchet spaces.
 Deviation: The defining sequence is given by its increasing images in the
@@ -1239,7 +1296,19 @@ theorem isAbsolute_iff_summable_of_strictLF_stages [T2Space E]
     (ht : (inferInstance : TopologicalSpace E) = locallyConvexFinalTopology (fun n ↦ (S n).subtype))
     (hb : IsSchauderBasis x f) :
     IsAbsolute x f ↔
-      ∀ (q : Seminorm ℂ E), Continuous q → ∀ u, Summable (fun m ↦ q (f m u • x m)) := by sorry
+      ∀ (q : Seminorm ℂ E), Continuous q → ∀ u, Summable (fun m ↦ q (f m u • x m)) := by
+  have hP : WithSeminorms
+      (Subtype.val : {p : Seminorm ℂ E // ∀ n, Continuous (p ∘ (S n).subtype)} →
+        Seminorm ℂ E) := ⟨ht⟩
+  have : IsTopologicalAddGroup E := hP.isTopologicalAddGroup
+  have : ContinuousSMul ℂ E := hP.continuousSMul
+  have : BarrelledSpace ℂ E := by
+    refine ⟨fun p hp ↦ hP.continuous_seminorm ⟨p, ?_⟩⟩
+    intro n
+    have : BarrelledSpace ℂ (S n) := isFrechetTVS_barrelled (hFrechet n)
+    exact (p.comp (S n).subtype).continuous_of_lowerSemicontinuous
+      (hp.comp continuous_subtype_val)
+  exact isAbsolute_iff_summable_of_barrelled
 
 /-- Paper: Theorem 4.1.2.6(1), p. 161. Every equicontinuous Schauder basis of a
 nuclear space is absolute. -/

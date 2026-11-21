@@ -8,6 +8,7 @@ public import Mathlib.Analysis.Normed.Operator.Compact.Basic
 public import Mathlib.Analysis.SpecialFunctions.ContinuousFunctionalCalculus.Rpow.Basic
 import Mathlib.Analysis.LocallyConvex.StrongTopology
 import Mathlib.Analysis.Normed.Module.HahnBanach
+import RiemannMasullo.ForMathlib.Analysis.InnerProductSpace.Projection.Basic
 import Mathlib.Topology.Algebra.InfiniteSum.Module
 import RiemannMasullo.ForMathlib.Topology.Algebra.InfiniteSum.Real
 
@@ -1994,11 +1995,51 @@ def traceNorm (T : nuclearEndomorphisms H) : ℝ :=
   let b := (exists_hilbertBasis (𝕜 := ℂ) (E := H)).choose_spec.choose
   ∑' i, (⟪b i, CFC.sqrt (T.val.adjoint * T.val) (b i)⟫_ℂ).re
 
+/-- The positive square root of `A.adjoint * A` is nuclear if `A` is nuclear. -/
+private theorem isNuclearOperator_sqrt_adjoint_mul (A : H →L[ℂ] H)
+    (hA : IsNuclearOperator A) : IsNuclearOperator (CFC.sqrt (A.adjoint * A)) := by
+  generalize hB : CFC.sqrt (A.adjoint * A) = B
+  have hB_pos : 0 ≤ B := by
+    rw [← hB]
+    exact CFC.sqrt_nonneg _
+  have hB_adj : B.adjoint = B :=
+    (ContinuousLinearMap.nonneg_iff_isPositive.mp hB_pos).isSelfAdjoint.adjoint_eq
+  have hA_pos : 0 ≤ A.adjoint * A :=
+    ContinuousLinearMap.nonneg_iff_isPositive.mpr (ContinuousLinearMap.isPositive_adjoint_comp_self A)
+  have hB_sq : B * B = A.adjoint * A := by
+    simpa only [hB] using CFC.sqrt_mul_sqrt_self (A.adjoint * A) hA_pos
+  have hB_comp : B.comp B = A.adjoint.comp A :=
+    calc
+      B.comp B = B * B := (ContinuousLinearMap.mul_def B B).symm
+      _ = A.adjoint * A := hB_sq
+      _ = A.adjoint.comp A := ContinuousLinearMap.mul_def A.adjoint A
+  have hB_norm (x : H) : ‖B x‖ ≤ ‖A x‖ := by
+    have h := B.apply_norm_eq_sqrt_inner_adjoint_right x
+    rw [hB_adj, hB_comp] at h
+    exact (h.trans (A.apply_norm_eq_sqrt_inner_adjoint_right x).symm).le
+  obtain ⟨S, _, hS⟩ := exists_contraction_comp_eq_of_norm_le A B hB_norm
+  rw [← hS]
+  obtain ⟨a, φ, y, ha, hφ, hy, hseries⟩ := (isNuclearOperator_iff_isBanachNuclear A).mp hA
+  refine (isNuclearOperator_iff_isBanachNuclear _).mpr
+    ⟨a, φ, S ∘ y, ha, hφ, ?_, fun x ↦ ?_⟩
+  · simpa only [map_zero] using (S.continuous.tendsto 0).comp hy
+  · simpa only [Function.comp_apply, ContinuousLinearMap.comp_apply, map_smul] using
+      S.hasSum (hseries x)
+
 /-- Paper: Definition C.3.4.2(2), p. 697. The trace norm is the sum of the
 diagonal series for the positive square root in every Hilbert basis. -/
 theorem hasSum_traceNorm_diagonal {ι : Type*} (b : HilbertBasis ι ℂ H)
     (T : nuclearEndomorphisms H) :
-    HasSum (fun i ↦ (⟪b i, CFC.sqrt (T.val.adjoint * T.val) (b i)⟫_ℂ).re) (traceNorm T) := by sorry
+    HasSum (fun i ↦ (⟪b i, CFC.sqrt (T.val.adjoint * T.val) (b i)⟫_ℂ).re) (traceNorm T) := by
+  let B := CFC.sqrt (T.val.adjoint * T.val)
+  have hB : IsNuclearOperator B := isNuclearOperator_sqrt_adjoint_mul T.val T.property
+  let c := (exists_hilbertBasis (𝕜 := ℂ) (E := H)).choose_spec.choose
+  change HasSum (fun i ↦ (⟪b i, B (b i)⟫_ℂ).re) (∑' j, (⟪c j, B (c j)⟫_ℂ).re)
+  have hc := Complex.reCLM.hasSum (summable_norm_hilbertDiagonal c B hB).of_norm.hasSum
+  have hb := Complex.reCLM.hasSum (summable_norm_hilbertDiagonal b B hB).of_norm.hasSum
+  simp only [Complex.reCLM_apply] at hc hb
+  rw [hc.tsum_eq, ← tsum_hilbertDiagonal_eq b c B hB]
+  exact hb
 
 /-- A bounded endomorphism and the positive square root of its Gram operator
 each factor through the other by bounded postcomposition. -/
@@ -2126,11 +2167,52 @@ theorem isNuclearOperator_iff_summable_traceNorm_diagonal {ι : Type*} (b : Hilb
     have hSn : IsNuclearOperator S := hsq ▸ isNuclearOperator_square_of_summable_basis b B hB hb
     exact hU ▸ isNuclearOperator_postcomp_hilbert hSn U
 
+open InnerProductSpace in
 /-- Paper: Definition C.3.4.2(2), p. 697. A rank-one map has trace norm equal
 to the product of the functional and vector norms.
 Deviation: This is a check of the square root and trace norm normalization. -/
 theorem traceNorm_smulRight (φ : H →L[ℂ] ℂ) (y : H) :
-    traceNorm ⟨φ.smulRight y, smulRight_mem_nuclearEndomorphisms φ y⟩ = ‖φ‖ * ‖y‖ := by sorry
+    traceNorm ⟨φ.smulRight y, smulRight_mem_nuclearEndomorphisms φ y⟩ = ‖φ‖ * ‖y‖ := by
+  let b := (exists_hilbertBasis (𝕜 := ℂ) (E := H)).choose_spec.choose
+  change ∑' i, (⟪b i, CFC.sqrt ((φ.smulRight y).adjoint * φ.smulRight y) (b i)⟫_ℂ).re = _
+  by_cases hφ : φ = 0
+  · simp [hφ, CFC.sqrt_zero]
+  let u := (toDual ℂ H).symm φ
+  have hu : ‖u‖ = ‖φ‖ := (toDual ℂ H).symm.norm_map φ
+  have hu₀ : ‖u‖ ≠ 0 := hu ▸ norm_ne_zero_iff.mpr hφ
+  let c := ‖y‖ / ‖u‖
+  have hc : c * ‖u‖ = ‖y‖ := div_mul_cancel₀ _ hu₀
+  have hT : φ.smulRight y = rankOne ℂ y u := by
+    ext x
+    rw [ContinuousLinearMap.smulRight_apply, rankOne_apply, toDual_symm_apply]
+  have hmul (v w : H) :
+      rankOne ℂ v w * rankOne ℂ w v = (‖w‖ ^ 2 : ℝ) • rankOne ℂ v v := by
+    rw [ContinuousLinearMap.mul_def, comp_rankOne, rankOne_apply, inner_self_eq_norm_sq_to_K]
+    ext x
+    simp only [rankOne_apply, smul_apply]
+    change ⟪v, x⟫_ℂ • ((‖w‖ : ℂ) ^ 2 • v) = _
+    rw [← Complex.ofReal_pow, Complex.coe_smul]
+    exact smul_comm (⟪v, x⟫_ℂ) (‖w‖ ^ 2 : ℝ) v
+  have hsqrt :
+      CFC.sqrt ((φ.smulRight y).adjoint * φ.smulRight y) = c • rankOne ℂ u u := by
+    apply CFC.sqrt_unique
+    · rw [hT, adjoint_rankOne, hmul, smul_mul_assoc, mul_smul_comm, hmul,
+        smul_smul, smul_smul]
+      congr 1
+      calc
+        c * c * ‖u‖ ^ 2 = (c * ‖u‖) ^ 2 := by ring
+        _ = ‖y‖ ^ 2 := by rw [hc]
+    · exact smul_nonneg (div_nonneg (norm_nonneg _) (norm_nonneg _))
+        (ContinuousLinearMap.nonneg_iff_isPositive.mpr (isPositive_rankOne_self u))
+  rw [hsqrt]
+  have hsum := ((b.hasSum_inner_mul_inner u u).mapL Complex.reCLM).mul_left c
+  have hvalue : c * Complex.reCLM ⟪u, u⟫_ℂ = ‖φ‖ * ‖y‖ := by
+    change c * RCLike.re ⟪u, u⟫_ℂ = _
+    rw [← norm_sq_eq_re_inner, pow_two, ← mul_assoc, hc, hu, mul_comm]
+  rw [← hvalue]
+  refine (hsum.congr_fun fun i ↦ ?_).tsum_eq
+  simp only [smul_apply, rankOne_apply, ← Complex.coe_smul, inner_smul_right,
+    Complex.reCLM_apply, Complex.mul_re, Complex.ofReal_re, Complex.ofReal_im, zero_mul, sub_zero]
 
 /-- Paper: Lemma C.3.4.3, p. 698. Composing a strongly convergent sequence of
 endomorphisms on the right by a fixed compact operator gives convergence

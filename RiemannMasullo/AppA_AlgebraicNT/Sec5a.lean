@@ -6,6 +6,7 @@ public import Mathlib.MeasureTheory.Constructions.Polish.Basic
 public import Mathlib.MeasureTheory.Function.LocallyIntegrable
 public import Mathlib.Topology.Algebra.ProperAction.Basic
 import Mathlib.MeasureTheory.Covering.Vitali
+import Mathlib.MeasureTheory.Covering.OneDim
 import Mathlib.MeasureTheory.Measure.Haar.Extension
 import Mathlib.Topology.Algebra.IsUniformGroup.Basic
 import Mathlib.Topology.Algebra.ProperAction.CompactlyGenerated
@@ -344,7 +345,20 @@ function converge to its value at almost every point of the real line. -/
 theorem ae_tendsto_centeredAverage {f : ℝ → ℂ} (hf : LocallyIntegrable f volume) :
     ∀ᵐ x ∂(volume : Measure ℝ),
       Tendsto (fun r : ℝ ↦ ((2 * r)⁻¹ : ℝ) • ∫ y in x - r..x + r, f y)
-        (𝓝[>] 0) (𝓝 (f x)) := by sorry
+        (𝓝[>] 0) (𝓝 (f x)) := by
+  filter_upwards [IsUnifLocDoublingMeasure.ae_tendsto_average volume hf 1] with x hx
+  have h := hx (fun _ : ℝ ↦ x) id tendsto_id (by
+    filter_upwards [self_mem_nhdsWithin (s := Ioi (0 : ℝ))] with r hr
+    have hr' : 0 < r := hr
+    simp [Metric.mem_closedBall, hr'.le])
+  apply h.congr'
+  filter_upwards [self_mem_nhdsWithin (s := Ioi (0 : ℝ))] with r hr
+  have hr' : 0 < r := hr
+  have hab : x - r ≤ x + r := by linarith
+  rw [intervalIntegral.integral_of_le hab, ← integral_Icc_eq_integral_Ioc]
+  simp only [id_eq]
+  rw [average_eq, measureReal_def, Measure.restrict_apply_univ, Real.volume_closedBall,
+    ENNReal.toReal_ofReal (by positivity : 0 ≤ 2 * r), Real.closedBall_eq_Icc]
 
 section DSequences
 
