@@ -3016,12 +3016,72 @@ theorem completedProjectiveTensor_exists_series (hE : IsFrechetTVS E) (hF : IsFr
       Tendsto x atTop (𝓝 0) ∧ Tendsto y atTop (𝓝 0) ∧
       HasSum (fun n ↦ (Completion.coe' (α := ProjectiveTensor E F) (c n • (x n ⊗ₜ[ℂ] y n)))) z := by sorry
 
+-- Fréchet completeness of the factors is not used: the completion is already complete.
+set_option linter.unusedVariables false in
 /-- Paper: (C.2.3.16), p. 679. Conversely, every series of the displayed form converges.
 Deviation: The sequences are reindexed from zero. -/
 theorem completedProjectiveTensor_summable_series (hE : IsFrechetTVS E) (hF : IsFrechetTVS F)
     (c : ℕ → ℂ) (x : ℕ → E) (y : ℕ → F) (hc : Summable (fun n ↦ ‖c n‖))
     (hx : Tendsto x atTop (𝓝 0)) (hy : Tendsto y atTop (𝓝 0)) :
-    Summable (fun n ↦ (Completion.coe' (α := ProjectiveTensor E F) (c n • (x n ⊗ₜ[ℂ] y n)))) := by sorry
+    Summable (fun n ↦ (Completion.coe' (α := ProjectiveTensor E F) (c n • (x n ⊗ₜ[ℂ] y n)))) := by
+  let P := ProjectiveTensor E F
+  have : UniformContinuousConstSMul ℂ P :=
+    uniformContinuousConstSMul_of_continuousConstSMul ℂ P
+  have : PolynormableSpace ℂ (Completion P) := polynormableSpace_completion
+  let tmul : E × F → P := fun v ↦ v.1 ⊗ₜ[ℂ] v.2
+  let z (n : ℕ) : Completion P := Completion.coe' (c n • tmul (x n, y n))
+  change Summable z
+  -- Joint continuity of pure tensors at zero makes `xₙ ⊗ yₙ` a null sequence.
+  have htmul : Tendsto (fun n ↦ tmul (x n, y n)) atTop (𝓝 (0 : P)) := by
+    have h :=
+      ((continuousAt_projectiveTensor_tmul_zero E F).tendsto.comp (hx.prodMk_nhds hy))
+    have h0 : ((0 : E × F).1 ⊗ₜ[ℂ] (0 : E × F).2 : P) = 0 := by
+      simp [Prod.fst_zero, Prod.snd_zero, TensorProduct.zero_tmul]
+    rw [h0] at h
+    exact h.congr fun _ ↦ rfl
+  rw [summable_iff_vanishing]
+  intro U hU
+  obtain ⟨q, hq, hqU⟩ :=
+    (PolynormableSpace.hasBasis_zero_ball ℂ (Completion P)).mem_iff.mp hU
+  have hcoe : Tendsto (fun n ↦ (tmul (x n, y n) : Completion P)) atTop (𝓝 0) := by
+    have h := ((Completion.continuous_coe (α := P)).tendsto (0 : P)).comp htmul
+    simp only [Completion.coe_zero] at h
+    exact h.congr fun _ ↦ rfl
+  have hb : Tendsto (fun n ↦ q (tmul (x n, y n) : Completion P)) atTop (𝓝 0) := by
+    have h := (hq.tendsto (0 : Completion P)).comp hcoe
+    simp only [map_zero q] at h
+    exact h.congr fun _ ↦ rfl
+  obtain ⟨M, hMpos, hM⟩ := (Metric.isBounded_range_of_tendsto _ hb).exists_pos_norm_le
+  have hbound (n : ℕ) : q (tmul (x n, y n) : Completion P) ≤ M := by
+    have hle := hM _ (mem_range_self n)
+    rwa [Real.norm_of_nonneg (apply_nonneg q _)] at hle
+  have hqz (n : ℕ) : q (z n) ≤ M * ‖c n‖ := by
+    have hsmul : (z n) = c n • (tmul (x n, y n) : Completion P) := by
+      simp [z]
+    rw [hsmul, map_smul_eq_mul, mul_comm M]
+    exact mul_le_mul_of_nonneg_left (hbound n) (norm_nonneg (c n))
+  have htri (t : Finset ℕ) : q (∑ n ∈ t, z n) ≤ ∑ n ∈ t, q (z n) := by
+    induction t using Finset.cons_induction with
+    | empty => simp [map_zero]
+    | cons a s ha ih =>
+      rw [Finset.sum_cons ha, Finset.sum_cons ha]
+      exact (map_add_le_add q _ _).trans (add_le_add le_rfl ih)
+  obtain ⟨s, hs⟩ := summable_iff_vanishing.mp hc (Metric.ball (0 : ℝ) (1 / M))
+    (Metric.ball_mem_nhds 0 (one_div_pos.mpr hMpos))
+  refine ⟨s, fun t ht ↦ ?_⟩
+  have htail : ∑ n ∈ t, ‖c n‖ < 1 / M := by
+    have hmem := hs t ht
+    rw [Metric.mem_ball, dist_zero_right,
+      Real.norm_of_nonneg (Finset.sum_nonneg fun n _ ↦ norm_nonneg _)] at hmem
+    exact hmem
+  have hlt : q (∑ n ∈ t, z n) < 1 :=
+    calc
+      q (∑ n ∈ t, z n) ≤ ∑ n ∈ t, q (z n) := htri t
+      _ ≤ ∑ n ∈ t, M * ‖c n‖ := Finset.sum_le_sum fun n _ ↦ hqz n
+      _ = M * ∑ n ∈ t, ‖c n‖ := by rw [← Finset.mul_sum]
+      _ < M * (1 / M) := mul_lt_mul_of_pos_left htail hMpos
+      _ = 1 := mul_one_div_cancel hMpos.ne'
+  exact hqU (q.mem_ball_zero.mpr hlt)
 
 end Projective
 
