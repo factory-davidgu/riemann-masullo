@@ -294,7 +294,35 @@ theorem exists_modulatedCyclicCharacter_lifts (τ : ℝ≥0ˣ →ₜ* G) (hτ : 
     ∃ (χ : PontryaginDual K → PontryaginDual G) (b t₀ : PontryaginDual K → ℝ),
       (∀ ω (k : K), χ ω k.val = ω k) ∧
       (∀ ω (t : ℝ≥0ˣ), χ ω (τ t) = Circle.exp (b ω * Real.log (t.val : ℝ))) ∧
-      (∀ ω, t₀ ω ∈ Ico 0 (2 * Real.pi / L) ∧ Circle.exp (t₀ ω * L) = χ ω γ) := by sorry
+      (∀ ω, t₀ ω ∈ Ico 0 (2 * Real.pi / L) ∧ Circle.exp (t₀ ω * L) = χ ω γ) := by
+  have hmem (x : G) : x * (τ (m x))⁻¹ ∈ K := by
+    change m (x * (τ (m x))⁻¹) = 1
+    rw [map_mul, map_inv, hτ (m x), mul_inv_cancel]
+  let p : G →ₜ* K :=
+    { toFun := fun x ↦ ⟨x * (τ (m x))⁻¹, hmem x⟩
+      map_one' := Subtype.ext (by simp)
+      map_mul' := fun x y ↦ Subtype.ext (by
+        change x * y * (τ (m (x * y)))⁻¹ = x * (τ (m x))⁻¹ * (y * (τ (m y))⁻¹)
+        rw [map_mul, map_mul, mul_inv, mul_mul_mul_comm])
+      continuous_toFun :=
+        (continuous_id.mul (τ.continuous.comp m.continuous).inv).subtype_mk hmem }
+  let χ : PontryaginDual K → PontryaginDual G := fun ω ↦ ContinuousMonoidHom.comp ω p
+  have hphase (ω : PontryaginDual K) :
+      ∃ t : ℝ, t ∈ Ico 0 (2 * Real.pi / L) ∧ Circle.exp (t * L) = χ ω γ :=
+    (existsUnique_modulatedCharacterPhase m γ hγ (χ ω)).exists
+  choose t₀ ht₀ using hphase
+  refine ⟨χ, fun _ ↦ 0, t₀, fun ω k ↦ ?_, fun ω t ↦ ?_, ht₀⟩
+  · have hk : p k.val = k := Subtype.ext (by
+      change k.val * (τ (m k.val))⁻¹ = k.val
+      rw [show m k.val = 1 from k.property, map_one, inv_one, mul_one])
+    change ω (p k.val) = ω k
+    rw [hk]
+  · have ht : p (τ t) = 1 := Subtype.ext (by
+      change τ t * (τ (m (τ t)))⁻¹ = 1
+      rw [hτ t, mul_inv_cancel])
+    change ω (p (τ t)) = _
+    rw [ht]
+    simp
 
 include hm hms hχ in
 /-- Paper: Remark 4.4.2.4, p. 192. With the chosen lifts, the norm twists
