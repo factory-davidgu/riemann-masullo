@@ -185,27 +185,34 @@ ${review:-(none)}"
   git worktree add -q -B "$branch" "$wt" "$base"
   mkdir -p "$wt/.lake" "$wt/.agent"
   ln -sfn "$main/.lake/packages" "$wt/.lake/packages"   # share the built Mathlib
-  # Start from a build of the library, so that only the modules that differ are compiled here.
-  # A change low in the import graph rebuilds everything above it, and main moves all the
-  # time, so a copy of the main checkout's build is soon stale and every agent started side
-  # by side would rebuild the same modules. Instead one shared worktree, "seed", is brought
-  # to this agent's starting commit and built under a lock: the first agent pays for what
-  # changed, the others copy the result. Lake checks every module against its sources, so a
-  # stale or half-written copy costs a rebuild of that module, nothing worse.
+  # Start from a build of the library, so that nothing is compiled here before the agent
+  # starts. A change low in the import graph rebuilds everything above it and main moves all
+  # the time, so a copy of the main checkout's build is soon stale, and agents started side by
+  # side would each rebuild the same modules. Instead one shared worktree, "seed", is kept
+  # built under a lock. It is brought up to main when its build is more than ten minutes old;
+  # otherwise the agent starts from the commit the seed is at (a few merges behind main,
+  # which costs nothing: the pull request is checked against main anyway) and copies its
+  # build. Lake checks every module against its sources, so a stale or half-written copy
+  # costs a rebuild of that module, nothing worse.
   if [ ! -e "$wt/.lake/build" ]; then
     seed="$(dirname "$wt")/seed"; from="$main/.lake/build"
     if [ "$role" != scout ] && [ -z "$pr" ]; then
       (
         flock 8
-        start=$(git -C "$wt" rev-parse HEAD)
         if [ ! -d "$seed" ]; then
-          git worktree add -q --detach "$seed" "$start" && mkdir -p "$seed/.lake" &&
+          git worktree add -q --detach "$seed" "$base" && mkdir -p "$seed/.lake" &&
             ln -sfn "$main/.lake/packages" "$seed/.lake/packages" &&
             { [ ! -d "$main/.lake/build" ] || cp -a --reflink=auto "$main/.lake/build" "$seed/.lake/build"; }
         fi
-        git -C "$seed" checkout -q --detach "$start" && (cd "$seed" && lake build RiemannMasullo >/dev/null 2>&1)
-        [ ! -d "$seed/.lake/build" ] || cp -a --reflink=auto "$seed/.lake/build" "$wt/.lake/build" 2>/dev/null ||
-          rm -rf "$wt/.lake/build"
+        built=$(stat -c %Y "$seed/.lake/built-at" 2>/dev/null || echo 0)
+        if [ $(( $(date +%s) - built )) -gt 600 ]; then
+          git -C "$seed" checkout -q --detach "$base" &&
+            (cd "$seed" && lake build RiemannMasullo >/dev/null 2>&1) && touch "$seed/.lake/built-at"
+        fi
+        if [ -e "$seed/.lake/built-at" ]; then
+          git -C "$wt" reset -q --hard "$(git -C "$seed" rev-parse HEAD)" &&
+            { cp -a --reflink=auto "$seed/.lake/build" "$wt/.lake/build" 2>/dev/null || rm -rf "$wt/.lake/build"; }
+        fi
       ) 8>"$main/.agent/seed.lock" || true
     fi
     if [ ! -e "$wt/.lake/build" ] && [ -d "$from" ]; then

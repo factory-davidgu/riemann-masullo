@@ -1074,6 +1074,34 @@ theorem sLocalAdelicTheta_norm_pow_bounded (B : Set ℬₛ) (hB : IsVonNBounded 
       rw [mul_add, mul_left_comm (t ^ ε) C₁]
     _ ≤ _ := hweighted
 
+/-- Uniform logarithmic bounds give uniform norm-power bounds for integrals whose
+pointwise norms agree with evaluations on representatives of the same norm. -/
+private theorem norm_pow_integral_bounded_of_uniform_log_bound {E G K : Type*} [MeasurableSpace K]
+    (ν : Measure K) [IsFiniteMeasure ν]
+    (r : G → ℝ) (hr : ∀ g, 0 < r g) (θ : E → G → ℂ) (φ : E → G → K → ℂ)
+    (A : Set E) (n : ℕ)
+    (hlog : ∃ C₁ C₂ : ℝ, 0 < C₁ ∧ 0 < C₂ ∧ ∀ f ∈ A, ∀ g, r g < 1 →
+      ‖θ f g‖ ≤ C₁ * |Real.log (r g)| ^ n + C₂)
+    (hrep : ∀ f g h, ∃ k, r k = r g ∧ ‖φ f g h‖ = ‖θ f k‖) :
+    ∃ C T : ℝ, 0 < C ∧ 0 < T ∧ ∀ f ∈ A, ∀ g, r g < T →
+      ‖(r g ^ ε) • (∫ h, φ f g h ∂ν)‖ ≤ C := by
+  obtain ⟨C₁, C₂, hC₁, hC₂, hlog⟩ := hlog
+  -- The bound on pairs uses a single constant for all test functions.
+  let r' : A × G → ℝ := fun p ↦ r p.2
+  let θ' : A × G → ℂ := fun p ↦ θ p.1.val p.2
+  let φ' (p : A × G) (h : K) : ℂ := φ p.1.val p.2 h
+  have hθ := isBigO_norm_pow_of_log_bound ε hε r' θ' n hC₁ hC₂
+    (fun p hp ↦ hlog p.1.val p.1.property p.2 hp)
+  have hlift (p : A × G) (h : K) : ∃ q, r' q = r' p ∧ ‖φ' p h‖ = ‖θ' q‖ := by
+    obtain ⟨k, hk, hnorm⟩ := hrep p.1.val p.2 h
+    exact ⟨(p.1, k), hk, hnorm⟩
+  obtain ⟨C, hC, hbound⟩ := isBigO_iff'.mp
+    (norm_pow_isBigO_integral_of_representatives ν r' ε (𝓝[>] (0 : ℝ)) θ' φ' hθ hlift)
+  obtain ⟨T, hT, hcut⟩ := mem_nhdsGT_iff_exists_Ioo_subset.mp (eventually_comap.mp hbound)
+  refine ⟨C, T, hC, hT, fun f hf g hg ↦ ?_⟩
+  have hmem : r g ∈ Set.Ioo 0 T := ⟨hr g, hg⟩
+  simpa only [norm_one, mul_one] using hcut hmem (⟨f, hf⟩, g) rfl
+
 /-- Paper: Proposition 2.4.3.1(2), p. 113. Below a positive norm cutoff
 the corresponding homogeneous bound is uniform on a bounded set of test functions.
 Deviation: As in §2.3, the norm-one class Haar measure is explicit. -/
@@ -1081,7 +1109,21 @@ theorem sLocalHomogeneousAdelicTheta_norm_pow_bounded
     (μ : Measure ↥J₁) [Measure.IsHaarMeasure μ] (ω : PontryaginDual J₁)
     (B : Set ℬₛ) (hB : IsVonNBounded ℂ B) :
     ∃ C T : ℝ, 0 < C ∧ 0 < T ∧ ∀ f ∈ B, ∀ g : Iₛ, normℝ g < T →
-      ‖(normℝ g ^ ε) • sLocalHomogeneousAdelicTheta F S μ ω f (classOf g)‖ ≤ C := by sorry
+      ‖(normℝ g ^ ε) • sLocalHomogeneousAdelicTheta F S μ ω f (classOf g)‖ ≤ C := by
+  let : IsFiniteMeasure μ := normOneSIdeleQuotient_isFiniteMeasure F S μ
+  let r : Iₛ → ℝ := normℝ
+  let θ (f : ℬₛ) (g : Iₛ) : ℂ := sLocalAdelicTheta F S f g
+  let φ (f : ℬₛ) (g : Iₛ) (h : J₁) : ℂ :=
+    sLocalAdelicThetaOnClasses F S f (classOf g * h.val) * (ω h : ℂ)
+  have hrep (f : ℬₛ) (g : Iₛ) (h : J₁) : ∃ k, r k = r g ∧ ‖φ f g h‖ = ‖θ f k‖ := by
+    obtain ⟨k, hn, hk⟩ := sIdele_exists_representative_mul_norm_one F S g h
+    exact ⟨k, hn, sLocalTheta_char_norm_eq_of_representative F S ω f g k h hk⟩
+  change ∃ C T : ℝ, 0 < C ∧ 0 < T ∧ ∀ f ∈ B, ∀ g, r g < T →
+    ‖(r g ^ ε) • (∫ h, φ f g h ∂μ)‖ ≤ C
+  exact norm_pow_integral_bounded_of_uniform_log_bound (E := ℬₛ) (G := Iₛ) (K := J₁) ε hε μ r
+    (fun g ↦ NNReal.coe_pos.mpr (Units.zero_lt (sIdeleNorm F S g)))
+    θ φ B (Fintype.card (InfinitePlace F) + S.card - 1)
+    (sLocalAdelicTheta_log_growth_bounded F S B hB) hrep
 
 /-- Paper: Proposition 2.4.3.1(3), p. 113. The uniform bound for theta
 times a positive norm power holds below S-idelic norm one. -/
