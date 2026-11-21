@@ -179,12 +179,12 @@ def modulatedCyclicDifference : D →L[ℂ] D :=
   let h := modulatedCyclicDifference_isLinearMap_continuous m γ hm hms I hInt hne
   let T : D →ₗ[ℂ] D := IsLinearMap.mk' diff h.1
   ⟨T, h.2⟩
-
+set_option linter.unusedSectionVars false in -- Avoid expensive unused-section-variable linting.
 /-- Paper: Equations (4.5.1.3) and (4.5.3.3), pp. 198, 208. The difference
 at x subtracts the function's value at γx. -/
 theorem modulatedCyclicDifference_apply (f : D) (x : G) :
     (modulatedCyclicDifference m γ hm hms I hInt hne f).val x =
-      f.val x - f.val (γ * x) := by sorry
+      f.val x - f.val (γ * x) := congrArg (fun y : G ↦ f.val x - f.val (y * x)) (inv_inv γ)
 
 end Difference
 

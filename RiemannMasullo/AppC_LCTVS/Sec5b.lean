@@ -2245,7 +2245,11 @@ def vectorResidue (h : ∃ a : ℤ → E, HasVectorLaurentSeriesAt f z a) : E :=
 Deviation: This is a sanity check for the residue operation. -/
 theorem vectorResidue_inv
     (h : ∃ a : ℤ → ℂ, HasVectorLaurentSeriesAt (fun w : ℂ ↦ w⁻¹) 0 a) :
-    vectorResidue h = 1 := by sorry
+    vectorResidue h = 1 := by
+  have : @QuasiCompleteSpace ℂ ℂ _ (IsTopologicalAddGroup.rightUniformSpace ℂ) _ _ := by
+    convert (inferInstance : @QuasiCompleteSpace ℂ ℂ _ PseudoMetricSpace.toUniformSpace _ _)
+    exact IsUniformAddGroup.rightUniformSpace_eq
+  exact (vectorLaurentCoeff_eq vectorMeromorphic_inv.2.1 h (-1)).trans (by simp)
 
 /-- Paper: Lemma C.5.3.3(1), p. 740. The residue preserves complex linear
 combinations.
@@ -2290,7 +2294,40 @@ theorem vectorResidue_comp_continuousLinearMap
     (hf : IsVectorMeromorphicOn f Ω D) (T : E →L[ℂ] F) :
     ∃ h : IsVectorMeromorphicOn (T ∘ f) Ω D,
       vectorResidue (h.existsUnique_laurentSeries hΩ hz).exists =
-        T (vectorResidue (hf.existsUnique_laurentSeries hΩ hz).exists) := by sorry
+        T (vectorResidue (hf.existsUnique_laurentSeries hΩ hz).exists) := by
+  have hcomp : ∀ {U : Set ℂ} {g : ℂ → E}, IsOpen U → VectorHolomorphicOn g U →
+      VectorHolomorphicOn (T ∘ g) U := by
+    intro U g hU hg x hx
+    have h := hg.hasFDerivAt (hU.mem_nhds hx)
+    have hj : HasFDerivAt (T ∘ g) (T.comp (fderiv ℂ g x)) x := by
+      apply HasFDerivAt.of_isLittleOTVS
+      simpa only [Function.comp_def, ContinuousLinearMap.comp_apply, map_sub]
+        using T.isBigOTVS_comp.trans_isLittleOTVS h.isLittleOTVS
+    exact ⟨_, hj.hasFDerivWithinAt⟩
+  obtain ⟨hDΩ, hDd, hopen, hhol, hclear⟩ := id hf
+  have hmer : IsVectorMeromorphicOn (T ∘ f) Ω D := by
+    refine ⟨hDΩ, hDd, hopen, hcomp hopen hhol, fun w hw ↦ ?_⟩
+    obtain ⟨n, r, g, hr, hsub, hg, heq⟩ := hclear w hw
+    refine ⟨n, r, T ∘ g, hr, hsub, hcomp Metric.isOpen_ball hg, fun x hx ↦ ?_⟩
+    simp only [Function.comp_apply]
+    rw [heq hx, map_smul]
+  refine ⟨hmer, ?_⟩
+  obtain ⟨a, ha⟩ := (hf.existsUnique_laurentSeries hΩ hz).exists
+  have : IsUniformAddGroup E := isUniformAddGroup_of_addCommGroup
+  have : IsUniformAddGroup F := isUniformAddGroup_of_addCommGroup
+  have hu : UniformContinuous T :=
+    uniformContinuous_of_continuousAt_zero T.toAddMonoidHom T.continuous.continuousAt
+  have hTa : HasVectorLaurentSeriesAt (T ∘ f) z (T ∘ a) := by
+    obtain ⟨N, r, hr, hN, hconv⟩ := ha
+    refine ⟨N, r, hr, fun k hk ↦ by simp [hN k hk], fun K hK hKc ↦ ?_⟩
+    have := hu.comp_tendstoUniformlyOn (hconv K hK hKc)
+    refine this.congr (Eventually.of_forall fun n w _ ↦ ?_)
+    simp [map_sum, map_smul]
+  have e1 := vectorLaurentCoeff_eq hTa (hmer.existsUnique_laurentSeries hΩ hz).exists (-1)
+  have e2 := vectorLaurentCoeff_eq ha (hf.existsUnique_laurentSeries hΩ hz).exists (-1)
+  unfold vectorResidue
+  rw [e1, e2]
+  rfl
 
 end Meromorphy
 

@@ -4,9 +4,11 @@ public import RiemannMasullo.AppD_SchwartzBruhat.Sec1b
 public import Mathlib.Analysis.Calculus.Deriv.Basic
 import Mathlib.Analysis.Calculus.FDeriv.Symmetric
 import Mathlib.Analysis.Convex.Contractible
+import Mathlib.Analysis.LocallyConvex.AbsConvexOpen
 import Mathlib.Analysis.Fourier.FourierTransformDeriv
 import Mathlib.LinearAlgebra.Basis.Prod
 import Mathlib.Topology.Covering.AddCircle
+import Mathlib.Topology.ContinuousMap.LocallyConvex
 import Mathlib.Topology.Homotopy.Lifting
 import RiemannMasullo.ForMathlib.Analysis.Calculus.FDeriv.Symmetric
 import RiemannMasullo.ForMathlib.Topology.Algebra.PontryaginDual.Compact
@@ -1283,7 +1285,89 @@ function via its circle-valued character map.
 Deviation: The global differentiability definition in §D.1.5 allows any
 good subgroup in the kernel, so the symbol can use the character itself. -/
 theorem pontryaginDual_mem_bruhatSmooth (χ : PontryaginDual G) :
-    (fun x : G ↦ (χ x : ℂ)) ∈ bruhatSmoothSubmodule := by sorry
+    (fun x : G ↦ (χ x : ℂ)) ∈ bruhatSmoothSubmodule := by
+  obtain ⟨H, hχ⟩ := (openCompactlyGeneratedSubgroups_colimit (G := PontryaginDual G)).2.1 χ
+  let k := lcaDualAnnihilator H.val
+  have hkClosed : IsClosed (k : Set G) := by
+    have hSet : (k : Set G) = ⋂ ψ : H.val, (ψ.val : G → Circle) ⁻¹' {1} := by
+      ext x
+      simp only [k, SetLike.mem_coe, mem_lcaDualAnnihilator_iff, mem_iInter, mem_preimage,
+        mem_singleton_iff]
+    rw [hSet]
+    exact isClosed_iInter fun ψ ↦ isClosed_singleton.preimage ψ.val.continuous
+  have hk : IsBruhatGoodSubgroup k :=
+    ⟨hkClosed, (lcaAnnihilator_dualAnnihilator_of_open H.val H.property.1).symm ▸ H.property⟩
+  have hTrivial (x : k) : χ x.val = 1 :=
+    (mem_lcaDualAnnihilator_iff H.val x.val).mp x.property ⟨χ, hχ⟩
+  apply (mem_bruhatSmoothSubmodule_iff _).2
+  intro p
+  refine ⟨k, hk, fun x y ↦ ?_, fun a ha ↦ ?_⟩
+  · change (χ (x.val * y) : ℂ) = (χ y : ℂ)
+    rw [map_mul, hTrivial, one_mul]
+  · let N := (OrderDual.ofDual a.val.2).comap a.val.1.subtype
+    let χH : a.val.1 →* Circle := χ.toMonoidHom.comp a.val.1.subtype
+    have hN : N ≤ χH.ker := by
+      intro x hx
+      have hxk : (x : G) ∈ k := ha ▸ hx
+      exact MonoidHom.mem_ker.mpr (hTrivial ⟨x, hxk⟩)
+    let χ₀ : a.quotient →* Circle := QuotientGroup.lift N χH hN
+    have hχ₀ : Continuous χ₀ := (QuotientGroup.isQuotientMap_mk N).continuous_iff.mpr
+      (χ.continuous.comp continuous_subtype_val)
+    refine ⟨fun x ↦ (χ₀ x : ℂ), fun x ↦ rfl, fun e z b ↦ ?_⟩
+    -- Lift the character on the vector cover of the identity fiber to a linear phase.
+    let E := EuclideanSpace ℝ (Fin e.realDim) × EuclideanSpace ℝ (Fin e.torusDim)
+    let S := ElementaryLieGroup e.realDim e.torusDim e.latticeRank e.finiteFactor
+    let cover : E →+ S :=
+      { toFun := fun xt ↦ elementaryCover xt 0 0
+        map_zero' := Prod.ext rfl (Prod.ext (funext fun _ ↦ AddCircle.coe_zero (1 : ℝ)) rfl)
+        map_add' := fun x y ↦ Prod.ext rfl (Prod.ext
+          (funext fun i ↦ AddCircle.coe_add (1 : ℝ) (x.2 i) (y.2 i)) (zero_add _).symm) }
+    have hCover : Continuous cover := continuous_fst.prodMk
+      ((continuous_pi fun i ↦ (AddCircle.continuous_mk' (1 : ℝ)).comp
+        ((PiLp.continuous_apply 2 _ i).comp continuous_snd)).prodMk continuous_const)
+    let ψ := χ₀.comp e.equiv.symm.toMulEquiv.toMonoidHom
+    let circleEquiv : AddCircle (1 : ℝ) ≃ₜ Circle := AddCircle.homeomorphCircle one_ne_zero
+    let phase : E →+ AddCircle (1 : ℝ) :=
+      { toFun := fun x ↦ circleEquiv.symm (ψ (Multiplicative.ofAdd (cover x)))
+        map_zero' := by
+          apply circleEquiv.injective
+          simp [circleEquiv, AddCircle.homeomorphCircle_apply]
+        map_add' := by
+          intro x y
+          apply circleEquiv.injective
+          have hAdd (u v : AddCircle (1 : ℝ)) :
+              circleEquiv (u + v) = circleEquiv u * circleEquiv v := by
+            simp only [circleEquiv, AddCircle.homeomorphCircle_apply, AddCircle.toCircle_add]
+          change circleEquiv (circleEquiv.symm (ψ (Multiplicative.ofAdd (cover (x + y))))) = _
+          simp only [circleEquiv.apply_symm_apply, hAdd, map_add]
+          exact map_mul ψ (Multiplicative.ofAdd (cover x)) (Multiplicative.ofAdd (cover y)) }
+    have hPhase : Continuous phase :=
+      circleEquiv.symm.continuous.comp (hχ₀.comp (e.equiv.symm.continuous.comp hCover))
+    obtain ⟨L, hL⟩ := exists_addCircle_coe_linearMap_eq phase hPhase
+    have hExp (x : E) : ψ (Multiplicative.ofAdd (cover x)) = Circle.exp (2 * Real.pi * L x) := by
+      have h := congrArg circleEquiv (hL x)
+      have hApply : circleEquiv (phase x) = ψ (Multiplicative.ofAdd (cover x)) :=
+        circleEquiv.apply_symm_apply _
+      simpa only [hApply, circleEquiv, AddCircle.homeomorphCircle_apply,
+        AddCircle.toCircle_apply_mk, div_one] using h.symm
+    -- Moving to the fiber indexed by z and b multiplies the character by a constant.
+    have hShift (x : E) : cover x + elementaryCover 0 z b = elementaryCover x z b := by
+      refine Prod.ext (add_zero _) (Prod.ext ?_ (zero_add _))
+      funext j
+      change (x.2 j : AddCircle (1 : ℝ)) + ((0 : ℝ) : AddCircle (1 : ℝ)) =
+        (x.2 j : AddCircle (1 : ℝ))
+      rw [AddCircle.coe_zero, add_zero]
+    have hFormula (x : E) : (ψ (Multiplicative.ofAdd (elementaryCover x z b)) : ℂ) =
+        Complex.exp (↑(2 * Real.pi * L x) * Complex.I) *
+          (ψ (Multiplicative.ofAdd (elementaryCover 0 z b)) : ℂ) := by
+      rw [← hShift x]
+      change (ψ (Multiplicative.ofAdd (cover x) *
+        Multiplicative.ofAdd (elementaryCover 0 z b)) : ℂ) = _
+      rw [map_mul, hExp, Circle.coe_mul, Circle.coe_exp]
+    change ContDiff ℝ _ (fun x : E ↦ (ψ (Multiplicative.ofAdd (elementaryCover x z b)) : ℂ))
+    rw [funext hFormula]
+    exact (((Complex.ofRealCLM.contDiff.comp (contDiff_const.mul L.contDiff)).mul
+      contDiff_const).cexp).mul contDiff_const
 
 /-- A scalar directional derivative must vanish on constants and hence on all
 characters. Character separation then forces its one-parameter subgroup to be trivial. -/
@@ -1783,10 +1867,129 @@ theorem schwartzBruhatTranslate_apply_mul (g x : G) (f : SchwartzBruhat G) :
   change f.val (g⁻¹ * (g * x)) = f.val x
   rw [inv_mul_cancel_left]
 
+omit hTop hT2 hLC in
+/-- Paper: Proposition D.1.9.2, p. 781. On an elementary group, shifting the argument
+by addition preserves the Schwartz space and is jointly continuous for the weighted
+derivative seminorm topology. -/
+theorem elementarySchwartz_translate_jointly {m n r : ℕ} {F : Type*}
+    [AddCommGroup F] [TopologicalSpace F] [DiscreteTopology F] [Finite F] :
+    ∃ T : C(ElementaryLieGroup m n r F × ElementarySchwartz m n r F,
+        ElementarySchwartz m n r F),
+      ∀ g f x, T (g, f) x = f (g + x) := by
+  sorry
+
+omit hTop hT2 hLC in
+/-- The inclusion of a structural stage is continuous for the generating seminorms. -/
+private theorem continuous_schwartzBruhatStageInclusion (a : BruhatStructuralPair G)
+    (e : ElementaryLCAPresentation a.quotient) :
+    Continuous (show SchwartzBruhatStage e →ₗ[ℂ] SchwartzBruhat G from
+      schwartzBruhatStageInclusion a e) :=
+  (withGeneratingSeminorms_spec _ _).continuous_of_continuous_comp _ fun p ↦ p.property a e
+
+/-- The quotient action gives translation by elements of the stage's own open subgroup. -/
+private theorem continuous_schwartzBruhatTranslate_on_subgroup (b : BruhatStructuralPair G)
+    (e : ElementaryLCAPresentation b.quotient) :
+    Continuous (fun p : b.val.1 × SchwartzBruhatStage e ↦
+      schwartzBruhatTranslate p.1.val (schwartzBruhatStageInclusion b e p.2)) := by
+  classical
+  obtain ⟨T, hT⟩ := elementarySchwartz_translate_jointly
+    (m := e.realDim) (n := e.torusDim) (r := e.latticeRank) (F := e.finiteFactor)
+  let q (h : b.val.1) := (e.equiv (QuotientGroup.mk h : b.quotient)).toAdd
+  have hq : Continuous q := continuous_toAdd.comp
+    (e.equiv.continuous.comp QuotientGroup.continuous_mk)
+  have hCont : Continuous (fun p : b.val.1 × SchwartzBruhatStage e ↦
+      (show SchwartzBruhat G from schwartzBruhatStageInclusion b e (T (q p.1⁻¹, p.2)))) :=
+    (continuous_schwartzBruhatStageInclusion b e).comp
+      (T.continuous.comp ((hq.comp continuous_fst.inv).prodMk continuous_snd))
+  refine hCont.congr fun ⟨h, s⟩ ↦ ?_
+  refine Subtype.ext (funext fun x ↦ ?_)
+  change schwartzBruhatStageRealization b e (T (q h⁻¹, s)) x =
+    schwartzBruhatStageRealization b e s ((h : G)⁻¹ * x)
+  have hmem := b.val.1.mul_mem_cancel_left (x := (h : G)⁻¹) (y := x)
+    (b.val.1.inv_mem h.property)
+  by_cases hx : x ∈ b.val.1
+  · simp only [schwartzBruhatStageRealization_apply, dite_eq_left hx, dite_eq_left (hmem.mpr hx), hT]
+    apply congrArg (fun y ↦ s y)
+    change q h⁻¹ + q ⟨x, hx⟩ = q (h⁻¹ * ⟨x, hx⟩)
+    unfold q
+    rw [QuotientGroup.mk_mul, map_mul]
+    rfl
+  · simp only [schwartzBruhatStageRealization_apply, dite_eq_right hx, dite_eq_right (hmem.not.mpr hx)]
+
+/-- A stage can be enlarged to contain any prescribed translating element. -/
+private theorem exists_bruhatStructuralPair_le_mem (a : BruhatStructuralPair G) (g : G) :
+    ∃ b : BruhatStructuralPair G, a ≤ b ∧ g ∈ b.val.1 := by
+  let I := OpenCompactlyGeneratedSubgroups G
+  have hGroups := openCompactlyGeneratedSubgroups_colimit (G := G)
+  let : IsDirectedOrder I := hGroups.1
+  obtain ⟨J, hgJ⟩ := hGroups.2.1 g
+  let aGroup : I := ⟨a.val.1, a.property.1, a.property.2.1⟩
+  obtain ⟨H, haH, hJH⟩ := exists_ge_ge aGroup J
+  let b : BruhatStructuralPair G := ⟨(H.val, a.val.2), H.property.1, H.property.2,
+    a.property.2.2.1, a.property.2.2.2.trans haH⟩
+  exact ⟨b, ⟨haH, le_rfl⟩, hJH hgJ⟩
+
+/-- Translation is jointly continuous when the function varies in a fixed structural stage.
+Locally the translating element and the function are handled in one larger stage. -/
+private theorem continuous_schwartzBruhatTranslate_stage (a : BruhatStructuralPair G)
+    (e : ElementaryLCAPresentation a.quotient) :
+    Continuous (fun p : G × SchwartzBruhatStage e ↦
+      schwartzBruhatTranslate p.1 (schwartzBruhatStageInclusion a e p.2)) := by
+  rw [continuous_iff_continuousAt]
+  intro ⟨g, f⟩
+  obtain ⟨b, hab, hgb⟩ := exists_bruhatStructuralPair_le_mem a g
+  obtain ⟨e'⟩ := b.elementary
+  obtain ⟨j, hj, _⟩ := schwartzBruhatStage_transition (a := a) (b := b) hab e e'
+  have hOpen : IsOpenEmbedding (Prod.map (Subtype.val : b.val.1 → G)
+      (id : SchwartzBruhatStage e → SchwartzBruhatStage e)) :=
+    b.property.1.isOpenEmbedding_subtypeVal.prodMap IsOpenEmbedding.id
+  apply (hOpen.continuousAt_iff (x := (⟨g, hgb⟩, f))).mp
+  have hCont : Continuous (fun p : b.val.1 × SchwartzBruhatStage e ↦
+      schwartzBruhatTranslate p.1.val (schwartzBruhatStageInclusion b e' (j p.2))) :=
+    (continuous_schwartzBruhatTranslate_on_subgroup b e').comp
+      (continuous_fst.prodMk (j.continuous.comp continuous_snd))
+  refine (hCont.congr fun p ↦ ?_).continuousAt
+  exact congrArg (schwartzBruhatTranslate p.1.val) (Subtype.ext (hj p.2))
+
+open scoped ComplexOrder in
 /-- Paper: Proposition D.1.9.2, p. 781. For a second-countable group, left
 translation is jointly continuous in the group element and Schwartz–Bruhat function. -/
 theorem schwartzBruhatTranslate_continuous [SecondCountableTopology G] :
-    Continuous (fun p : G × SchwartzBruhat G ↦ schwartzBruhatTranslate p.1 p.2) := by sorry
+    Continuous (fun p : G × SchwartzBruhat G ↦ schwartzBruhatTranslate p.1 p.2) := by
+  let E := SchwartzBruhat G
+  let : ContinuousSMul ℂ E := (PolynormableSpace.withSeminorms ℂ E).continuousSMul
+  let : Module ℝ E := Module.restrictScalars ℝ ℂ E
+  let : IsScalarTower ℝ ℂ E := IsScalarTower.restrictScalars ℝ ℂ E
+  let : ContinuousSMul ℝ E := IsScalarTower.continuousSMul ℂ
+  let : LocallyConvexSpace ℝ E := (PolynormableSpace.withSeminorms ℂ E).toLocallyConvexSpace
+  let : LocallyConvexSpace ℂ E := .ofBasisZero ℂ E _ _ (LocallyConvexSpace.convex_basis_zero ℝ E)
+    (fun _ hs ↦ convex_of_nonneg_surjective_algebraMap ℂ
+      (fun _ hz ↦ RCLike.nonneg_iff_exists_ofReal.mp hz) hs.2)
+  let : ContinuousSMul ℝ C(G, E) := IsScalarTower.continuousSMul ℂ
+  have hOrbit (f : E) : Continuous (fun g ↦ schwartzBruhatTranslate g f) := by
+    obtain ⟨a, e, s, hs⟩ := (mem_schwartzBruhatSubmodule_iff f.val).mp f.property
+    have hf : (show E from schwartzBruhatStageInclusion a e s) = f := Subtype.ext hs
+    rw [← hf]
+    exact (continuous_schwartzBruhatTranslate_stage a e).comp (continuous_id.prodMk continuous_const)
+  let A : E →ₗ[ℂ] C(G, E) :=
+    { toFun := fun f ↦ ⟨fun g ↦ schwartzBruhatTranslate g f, hOrbit f⟩
+      map_add' := fun f s ↦ ContinuousMap.ext fun g ↦ Subtype.ext rfl
+      map_smul' := fun c f ↦ ContinuousMap.ext fun g ↦ Subtype.ext rfl }
+  -- The linear map into the compact-open space is continuous on each stage.
+  -- Its seminorm pullbacks are therefore among the defining seminorms of E.
+  have hA : Continuous A := by
+    let P : SeminormFamily ℂ E {q : Seminorm ℂ E //
+        ∀ (a : BruhatStructuralPair G) (e : ElementaryLCAPresentation a.quotient),
+          Continuous (q ∘ schwartzBruhatStageInclusion a e)} := Subtype.val
+    have hP : WithSeminorms P := ⟨rfl⟩
+    refine (PolynormableSpace.withSeminorms ℂ C(G, E)).continuous_of_continuous_comp A fun p ↦ ?_
+    refine hP.continuous_seminorm ⟨p.val.comp A, ?_⟩
+    intro a e
+    have hStage : Continuous (fun s : SchwartzBruhatStage e ↦ A (schwartzBruhatStageInclusion a e s)) :=
+      ContinuousMap.continuous_of_continuous_uncurry _ <|
+        (continuous_schwartzBruhatTranslate_stage a e).comp continuous_swap
+    exact p.property.comp hStage
+  exact continuous_eval.comp ((hA.comp continuous_snd).prodMk continuous_fst)
 
 /-- Paper: Proposition D.1.9.2, p. 781. Translations by a compact set of group
 elements send one common zero-neighborhood into any prescribed zero-neighborhood. -/

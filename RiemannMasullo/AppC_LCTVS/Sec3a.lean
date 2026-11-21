@@ -2121,7 +2121,22 @@ theorem hilbertTrace_smulRight (φ : H →L[ℂ] ℂ) (y : H) :
 /-- Paper: Definition C.3.4.2(1), p. 697. The Hilbert-space trace is the
 nuclear trace from Proposition C.3.2.1 on the same endomorphism. -/
 theorem hilbertTrace_eq_nuclearTrace (T : nuclearEndomorphisms H) :
-    hilbertTrace T = nuclearTrace hilbert_approximationProperty T.val T.property := by sorry
+    hilbertTrace T = nuclearTrace hilbert_approximationProperty T.val T.property := by
+  obtain ⟨r⟩ := (isNuclearOperator_iff_nonempty_presentation T.val).mp T.property
+  obtain ⟨C, hC₀, hC⟩ :=
+    ((NormedSpace.equicontinuous_tfae r.functional).out 1 7).mp r.equicontinuous
+  obtain ⟨D, hD⟩ :=
+    ((NormedSpace.isVonNBounded_iff ℂ).mp r.isBanachDisc.bounded).exists_norm_le
+  have hcost : Summable (fun n ↦ ‖r.coeff n‖ * (‖r.functional n‖ * ‖(r.vector n : H)‖)) := by
+    refine (r.summable_coeff.mul_right (C * D)).of_nonneg_of_le (fun n ↦ by positivity) ?_
+    intro n
+    exact mul_le_mul_of_nonneg_left
+      (mul_le_mul (hC n) (hD _ (r.vector_mem n)) (norm_nonneg _) hC₀) (norm_nonneg _)
+  let b := (exists_hilbertBasis (𝕜 := ℂ) (E := H)).choose_spec.choose
+  have htrace := ((exists_nuclearTrace_hasSum hilbert_approximationProperty
+    T.val T.property).exists.choose_spec r).2
+  exact (tsum_hilbertDiagonal_eq_series b T.val r.coeff r.functional
+    (fun n ↦ (r.vector n : H)) hcost r.hasSum).trans htrace.tsum_eq
 
 /-- Paper: Definition C.3.4.2(2), p. 697. The trace norm of a nuclear operator
 sums the real diagonal entries of the positive square root of its adjoint
@@ -2790,7 +2805,76 @@ countable trace-norm dense set of nuclear endomorphisms.
 Deviation: Density is expressed by approximation in every positive trace-norm radius. -/
 theorem exists_countable_traceNorm_dense [SeparableSpace H] :
     ∃ S : Set (nuclearEndomorphisms H), S.Countable ∧
-      ∀ (T : nuclearEndomorphisms H) (ε : ℝ), 0 < ε → ∃ A ∈ S, traceNorm (T - A) < ε := by sorry
+      ∀ (T : nuclearEndomorphisms H) (ε : ℝ), 0 < ε → ∃ A ∈ S, traceNorm (T - A) < ε := by
+  let : Norm (nuclearEndomorphisms H) := ⟨traceNorm⟩
+  let : NormedAddCommGroup (nuclearEndomorphisms H) :=
+    NormedAddCommGroup.ofCore (traceNorm_normedSpaceCore (H := H))
+  let : SeminormedAddCommGroup (nuclearEndomorphisms H) :=
+    (inferInstance : NormedAddCommGroup (nuclearEndomorphisms H)).toSeminormedAddCommGroup
+  let : MetricSpace (nuclearEndomorphisms H) := NormedAddCommGroup.toMetricSpace
+  let : PseudoMetricSpace (nuclearEndomorphisms H) := MetricSpace.toPseudoMetricSpace
+  let : UniformSpace (nuclearEndomorphisms H) := PseudoMetricSpace.toUniformSpace
+  let : TopologicalSpace (nuclearEndomorphisms H) := UniformSpace.toTopologicalSpace
+  let : NormedSpace ℂ (nuclearEndomorphisms H) :=
+    NormedSpace.ofCore (traceNorm_normedSpaceCore (H := H))
+  let : SeparableSpace (StrongDual ℂ H) :=
+    (InnerProductSpace.toDual ℂ H).surjective.denseRange.separableSpace
+      (InnerProductSpace.toDual ℂ H).isometry.continuous
+  have hdist (T A : nuclearEndomorphisms H) : dist T A = traceNorm (T - A) := by
+    rw [dist_eq_norm]
+    rfl
+  let f : StrongDual ℂ H × H → nuclearEndomorphisms H := fun p =>
+    ⟨p.1.smulRight p.2, smulRight_mem_nuclearEndomorphisms p.1 p.2⟩
+  have hf : Continuous f := by
+    apply IsBoundedBilinearMap.continuous (𝕜 := ℂ)
+    refine ⟨?_, ?_, ?_, ?_, ?_⟩
+    · intro x y z
+      ext t
+      simp [f, add_smul]
+    · intro c x y
+      ext t
+      simp [f, mul_smul]
+    · intro x y z
+      ext t
+      simp [f, smul_add]
+    · intro c x y
+      ext t
+      simp only [f, Submodule.coe_smul, smul_apply, ContinuousLinearMap.smulRight_apply]
+      exact smul_comm _ _ _
+    · refine ⟨1, zero_lt_one, ?_⟩
+      intro x y
+      change traceNorm ⟨x.smulRight y, smulRight_mem_nuclearEndomorphisms x y⟩ ≤ 1 * ‖x‖ * ‖y‖
+      simpa using (traceNorm_smulRight x y).le
+  let V := Submodule.span ℂ (range f)
+  have hV : IsSeparable (V : Set (nuclearEndomorphisms H)) := (isSeparable_range hf).span
+  have hmem (z : StrongDual ℂ H ⊗[ℂ] H) :
+      (⟨tensorToFiniteRank z, tensorToFiniteRank_mem_nuclearEndomorphisms z⟩ :
+        nuclearEndomorphisms H) ∈ V := by
+    induction z using TensorProduct.inductionOn with
+    | tmul x y =>
+      apply Submodule.subset_span
+      refine ⟨(x, y), ?_⟩
+      ext t
+      simp [f, tensorToFiniteRank_tmul]
+    | add x y hx hy =>
+      convert V.add_mem hx hy using 1 <;> ext t <;> simp
+  have hd : Dense (V : Set (nuclearEndomorphisms H)) := by
+    rw [dense_iff_closure_eq]
+    apply Set.eq_univ_of_forall
+    intro T
+    apply Metric.mem_closure_iff.mpr
+    intro ε hε
+    obtain ⟨z, hz⟩ := exists_tensorToFiniteRank_traceNorm_sub_lt T hε
+    refine ⟨⟨tensorToFiniteRank z, tensorToFiniteRank_mem_nuclearEndomorphisms z⟩, hmem z, ?_⟩
+    rw [hdist]
+    exact hz
+  obtain ⟨S, hS, hSc⟩ := hV
+  refine ⟨S, hS, ?_⟩
+  intro T ε hε
+  have hT : T ∈ closure S := closure_minimal hSc isClosed_closure (hd T)
+  obtain ⟨A, hAS, hA⟩ := Metric.mem_closure_iff.mp hT ε hε
+  rw [hdist] at hA
+  exact ⟨A, hAS, hA⟩
 
 -- TODO(paper-gap): The proof on p. 699 sums distinct eigenvalues to compute the
 -- trace norm. Multiplicities are required, as shown by the identity on ℂ².
