@@ -351,7 +351,37 @@ include hE hμ₁ hρ heq hm in
 /-- Paper: (D.2.2.4), p. 794. The complete target admits a unique normalized
 Pettis projector for the action of the norm-one group with the chosen character. -/
 theorem existsUnique_modulatedActionIsotypicProjector (ω : PontryaginDual K) :
-    ∃! Q : E →L[ℂ] E, IsPettisIsotypicAverageOn μ₁ univ ρE ω (μ₁.real univ • Q) := by sorry
+    ∃! Q : E →L[ℂ] E, IsPettisIsotypicAverageOn μ₁ univ ρE ω (μ₁.real univ • Q) := by
+  have : CompactSpace K := isCompact_iff_compactSpace.mp hm.isCompact_ker
+  let τ : K →* (E →L[ℂ] E) :=
+    { toFun := fun k ↦ star (ω k : ℂ) • ρE k
+      map_one' := by simp
+      map_mul' := fun k l ↦ by
+        simp only [map_mul, Circle.coe_mul, star_mul', smul_mul_smul_comm] }
+  have hτ_apply (k : K) (u : E) : τ k u = star (ω k : ℂ) • ρE k u := rfl
+  have hτ : Continuous (fun p : K × E ↦ τ p.1 p.2) :=
+    (show Continuous (fun p : K × E ↦ star (ω p.1 : ℂ)) from by fun_prop).smul
+      (hρ.comp ((continuous_subtype_val.comp continuous_fst).prodMk continuous_snd))
+  have hτeq : EquicontinuousAt (fun k : K ↦ (τ k : E → E)) 0 := by
+    have basis := (nhds_basis_balanced ℂ E).uniformity_of_nhds_zero
+    apply basis.equicontinuousAt_iff_right.mpr
+    intro U hU
+    filter_upwards [basis.equicontinuousAt_iff_right.mp heq U hU] with u hu k
+    have hk : ρ (k : G) u ∈ U := by simpa using hu (k : G)
+    change τ k u - τ k 0 ∈ U
+    rw [map_zero, sub_zero]
+    exact hU.2.smul_mem (by simp [← Circle.coe_inv_eq_conj]) hk
+  have hAvg : ∃! A : E →L[ℂ] E, IsPettisIsotypicAverageOn μ₁ univ ρE ω A := by
+    simpa only [IsPettisIsotypicAverageOn, PontryaginDual.one_apply, Circle.coe_one,
+      star_one, one_smul, hτ_apply]
+      using existsUnique_compactActionAverage μ₁ τ hτ (Or.inl hτeq)
+  obtain ⟨A, hA, huniq⟩ := hAvg
+  have hmass : μ₁.real univ ≠ 0 := measureReal_univ_ne_zero
+  refine ⟨(μ₁.real univ)⁻¹ • A, ?_, ?_⟩
+  · simpa only [smul_inv_smul₀ hmass] using hA
+  · intro Q hQ
+    apply smul_right_injective _ hmass
+    simpa only [smul_inv_smul₀ hmass] using huniq _ hQ
 
 variable (ω : PontryaginDual m.toMonoidHom.ker) (Q : E →L[ℂ] E)
   (hQ : IsPettisIsotypicAverageOn μ₁ univ (ρ.comp m.toMonoidHom.ker.subtype) ω (μ₁.real univ • Q))
@@ -368,7 +398,16 @@ theorem schwartzBruhatIsotype_comap_ker : Q.ker.comap i.toLinearMap = (P).ker :=
 linear injection on the quotients by the averaging kernels. -/
 theorem schwartzBruhatIsotype_quotient_map :
     ∃ j : (S ⧸ (P).ker) →L[ℂ] (E ⧸ Q.ker), Injective j ∧
-      ∀ f : S, j ((P).ker.mkQ f) = Q.ker.mkQ (i f) := by sorry
+      ∀ f : S, j ((P).ker.mkQ f) = Q.ker.mkQ (i f) := by
+  let F := Q.ker.mkQL.comp i
+  have hker : (P).ker = F.ker := calc
+    (P).ker = Q.ker.comap i.toLinearMap :=
+      (schwartzBruhatIsotype_comap_ker m hm μ₁ ρ hρ heq i hi hcomm ω Q hQ).symm
+    _ = (Q.ker.mkQ.ker).comap i.toLinearMap :=
+      congrArg (Submodule.comap i.toLinearMap) (Submodule.ker_mkQ Q.ker).symm
+    _ = F.ker := (LinearMap.ker_comp i.toLinearMap Q.ker.mkQ).symm
+  refine ⟨(P).ker.liftQL F hker.le, ?_, fun _ ↦ rfl⟩
+  exact LinearMap.ker_eq_bot.mp (Submodule.ker_liftQ_eq_bot' (P).ker F.toLinearMap hker)
 
 /-- Paper: Lemma D.2.2.1(1), p. 795. The injection restricts to a
 continuous linear injection on the homogeneous subspaces. -/
