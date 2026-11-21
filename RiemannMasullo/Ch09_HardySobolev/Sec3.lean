@@ -239,7 +239,11 @@ def modulatedFrequencyBand (m : G →ₜ* ℝ≥0ˣ) (χ : PontryaginDual G) (α
 contains exactly its starting character.
 Deviation: Sanity check on the frequency band. -/
 theorem modulatedFrequencyBand_zero (χ : PontryaginDual G) :
-    modulatedFrequencyBand m χ 0 0 = {χ} := by sorry
+    modulatedFrequencyBand m χ 0 0 = {χ} := by
+  ext ψ
+  simp only [modulatedFrequencyBand, Icc_self, mem_singleton_iff, mem_ofPred_eq,
+    exists_eq_left, zero_mul, Circle.exp_zero, mul_one]
+  exact ⟨fun h ↦ ContinuousMonoidHom.ext h, fun h ↦ h ▸ fun _ ↦ rfl⟩
 
 /-- Paper: Corollary 9.3.2.3(1), p. 425. Inclusion of circle characters
 into complex quasi-characters identifies the band with the imaginary

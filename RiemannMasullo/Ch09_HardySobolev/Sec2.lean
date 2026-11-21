@@ -120,7 +120,8 @@ def lineSobolevDensity (b : ℝ) (N : ℕ) (x : ℝ) : ℝ :=
 is just the squared twist.
 Deviation: Sanity check in logarithmic coordinates. -/
 theorem lineSobolevDensity_order_zero (b x : ℝ) :
-    lineSobolevDensity b 0 x = Real.exp (2 * b * x) := by sorry
+    lineSobolevDensity b 0 x = Real.exp (2 * b * x) := by
+  simp [lineSobolevDensity]
 
 /-- Paper: Definition 9.2.1.1(1), p. 404. The completion is realized as weighted L².
 Deviation: The norm combines the squared norms in (9.2.1.2) by summing them. The
