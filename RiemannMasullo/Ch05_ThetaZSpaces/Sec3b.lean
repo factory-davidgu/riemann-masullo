@@ -39,7 +39,17 @@ local notation "normPower(" K ", " d ")" =>
 Natural powers of the norm on the multiplicative group are continuous as
 maps to the positive reals. -/
 theorem continuous_archimedeanUnitModulation (K : Type*) [NormedField K] (d : ℕ) :
-    Continuous (normPower(K, d)) := by sorry
+    Continuous (normPower(K, d)) := by
+  rw [Units.continuous_iff]
+  have h1 : Continuous fun x : Kˣ ↦ (‖(x : K)‖₊ : ℝ≥0) ^ d :=
+    (continuous_nnnorm.comp Units.continuous_val).pow d
+  have h2 : Continuous fun x : Kˣ ↦ (‖((x⁻¹ : Kˣ) : K)‖₊ : ℝ≥0) ^ d :=
+    (continuous_nnnorm.comp Units.continuous_val |>.comp continuous_inv).pow d
+  refine ⟨?_, ?_⟩
+  · convert h1 using 2 with x
+    simp
+  · convert h2 using 2 with x
+    simp [map_inv₀]
 
 /-- Paper: Proposition 5.3.3.2, p. 249.
 The real multiplicative group uses the norm, and the complex multiplicative group
@@ -306,7 +316,15 @@ local notation "jet(" n ", " x ", " v ")" =>
 Evaluation of the real derivative of order n at a point and a tuple of directions
 is complex-linear in the Schwartz function. -/
 theorem archimedeanSchwartzJet_isLinear (n : ℕ) (x : archAdd(ι, κ))
-    (v : Fin n → archAdd(ι, κ)) : IsLinearMap ℂ (jet(n, x, v)) := by sorry
+    (v : Fin n → archAdd(ι, κ)) : IsLinearMap ℂ (jet(n, x, v)) := by
+  constructor
+  · intro f g
+    change iteratedFDeriv ℝ n ((f : _ → ℂ) + (g : _ → ℂ)) x v = _
+    rw [iteratedFDeriv_add_apply (f.smooth n).contDiffAt (g.smooth n).contDiffAt,
+      ContinuousMultilinearMap.add_apply]
+  · intro a f
+    change iteratedFDeriv ℝ n (a • (f : _ → ℂ)) x v = _
+    rw [iteratedFDeriv_const_smul_apply (f.smooth n).contDiffAt, ContinuousMultilinearMap.smul_apply]
 
 /-- Paper: Lemma 5.3.3.3(3), p. 252.
 The flat Schwartz subspace is the intersection of the kernels of all jets on the
@@ -333,12 +351,29 @@ theorem archimedeanFlatSchwartz_one_complex :
 Schwartz functions supported away from every coordinate hyperplane are flat along them. -/
 theorem mem_archimedeanFlatSchwartz_of_tsupport (f : 𝓢(archAdd(ι, κ), ℂ))
     (_hf : Disjoint (tsupport f) {x : archAdd(ι, κ) | meetsWall(x)}) :
-    f ∈ archimedeanFlatSchwartz := by sorry
+    f ∈ archimedeanFlatSchwartz := by
+  simp only [archimedeanFlatSchwartz, Submodule.mem_iInf, LinearMap.mem_ker]
+  intro x n v
+  have hx : x.val ∉ tsupport f := fun h ↦ Set.disjoint_left.mp _hf h x.2
+  have hev : (f : archAdd(ι, κ) → ℂ) =ᶠ[nhds x.val] 0 := notMem_tsupport_iff_eventuallyEq.mp hx
+  have h0 : iteratedFDeriv ℝ n (f : archAdd(ι, κ) → ℂ) x.val =
+      iteratedFDeriv ℝ n (0 : archAdd(ι, κ) → ℂ) x.val :=
+    (hev.iteratedFDeriv ℝ n).self_of_nhds
+  simp [IsLinearMap.mk', h0]
 
 /-- Paper: Lemma 5.3.3.3(3), p. 252.
 The subspace of Schwartz functions with all jets zero on the coordinate hyperplanes is closed. -/
 theorem archimedeanFlatSchwartz_isClosed :
-    IsClosed (↑(archimedeanFlatSchwartz (ι := ι) (κ := κ)) : Set 𝓢(archAdd(ι, κ), ℂ)) := by sorry
+    IsClosed (↑(archimedeanFlatSchwartz (ι := ι) (κ := κ)) : Set 𝓢(archAdd(ι, κ), ℂ)) := by
+  simp only [archimedeanFlatSchwartz, Submodule.coe_iInf]
+  refine isClosed_iInter fun x ↦ isClosed_iInter fun n ↦ isClosed_iInter fun v ↦ ?_
+  let J := (TemperedDistribution.delta x.val).comp
+    (LineDeriv.iteratedLineDerivOpCLM ℂ 𝓢(archAdd(ι, κ), ℂ) v)
+  have hJ : (archimedeanSchwartzJet_isLinear n x.val v).mk' _ = J.toLinearMap := by
+    ext f
+    exact SchwartzMap.iteratedLineDerivOp_eq_iteratedFDeriv.symm
+  rw [hJ]
+  exact J.isClosed_ker
 
 -- TODO(paper-gap): The estimates (5.3.3.21)–(5.3.3.23) fail for bumps
 -- supported close to, but away from, the origin.
@@ -388,7 +423,8 @@ def realArchimedeanMellin (f : 𝓢(ℝ, ℂ)) (ε : Fin 2) : ℂ → ℂ :=
 The positive half-plane gives the defining integral for the real Mellin transform. -/
 theorem realArchimedeanMellin_eq_integral (f : 𝓢(ℝ, ℂ)) (ε : Fin 2)
     (s : ℂ) (_hs : 0 < s.re) :
-    realArchimedeanMellin f ε s = mellin (realProfile(f, ε)) s := by sorry
+    realArchimedeanMellin f ε s = mellin (realProfile(f, ε)) s :=
+  ((realArchimedeanMellin_existsUnique f ε).exists.choose_spec.2 s _hs).2.symm
 
 /-- Paper: Proposition 5.3.3.4, p. 258.
 The complex Mellin integral converges on the right half-plane and has a unique
@@ -411,7 +447,8 @@ The positive half-plane gives the defining integral for the complex Mellin trans
 Deviation: The angular measure is normalized as in §3.3. -/
 theorem complexArchimedeanMellin_eq_integral (f : 𝓢(ℂ, ℂ)) (n : ℤ)
     (s : ℂ) (_hs : 0 < s.re) :
-    complexArchimedeanMellin f n s = mellin (complexProfile(f, n)) s := by sorry
+    complexArchimedeanMellin f n s = mellin (complexProfile(f, n)) s :=
+  ((complexArchimedeanMellin_existsUnique f n).exists.choose_spec.2 s _hs).2.symm
 
 /-- Paper: Proposition 5.3.3.4, p. 258.
 In the real field model the local zeta function of §3.3 is the two-sign Mellin transform
@@ -558,7 +595,8 @@ def sAdeleFiniteZeroSchwartz (S T : Finset V) : Submodule ℂ ℬ(SAdeleRing F S
 Passing from a Schwartz function in archimedean coordinates to its underlying
 function is complex-linear. -/
 theorem archimedeanSchwartz_coe_isLinear :
-    IsLinearMap ℂ (fun f : 𝓢(ArchCoordinates, ℂ) ↦ (f : ArchCoordinates → ℂ)) := by sorry
+    IsLinearMap ℂ (fun f : 𝓢(ArchCoordinates, ℂ) ↦ (f : ArchCoordinates → ℂ)) :=
+  ⟨fun _ _ ↦ rfl, fun _ _ ↦ rfl⟩
 
 /-- Paper: Definition 5.3.4.1, p. 259.
 The polar-free subspace imposes flatness on every archimedean slice and vanishing
@@ -703,7 +741,9 @@ archimedean Euler factor. -/
 theorem sLocalArchimedeanPoleMultiplicity_pos_iff (χ : PontryaginDual Jₛ) (s : ℂ) :
     0 < sLocalArchimedeanPoleMultiplicity χ s ↔
       ∃ w : InfinitePlace F, meromorphicOrderAt (fun z ↦ infiniteLocalEulerFactor w
-        (sLocalInfiniteRestriction w (chartₛ(χ) z))) s < 0 := by sorry
+        (sLocalInfiniteRestriction w (chartₛ(χ) z))) s < 0 := by
+  rw [sLocalArchimedeanPoleMultiplicity, Finset.card_pos]
+  simp [Finset.Nonempty]
 
 /-- Paper: Proposition 5.3.4.5(2), p. 264.
 The negative of the allowed pole multiplicity is the sum of the negative parts

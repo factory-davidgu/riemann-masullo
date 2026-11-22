@@ -336,7 +336,62 @@ theorem regularizedCompletedHeckeL_differentiable (χ : U𝔽) (τ : ℝ≥0ˣ �
     let δ : ℕ := open Classical in
       if χ.toMonoidHom.comp (ideleClassNorm F).ker.subtype = 1 then 1 else 0
     Differentiable ℂ (toMeromorphicNFOn (fun s ↦ (s + b) ^ δ * (1 - s - b) ^ δ * L s) univ) :=
-  by sorry
+  by
+    classical
+    have hphase := existsUnique_ideleNormSection_character_phase χ τ hτ
+    let x := hphase.exists.choose
+    let b := (x : ℂ) * Complex.I
+    by_cases hχ : χ.toMonoidHom.comp (ideleClassNorm F).ker.subtype = 1
+    · simp only [ite_eq_left hχ, pow_one]
+      let P (s : ℂ) := (s + b) * (1 - s - b)
+      change Differentiable ℂ (toMeromorphicNFOn (P * L) univ)
+      obtain ⟨t, ⟨hchar, hzero, hone, haway⟩, _⟩ :=
+        completedHeckeL_continuation_simplePoles χ L _hL _hEq hχ
+      have hx : -t = x := by
+        refine hphase.unique ?_ hphase.exists.choose_spec
+        intro u
+        have he := DFunLike.congr_fun hchar (QuotientGroup.mk (τ u))
+        change (χ (QuotientGroup.mk (τ u)) : ℂ) * _ ^ (0 : ℂ) =
+          1 * ((((ideleNorm F (τ u)).val : ℝ) : ℂ) ^ (-Complex.I * (t : ℂ))) at he
+        rw [Complex.cpow_zero, mul_one, one_mul, hτ u] at he
+        rw [Complex.ofReal_neg, show -(t : ℂ) * Complex.I = -Complex.I * (t : ℂ) by ring]
+        exact he
+      have hb : b = -(Complex.I * (t : ℂ)) := by
+        dsimp only [b]
+        rw [← hx, Complex.ofReal_neg]
+        ring
+      have hP (s : ℂ) : AnalyticAt ℂ P s := by
+        dsimp only [P]
+        fun_prop
+      have hmer : MeromorphicOn (P * L) univ :=
+        fun s hs ↦ (hP s).meromorphicAt.mul (_hL hs).meromorphicAt
+      have hcancel (s : ℂ) (hz : P s = 0) (hp : meromorphicOrderAt L s = -1) :
+          0 ≤ meromorphicOrderAt (P * L) s := by
+        rw [meromorphicOrderAt_mul (hP s).meromorphicAt (_hL (mem_univ s)).meromorphicAt, hp]
+        have hpos : 0 < meromorphicOrderAt P s := by
+          apply (tendsto_zero_iff_meromorphicOrderAt_pos (hP s).meromorphicAt).mp
+          rw [← hz]
+          exact (hP s).continuousAt.continuousWithinAt
+        generalize meromorphicOrderAt P s = w at hpos ⊢
+        cases w with
+        | top => simp
+        | coe k =>
+          have hk : (0 : ℤ) < k := WithTop.coe_lt_coe.mp hpos
+          exact WithTop.coe_le_coe.mpr (show (0 : ℤ) ≤ k + (-1) by omega)
+      intro s
+      apply AnalyticAt.differentiableAt
+      have hNF := meromorphicNFOn_toMeromorphicNFOn (P * L) univ (mem_univ s)
+      apply hNF.meromorphicOrderAt_nonneg_iff_analyticAt.mp
+      rw [meromorphicOrderAt_toMeromorphicNFOn hmer (mem_univ s)]
+      by_cases hs₀ : s = Complex.I * (t : ℂ)
+      · subst s
+        exact hcancel _ (by dsimp only [P]; rw [hb]; ring) hzero
+      by_cases hs₁ : s = 1 + Complex.I * (t : ℂ)
+      · subst s
+        exact hcancel _ (by dsimp only [P]; rw [hb]; ring) hone
+      exact ((hP s).mul (haway s (by simp [hs₀, hs₁]))).meromorphicOrderAt_nonneg
+    · simpa only [ite_eq_right hχ, pow_zero, one_mul, toMeromorphicNFOn_eq_self.mpr _hL] using
+        completedHeckeL_continuation_entire χ L _hL _hEq hχ
 
 /-- Paper: Theorem 7.1.4.2(1), p. 326.
 The generator of the spectral ideal is the completed Hecke continuation multiplied by
@@ -362,7 +417,49 @@ theorem regularizedCompletedHeckeL_ne_zero_at_canceled_poles
     let x₀ := (existsUnique_ideleNormSection_character_phase χ τ hτ).exists.choose
     let b := (x₀ : ℂ) * Complex.I
     let Λ := regularizedCompletedHeckeL χ τ hτ L hL hEq
-    Λ.val (-b) ≠ 0 ∧ Λ.val (1 - b) ≠ 0 := by sorry
+    Λ.val (-b) ≠ 0 ∧ Λ.val (1 - b) ≠ 0 := by
+  classical
+  have hphase := existsUnique_ideleNormSection_character_phase χ τ hτ
+  let x := hphase.exists.choose
+  let b := (x : ℂ) * Complex.I
+  obtain ⟨t, ⟨hchar, hzero, hone, _⟩, _⟩ :=
+    completedHeckeL_continuation_simplePoles χ L hL hEq hχ
+  have hx : -t = x := by
+    refine hphase.unique ?_ hphase.exists.choose_spec
+    intro u
+    have he := DFunLike.congr_fun hchar (QuotientGroup.mk (τ u))
+    change (χ (QuotientGroup.mk (τ u)) : ℂ) * _ ^ (0 : ℂ) =
+      1 * ((((ideleNorm F (τ u)).val : ℝ) : ℂ) ^ (-Complex.I * (t : ℂ))) at he
+    rw [Complex.cpow_zero, mul_one, one_mul, hτ u] at he
+    rw [Complex.ofReal_neg, show -(t : ℂ) * Complex.I = -Complex.I * (t : ℂ) by ring]
+    exact he
+  have hb : b = -(Complex.I * (t : ℂ)) := by
+    dsimp only [b]
+    rw [← hx, Complex.ofReal_neg]
+    ring
+  let P (z : ℂ) := (z + b) * (1 - z - b)
+  have hP (s : ℂ) : AnalyticAt ℂ P s := by
+    dsimp only [P]
+    fun_prop
+  have hD (s : ℂ) : HasDerivAt P ((1 - s - b) - (s + b)) s := by
+    simpa [P, sub_eq_add_neg] using ((hasDerivAt_id s).add_const b).fun_mul
+      (((hasDerivAt_const s (1 : ℂ)).fun_sub (hasDerivAt_id s)).sub_const b)
+  have hmer : MeromorphicOn (P * L) univ :=
+    fun s hs ↦ (hP s).meromorphicAt.mul (hL hs).meromorphicAt
+  have cancel (s : ℂ) (hz : P s = 0) (hd : (1 - s - b) - (s + b) ≠ 0)
+      (hord : meromorphicOrderAt L s = -1) : toMeromorphicNFOn (P * L) univ s ≠ 0 := by
+    have h1 := (hP s).analyticOrderAt_eq_one_of_zero_deriv_ne_zero hz (by rwa [(hD s).deriv])
+    apply (meromorphicNFOn_toMeromorphicNFOn (P * L) univ (mem_univ s)).meromorphicOrderAt_eq_zero_iff.mp
+    rw [meromorphicOrderAt_toMeromorphicNFOn hmer (mem_univ s),
+      meromorphicOrderAt_mul (hP s).meromorphicAt (hL (mem_univ s)).meromorphicAt,
+      (hP s).meromorphicOrderAt_eq, h1, hord]
+    norm_num
+  change toMeromorphicNFOn _ univ (-b) ≠ 0 ∧ toMeromorphicNFOn _ univ (1 - b) ≠ 0
+  simp only [ite_eq_left hχ, pow_one]
+  refine ⟨cancel _ (by dsimp only [P]; ring) (by ring_nf <;> norm_num) ?_,
+    cancel _ (by dsimp only [P]; ring) (by ring_nf <;> norm_num) ?_⟩
+  · simpa [hb] using hzero
+  · simpa [hb] using hone
 
 /-- Paper: Equation (7.1.4.4), p. 326.
 Evaluation of the m-th complex derivative at a point defines a continuous linear
@@ -416,7 +513,25 @@ def entireJetSpace (ρ : ℂ) (n : ℕ) : Submodule ℂ (StrongDual ℂ Entire) 
 There are exactly n independent jet coordinates at a point for order n.
 Deviation: States the dimension check for the span used in the definition. -/
 theorem entireJetSpace_finrank (ρ : ℂ) (n : ℕ) :
-    Module.finrank ℂ (entireJetSpace ρ n) = n := by sorry
+    Module.finrank ℂ (entireJetSpace ρ n) = n := by
+  classical
+  let J (i : Fin n) := entireJet ρ i.val
+  have hJ : LinearIndependent ℂ J := by
+    apply Fintype.linearIndependent_iff.mpr
+    intro c hc i
+    let p : Entire := ⟨⟨fun z ↦ (z - ρ) ^ i.val, by fun_prop⟩,
+      (differentiable_id.sub (differentiable_const ρ)).pow _⟩
+    have hp (j : Fin n) : J j p = if j = i then (i.val.factorial : ℂ) else 0 := by
+      change iteratedDeriv j.val (fun z : ℂ ↦ (z - ρ) ^ i.val) ρ = _
+      simp only [iteratedDeriv_comp_sub_const (f := fun z : ℂ ↦ z ^ i.val), sub_self,
+        iteratedDeriv_fun_pow_zero, Fin.val_inj, apply_ite Nat.cast, Nat.cast_zero]
+    have h := congrArg (fun ℓ : StrongDual ℂ Entire ↦ ℓ p) hc
+    simp only [sum_apply, smul_apply,
+      hp, zero_apply, smul_eq_mul, mul_ite, mul_zero,
+      Finset.sum_ite_eq', Finset.mem_univ, ite_true] at h
+    exact (mul_eq_zero.mp h).resolve_right (by exact_mod_cast Nat.factorial_ne_zero i.val)
+  change Module.finrank ℂ (Submodule.span ℂ (range J)) = n
+  exact (finrank_span_eq_card hJ).trans (Fintype.card_fin n)
 
 /-- Paper: Theorem 7.1.4.2(1), p. 326.
 The annihilator of a principal ideal consists of the continuous linear functionals
@@ -557,7 +672,20 @@ reciprocal factors of the selected places, with factor one at ramified places. -
 theorem orbitalHeckeGenerator_differentiable (S₀ : Finset Primes) :
     Differentiable ℂ (fun s ↦
       reciprocalPartialHeckeEulerProduct χ S₀ s *
-        (regularizedCompletedHeckeL χ τ hτ L hL hEq).val s) := by sorry
+        (regularizedCompletedHeckeL χ τ hτ L hL hEq).val s) := by
+  classical
+  refine Differentiable.mul ?_ (regularizedCompletedHeckeL χ τ hτ L hL hEq).property
+  unfold reciprocalPartialHeckeEulerProduct
+  apply Differentiable.fun_finsetProd
+  intro v _
+  by_cases hv : (ideleClassNormTwist χ 0).IsUnramifiedAt v
+  · simp only [finiteHeckeEulerFactor, ite_eq_left hv, inv_inv]
+    have hq : (v.asIdeal.absNorm : ℂ) ≠ 0 := by
+      exact_mod_cast (Ideal.absNorm_eq_zero_iff.not.mpr v.ne_bot)
+    exact (differentiable_const _).sub ((differentiable_const _).mul
+      (differentiable_id.neg.const_cpow (.inl hq)))
+  · simp only [finiteHeckeEulerFactor, ite_eq_right hv, inv_one]
+    exact differentiable_const _
 
 /-- Paper: Theorem 7.1.4.3(1), p. 331.
 The entire generator of the orbital ideal is the finite Euler correction of the regularized
