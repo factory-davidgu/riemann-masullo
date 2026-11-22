@@ -1967,13 +1967,183 @@ theorem finitePlaceUnitAverage_eq_zero_iff (w : Places) (f : ℬᵥ(w)) :
 -- eigendistribution annihilates every unit difference only for unramified weight.
 -- The kernel assertion follows by averaging the finite unit orbit of each test function.
 
+private theorem finitePlaceUnitAverage_coinvariants_equiv_restrict {G : Type*} [Group G]
+    [MeasurableSpace G] [MeasurableMul G] (μ : Measure G) [μ.IsMulLeftInvariant]
+    (H : Subgroup G) (hH : MeasurableSet (H : Set G)) (a : G) (ha : a ∈ H) (φ : G → ℂ) :
+    ∫ u in (H : Set G), φ (a * u) ∂μ = ∫ u in (H : Set G), φ u ∂μ := by
+  classical
+  rw [← integral_indicator hH, ← integral_indicator hH,
+    ← integral_mul_left_eq_self (μ := μ) ((H : Set G).indicator φ) a]
+  apply integral_congr_ae
+  filter_upwards with u
+  by_cases hu : u ∈ H <;> simp [Set.indicator, hu, H.mul_mem_cancel_left ha]
+
+private theorem finitePlaceUnitAverage_coinvariants_equiv_translate (w : Places)
+    (g : U(w)) (f : ℬᵥ(w)) (x : L(w)) :
+    finitePlaceUnitAverage w ((ρ(w)) g f) x = finitePlaceUnitAverage w f x := by
+  classical
+  let : (μ(w)).IsHaarMeasure := finiteLocalMultiplicativeTamagawaMeasure_isHaarMeasure w
+  let φ (u : (L(w))ˣ) := f (Multiplicative.ofAdd (x * u.val))
+  let a : (L(w))ˣ := ↑(g⁻¹ : U(w))
+  have ha : a ∈ U(w) := (g⁻¹ : U(w)).property
+  have hφ (u : (L(w))ˣ) : ((ρ(w)) g f) (Multiplicative.ofAdd (x * u.val)) = φ (a * u) := by
+    change f (Multiplicative.ofAdd (a.val * (x * u.val))) = f (Multiplicative.ofAdd (x * (a.val * u.val)))
+    rw [mul_left_comm]
+  unfold finitePlaceUnitAverage
+  simp_rw [hφ]
+  exact finitePlaceUnitAverage_coinvariants_equiv_restrict (μ(w)) (U(w))
+    (units_isOpen w).measurableSet a ha φ
+
+private theorem finitePlaceUnitAverage_coinvariants_equiv_lift (w : Places) (x : L(w)) :
+    ∃ l : (ℬᵥ(w) ⧸ Representation.Coinvariants.ker (ρ(w))) →ₗ[ℂ] ℂ,
+      ∀ f, l ((Representation.Coinvariants.ker (ρ(w))).mkQ f) = finitePlaceUnitAverage w f x := by
+  let a : ℬᵥ(w) →ₗ[ℂ] ℂ :=
+    { toFun := fun f ↦ finitePlaceUnitAverage w f x
+      map_add' := fun f g ↦ integral_add (finitePlaceUnitAverage_integrable w f x)
+        (finitePlaceUnitAverage_integrable w g x)
+      map_smul' := fun c f ↦ integral_smul c _ }
+  refine ⟨Representation.Coinvariants.lift (ρ(w)) a (fun g ↦ LinearMap.ext fun f ↦ ?_), fun _ ↦ rfl⟩
+  exact finitePlaceUnitAverage_coinvariants_equiv_translate w g f x
+
+private theorem finitePlaceUnitAverage_coinvariants_equiv_fixed (w : Places)
+    (f : Representation.invariants (ρ(w))) (x : L(w)) :
+    finitePlaceUnitAverage w f.val x =
+      ((μ(w) (U(w) : Set (L(w))ˣ)).toReal : ℂ) * f.val (Multiplicative.ofAdd x) := by
+  let φ (u : (L(w))ˣ) := f.val (Multiplicative.ofAdd (x * u.val))
+  have hφ (u : (L(w))ˣ) (hu : u ∈ U(w)) : φ u = f.val (Multiplicative.ofAdd x) := by
+    let v : U(w) := ⟨u, hu⟩
+    have h : (ρ(w)) v⁻¹ f.val = f.val := f.property v⁻¹
+    have he := congrArg (fun t : ℬᵥ(w) ↦ t (Multiplicative.ofAdd x)) h
+    change f.val (Multiplicative.ofAdd ((u⁻¹⁻¹).val * x)) = f.val (Multiplicative.ofAdd x) at he
+    simpa only [φ, inv_inv, mul_comm x] using he
+  change ∫ u in (U(w) : Set (L(w))ˣ), φ u ∂μ(w) = _
+  have h₁ := setIntegral_congr_fun (μ := μ(w)) (s := (U(w) : Set (L(w))ˣ))
+    (f := φ) (g := fun _ ↦ f.val (Multiplicative.ofAdd x)) (units_isOpen w).measurableSet hφ
+  have h₂ := setIntegral_const (μ := μ(w)) (s := (U(w) : Set (L(w))ˣ)) (f.val (Multiplicative.ofAdd x))
+  exact h₁.trans (h₂.trans Complex.real_smul)
+
+/-- The normalized sum over a finite orbit is a fixed representative of its coinvariant class. -/
+private theorem finitePlaceUnitAverage_coinvariants_equiv_representative {G E : Type*} [Group G]
+    [AddCommGroup E] [Module ℂ E] (r : Representation ℂ G E) (f : E) (s : Finset E)
+    (hs : ∀ y, y ∈ s ↔ ∃ u : G, r u f = y) :
+    ∃ y : r.invariants, Representation.Coinvariants.mk r y.val = Representation.Coinvariants.mk r f := by
+  classical
+  let q := Representation.Coinvariants.mk r
+  have mul_apply (a b : G) (y : E) : r (a * b) y = r a (r b y) := DFunLike.congr_fun (r.map_mul a b) y
+  have perm (a : G) (y : E) (hy : y ∈ s) : r a y ∈ s := by
+    obtain ⟨b, rfl⟩ := (hs y).mp hy
+    exact (hs _).mpr ⟨a * b, mul_apply _ _ _⟩
+  have undo (a : G) (y : E) : r a⁻¹ (r a y) = y := by rw [← mul_apply, inv_mul_cancel, map_one]; rfl
+  have hsum (a : G) : r a (∑ y ∈ s, y) = ∑ y ∈ s, y := by
+    rw [map_sum]
+    exact Finset.sum_bij' (fun y _ ↦ r a y) (fun y _ ↦ r a⁻¹ y) (perm a) (perm a⁻¹)
+      (fun y _ ↦ undo a y) (fun y _ ↦ by simp) (fun _ _ ↦ rfl)
+  refine ⟨⟨(s.card : ℂ)⁻¹ • ∑ y ∈ s, y, fun a ↦ by rw [map_smul, hsum]⟩, ?_⟩
+  have hc : (s.card : ℂ) ≠ 0 := Nat.cast_ne_zero.mpr (Finset.card_ne_zero.mpr
+    ⟨r 1 f, (hs _).mpr ⟨1, rfl⟩⟩)
+  have hq (y : E) (hy : y ∈ s) : q y = q f := by
+    obtain ⟨u, rfl⟩ := (hs y).mp hy
+    exact Representation.Coinvariants.mk_self_apply r u f
+  change q ((s.card : ℂ)⁻¹ • ∑ y ∈ s, y) = q f
+  rw [map_smul, map_sum, Finset.sum_congr rfl hq, Finset.sum_const, ← Nat.cast_smul_eq_nsmul ℂ,
+    smul_smul, inv_mul_cancel₀ hc, one_smul]
+
+private theorem finitePlaceUnitAverage_coinvariants_equiv_continuous (w : Places)
+    (T : ℬᵥ(w) →ₗ[ℂ] ℬᵥ(w)) : Continuous T := by
+  let E := ℬᵥ(w)
+  have h := finestLocallyConvex_withSeminorms E
+  let : IsTopologicalAddGroup (FinestLocallyConvex E) := h.isTopologicalAddGroup
+  let T' : FinestLocallyConvex E →ₗ[ℂ] FinestLocallyConvex E := T
+  have hT := h.continuous_of_continuous_comp T' fun p ↦ h.continuous_seminorm (p.comp T')
+  exact (congrArg (fun t ↦ @Continuous E E t t T) (finitePlaceSchwartz_finestTopology F w)).mpr hT
+
+private theorem finitePlaceUnitAverage_coinvariants_equiv_mass (w : Places) :
+    ((μ(w) (U(w) : Set (L(w))ˣ)).toReal : ℂ) ≠ 0 := by
+  apply Complex.ofReal_ne_zero.mpr
+  apply ENNReal.toReal_ne_zero.mpr
+  refine ⟨?_, unitsMass_ne_top w⟩
+  rw [finiteLocalMultiplicativeTamagawaMeasure_integerUnits F w]
+  exact ENNReal.inv_ne_zero.mpr ENNReal.ofReal_ne_top
+
+private theorem finitePlaceUnitAverage_coinvariants_equiv_surj (w : Places) (f : ℬᵥ(w)) :
+    ∃ y : Representation.invariants (ρ(w)), Representation.Coinvariants.mk (ρ(w)) y.val =
+      Representation.Coinvariants.mk (ρ(w)) f := by
+  have H := finitePlaceSchwartz_average_dilation (F := F) w f
+  refine finitePlaceUnitAverage_coinvariants_equiv_representative (G := U(w)) (E := ℬᵥ(w))
+    (ρ(w)) f H.choose ?_
+  intro y
+  change y ∈ H.choose ↔ ∃ u : U(w), schwartzBruhatUnitRepresentation (R := L(w)) u.val f = y
+  simpa only [schwartzBruhatUnitRepresentation_apply] using H.choose_spec.1 y
+
+private theorem finitePlaceUnitAverage_coinvariants_equiv_of_bijective {E : Type*}
+    [AddCommGroup E] [Module ℂ E] [TopologicalSpace E] (K I : Submodule ℂ E)
+    (hc : ∀ T : E →ₗ[ℂ] E, Continuous T) (hq : Bijective (K.mkQ.comp I.subtype))
+    (m : ℂ) (hm : m ≠ 0) : ∃ N : (E ⧸ K) ≃L[ℂ] I, ∀ y : I, N (K.mkQ y.val) = m • y := by
+  let e := LinearEquiv.ofBijective (K.mkQ.comp I.subtype) hq
+  let N := e.symm.trans (LinearEquiv.smulOfNeZero ℂ I m hm)
+  have hN : Continuous N := by
+    apply K.isQuotientMap_mkQ.continuous_iff.mpr
+    exact (hc (I.subtype.comp (N.toLinearMap.comp K.mkQ))).subtype_mk fun f ↦ (N (K.mkQ f)).property
+  have hN' : Continuous N.symm :=
+    K.continuous_mkQ.comp ((hc (m⁻¹ • LinearMap.id)).comp continuous_subtype_val)
+  refine ⟨⟨N, hN, hN'⟩, fun y ↦ ?_⟩
+  change m • e.symm (e y) = m • y
+  rw [e.symm_apply_apply]
+
+/-- Pointwise averages that descend to the quotient and act by a nonzero mass on fixed vectors
+identify the quotient with the fixed space, provided every class has a fixed representative. -/
+private theorem finitePlaceUnitAverage_coinvariants_equiv_assemble {G E X : Type*} [Group G]
+    [AddCommGroup E] [Module ℂ E] [TopologicalSpace E] (r : Representation ℂ G E)
+    (hc : ∀ T : E →ₗ[ℂ] E, Continuous T) (m : ℂ) (hm : m ≠ 0)
+    (v A : E → X → ℂ) (hext : ∀ f g, (∀ x, v f x = v g x) → f = g)
+    (hsmul : ∀ f x, v (m • f) x = m * v f x)
+    (hlift : ∀ x, ∃ l : (E ⧸ Representation.Coinvariants.ker r) →ₗ[ℂ] ℂ,
+      ∀ f, l ((Representation.Coinvariants.ker r).mkQ f) = A f x)
+    (hfixed : ∀ y : r.invariants, ∀ x, A y.val x = m * v y.val x)
+    (hrep : ∀ f, ∃ y : r.invariants,
+      Representation.Coinvariants.mk r y.val = Representation.Coinvariants.mk r f) :
+    ∃ N : (E ⧸ Representation.Coinvariants.ker r) ≃L[ℂ] r.invariants,
+      ∀ f x, v (N (Submodule.Quotient.mk f)).val x = A f x := by
+  let I := r.invariants
+  let K := Representation.Coinvariants.ker r
+  have hcongr (f g : E) (h : K.mkQ f = K.mkQ g) (x : X) : A f x = A g x := by
+    obtain ⟨l, hl⟩ := hlift x
+    exact (hl f).symm.trans ((congrArg l h).trans (hl g))
+  have hq : Bijective (K.mkQ.comp I.subtype) := by
+    constructor
+    · intro f g h
+      refine Subtype.ext (hext _ _ fun x ↦ mul_left_cancel₀ hm ?_)
+      exact (hfixed f x).symm.trans ((hcongr f.val g.val h x).trans (hfixed g x))
+    · intro z
+      obtain ⟨f, rfl⟩ := K.mkQ_surjective z
+      exact hrep f
+  obtain ⟨N, hN⟩ := finitePlaceUnitAverage_coinvariants_equiv_of_bijective K I hc hq m hm
+  refine ⟨N, fun f x ↦ ?_⟩
+  obtain ⟨y, hy⟩ := hrep f
+  change K.mkQ y.val = K.mkQ f at hy
+  change v (N (K.mkQ f)).val x = A f x
+  rw [← hy, hN]
+  exact (hsmul y.val x).trans ((hfixed y x).symm.trans (hcongr y.val f hy x))
+
 /-- Paper: Lemma 6.1.2.4(2), (6.1.2.15), p. 292.
 Multiplicative unit averaging induces a linear homeomorphism from the algebraic
 coinvariants with their quotient topology to the integer-unit invariants. -/
 theorem finitePlaceUnitAverage_coinvariants_equiv (w : Places) :
     ∃ N : (ℬᵥ(w) ⧸ Representation.Coinvariants.ker (ρ(w))) ≃L[ℂ] (Representation.invariants (ρ(w))),
       ∀ (f : ℬᵥ(w)) x, (N (Submodule.Quotient.mk f)).val (Multiplicative.ofAdd x) =
-        finitePlaceUnitAverage w f x := by sorry
+        finitePlaceUnitAverage w f x := by
+  let v (f : ℬᵥ(w)) (x : L(w)) := f (Multiplicative.ofAdd x)
+  let m : ℂ := ((μ(w) (U(w) : Set (L(w))ˣ)).toReal : ℂ)
+  have extv (f g : ℬᵥ(w)) (h : ∀ x, v f x = v g x) : f = g := Subtype.ext (funext fun x ↦ h x.toAdd)
+  have smulv (f : ℬᵥ(w)) (x : L(w)) : v (m • f) x = m * v f x := rfl
+  have H := finitePlaceUnitAverage_coinvariants_equiv_assemble (E := ℬᵥ(w)) (G := U(w)) (X := L(w))
+    (ρ(w)) (finitePlaceUnitAverage_coinvariants_equiv_continuous w)
+    m (finitePlaceUnitAverage_coinvariants_equiv_mass w)
+    v (finitePlaceUnitAverage w) extv smulv
+  with_reducible
+    exact H (finitePlaceUnitAverage_coinvariants_equiv_lift (F := F) w)
+      (finitePlaceUnitAverage_coinvariants_equiv_fixed (F := F) w)
+      (finitePlaceUnitAverage_coinvariants_equiv_surj (F := F) w)
 
 local notation "K(" D ")" => FinitePlaceProduct F D
 local notation "KUnits(" D ")" =>

@@ -1539,10 +1539,73 @@ def schwartzBergmanDivisible (g : Entire) : Submodule ℂ Aℂ :=
   ((Ideal.span ({g} : Set Entire)).restrictScalars ℂ).comap
     schwartzBergmanEntireInclusion.toLinearMap
 
+/-- An entire function is divisible by `g` exactly when it vanishes to at least the order of
+`g` at every point. In that case the normalized quotient gives an entire factor. -/
+private theorem schwartzBergmanDivisible_isClosed_dvd (g f : Entire) :
+    g ∣ f ↔ ∀ z, analyticOrderAt (g.val : ℂ → ℂ) z ≤ analyticOrderAt (f.val : ℂ → ℂ) z := by
+  have ha (a : Entire) (z : ℂ) : AnalyticAt ℂ (a.val : ℂ → ℂ) z :=
+    (show Differentiable ℂ a.val from a.property).analyticAt z
+  constructor
+  · rintro ⟨k, rfl⟩ z
+    change _ ≤ analyticOrderAt ((g.val : ℂ → ℂ) * (k.val : ℂ → ℂ)) z
+    rw [analyticOrderAt_mul (ha g z) (ha k z)]
+    exact self_le_add_right _ _
+  · intro hord
+    let q := (f.val : ℂ → ℂ) / (g.val : ℂ → ℂ)
+    have hq : MeromorphicOn q univ := fun z _ ↦ (ha f z).meromorphicAt.div (ha g z).meromorphicAt
+    have hdiff : Differentiable ℂ (toMeromorphicNFOn q univ) := by
+      intro z
+      apply AnalyticAt.differentiableAt
+      have hnf := meromorphicNFOn_toMeromorphicNFOn q univ (mem_univ z)
+      apply hnf.meromorphicOrderAt_nonneg_iff_analyticAt.mp
+      rw [meromorphicOrderAt_toMeromorphicNFOn hq (mem_univ z),
+        meromorphicOrderAt_div (ha f z).meromorphicAt (ha g z).meromorphicAt,
+        (ha f z).meromorphicOrderAt_eq, (ha g z).meromorphicOrderAt_eq]
+      have hle := hord z
+      generalize analyticOrderAt (f.val : ℂ → ℂ) z = m at hle ⊢
+      generalize analyticOrderAt (g.val : ℂ → ℂ) z = n at hle ⊢
+      cases m using ENat.recTopCoe with
+      | top => simp
+      | coe m =>
+        cases n using ENat.recTopCoe with
+        | top => simp at hle
+        | coe n =>
+          exact WithTop.coe_le_coe.mpr (sub_nonneg.mpr (by exact_mod_cast hle : (n : ℤ) ≤ m))
+    refine ⟨⟨⟨_, hdiff.continuous⟩, hdiff⟩, Subtype.ext (ContinuousMap.ext fun z ↦ ?_)⟩
+    change f.val z = g.val z * toMeromorphicNFOn q univ z
+    by_cases hz : g.val z = 0
+    · have hpos := lt_of_lt_of_le (pos_iff_ne_zero.mpr ((ha g z).analyticOrderAt_ne_zero.mpr hz))
+          (hord z)
+      rw [hz, zero_mul]
+      exact (ha f z).analyticOrderAt_ne_zero.mp hpos.ne'
+    · rw [toMeromorphicNFOn_eq_toMeromorphicNFAt hq (mem_univ z),
+        toMeromorphicNFAt_eq_self.mpr ((ha f z).div (ha g z) hz).meromorphicNFAt]
+      exact (mul_div_cancel₀ _ hz).symm
+
+/-- A principal ideal of entire functions is the intersection of its vanishing jet kernels. -/
+private theorem schwartzBergmanDivisible_isClosed_span (g : Entire) :
+    IsClosed (Ideal.span ({g} : Set Entire) : Set Entire) := by
+  have heq : (Ideal.span ({g} : Set Entire) : Set Entire) =
+      ⋂ (z : ℂ) (n : ℕ) (_ : (n : ℕ∞) ≤ analyticOrderAt (g.val : ℂ → ℂ) z)
+        (i : ℕ) (_ : i < n), ((entireJet z i).ker : Set Entire) := by
+    ext f
+    simp only [SetLike.mem_coe, Ideal.mem_span_singleton,
+      schwartzBergmanDivisible_isClosed_dvd, mem_iInter, LinearMap.mem_ker,
+      ContinuousLinearMap.coe_coe, entireJet_apply]
+    apply forall_congr'
+    intro z
+    rw [← ENat.forall_natCast_le_iff_le]
+    simp_rw [natCast_le_analyticOrderAt_iff_iteratedDeriv_eq_zero
+      ((show Differentiable ℂ f.val from f.property).analyticAt z)]
+  rw [heq]
+  exact isClosed_iInter fun z ↦ isClosed_iInter fun n ↦ isClosed_iInter fun _ ↦
+    isClosed_iInter fun i ↦ isClosed_iInter fun _ ↦ (entireJet z i).isClosed_ker
+
 /-- Paper: Theorem 7.1.4.2(2), pp. 326–328. Divisibility defines a closed subspace,
 so its quotient with the Schwartz–Bergman quotient topology is Hausdorff. -/
 theorem schwartzBergmanDivisible_isClosed (g : Entire) :
-    IsClosed (schwartzBergmanDivisible g : Set Aℂ) := by sorry
+    IsClosed (schwartzBergmanDivisible g : Set Aℂ) :=
+  (schwartzBergmanDivisible_isClosed_span g).preimage schwartzBergmanEntireInclusion.continuous
 
 /-- Paper: Theorem 7.1.4.2(2), pp. 326–327 and Theorem 7.1.4.3(2), p. 331.
 Restriction to Schwartz–Bergman functions induces an injective map with dense image

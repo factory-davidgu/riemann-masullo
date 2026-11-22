@@ -103,7 +103,18 @@ of ideles satisfying the old conditions and failing a condition at some new plac
 The failure of a unit condition is the union of the nonzero valuation classes. -/
 theorem divisorialStratum_sdiff (T U : Finset V) (hTU : T ⊆ U) :
     divisorialStratum F T \ divisorialStratum F U =
-      ⋃ v ∈ U \ T, {g ∈ divisorialStratum F T | Valued.v (g.val.2 v) ≠ 1} := by sorry
+      ⋃ v ∈ U \ T, {g ∈ divisorialStratum F T | Valued.v (g.val.2 v) ≠ 1} := by
+  classical
+  ext g
+  simp only [Set.mem_diff, Set.mem_iUnion, Set.mem_setOf_eq, Finset.mem_sdiff]
+  constructor
+  · rintro ⟨hT, hU⟩
+    change ¬ ∀ v ∈ U, Valued.v (g.val.2 v) = 1 at hU
+    push_neg at hU
+    obtain ⟨v, hvU, hv⟩ := hU
+    exact ⟨v, ⟨hvU, fun hvT ↦ hv (hT v hvT)⟩, hT, hv⟩
+  · rintro ⟨v, ⟨hvU, _⟩, hT, hv⟩
+    exact ⟨hT, fun hU ↦ hv (hU v hvU)⟩
 
 /-- Paper: §11.3.1.1, pp. 492–493. The sequence of rational primes omitting the
 residue characteristics represented in the finite base consists of primes. -/

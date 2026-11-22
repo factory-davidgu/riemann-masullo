@@ -652,6 +652,88 @@ theorem mem_globalPolarFreeThetaSubmodule (ω : PontryaginDual C₁) (x : Θ(ω)
 -- TODO(paper-gap): The codomain in (6.3.2.5) is zero on a nontrivial norm-one
 -- component. The map (6.3.2.6) is identically zero there.
 
+private theorem globalConverse_nontrivial_exact_polar_translate (g : IdeleGroup (𝓞 F) F)
+    (hg : ideleNorm F g = 1) (f : ℬ) :
+    adelePolarValues (F := F) (schwartzBruhatUnitTranslate g f) = adelePolarValues (F := F) f := by
+  apply Prod.ext
+  · change f (Multiplicative.ofAdd (g.inv * 0)) = f zeroAdele
+    rw [mul_zero]
+  · change adeleSchwartzFourier (schwartzBruhatUnitTranslate g f) zeroAdele =
+      adeleSchwartzFourier f zeroAdele
+    rw [(adeleSchwartzFourier_apply_zero _).2, (adeleSchwartzFourier_apply_zero f).2]
+    let : MeasurableSpace 𝔸[F] := borel _
+    let : BorelSpace 𝔸[F] := ⟨rfl⟩
+    let μ := additiveTamagawaMeasure F
+    let : μ.IsAddHaarMeasure := (additiveTamagawaMeasure_existsUnique F).exists.choose_spec.1
+    let d := (Homeomorph.smul (α := 𝔸[F]) g⁻¹).toMeasurableEquiv
+    have hmap : μ.map d = μ := by
+      ext s hs
+      rw [Measure.map_apply d.measurable hs]
+      change μ ((fun x : 𝔸[F] ↦ g⁻¹ • x) ⁻¹' s) = μ s
+      rw [Set.preimage_smul_inv]
+      change μ ((fun x : 𝔸[F] ↦ g.val * x) '' s) = μ s
+      simpa [hg] using adeleHaar_mul_image F μ g s hs
+    change (∫ x, (fun y ↦ f (Multiplicative.ofAdd y)) (d x) ∂μ) = _
+    rw [← integral_map_equiv d (fun y : 𝔸[F] ↦ f (Multiplicative.ofAdd y)), hmap]
+
+private theorem globalConverse_nontrivial_exact_theta_translate (ω : PontryaginDual C₁)
+    (h : C₁) (g : IdeleGroup (𝓞 F) F) (hg : QuotientGroup.mk g = h.val) (f : ℬ) :
+    homogeneousAdelicThetaLinearMap F ω (schwartzBruhatUnitTranslate g f) =
+      (ω h : ℂ) • homogeneousAdelicThetaLinearMap F ω f := by
+  have ht (a : C𝔽) : adelicTheta (schwartzBruhatUnitTranslate g f) a =
+      adelicTheta f ((QuotientGroup.mk g)⁻¹ * a) := by
+    induction a using QuotientGroup.induction_on with | H x => ?_
+    change _ = adelicTheta f (QuotientGroup.mk (g⁻¹ * x))
+    rw [adelicTheta_mk, adelicTheta_mk]
+    exact tsum_congr fun t ↦ congrArg (fun y ↦ f (Multiplicative.ofAdd y))
+      (mul_left_comm g.inv (algebraMap F 𝔸[F] (t : F)) x.val)
+  apply ContinuousMap.ext
+  intro a
+  change homogeneousAdelicTheta ω (schwartzBruhatUnitTranslate g f) a =
+    (ω h : ℂ) * homogeneousAdelicTheta ω f a
+  rw [← homogeneousAdelicTheta_homogeneous]
+  apply integral_congr_ae (.of_forall fun k ↦ ?_)
+  have he : (QuotientGroup.mk g)⁻¹ * (k.val * a) = k.val * (h.val⁻¹ * a) := by
+    rw [hg, mul_left_comm]
+  exact congrArg (· * (ω k : ℂ)) ((ht (k.val * a)).trans (congrArg (adelicTheta f) he))
+
+private theorem globalConverse_nontrivial_exact_of_translate.{u, v} {E : Type u} {W : Type v}
+    [AddCommGroup E] [Module ℂ E] [TopologicalSpace E] [IsTopologicalAddGroup E]
+    [ContinuousSMul ℂ E]
+    [AddCommGroup W] [Module ℂ W] (p : E →ₗ[ℂ] ℂ × ℂ) (θ : E →ₗ[ℂ] W) (hp : Continuous p)
+    (hsurj : Surjective p) (T : E → E) (a : ℂ) (ha : a ≠ 1)
+    (hpT : ∀ f, p (T f) = p f) (hθT : ∀ f, θ (T f) = a • θ f) :
+    IsOpenQuotientMap (θ.ker.mkQ.comp p.ker.subtype) := by
+  -- The twisted difference is in the theta kernel and retains both polar values.
+  have hK : Surjective (p.comp θ.ker.subtype) := by
+    intro z
+    obtain ⟨f, hf⟩ := hsurj z
+    let k := (a - 1)⁻¹ • (a • f - T f)
+    have hk : k ∈ θ.ker := by simp [LinearMap.mem_ker, k, hθT]
+    refine ⟨⟨k, hk⟩, ?_⟩
+    change p ((a - 1)⁻¹ • (a • f - T f)) = z
+    rw [map_smul, map_sub, map_smul, hpT, hf]
+    simpa only [sub_smul, one_smul] using inv_smul_smul₀ (sub_ne_zero.mpr ha) z
+  -- A section of the polar map on that kernel is continuous, since its domain is ℂ².
+  obtain ⟨s, hs⟩ := (p.comp θ.ker.subtype).exists_rightInverse_of_surjective
+    (LinearMap.range_eq_top.mpr hK)
+  have hs' (z : ℂ × ℂ) : p (s z).val = z := LinearMap.congr_fun hs z
+  let r (f : E) : p.ker := ⟨f - (s (p f)).val, show p _ = 0 by rw [map_sub, hs', sub_self]⟩
+  have hr : Continuous r := (continuous_id.sub (continuous_subtype_val.comp
+    (s.continuous_of_finiteDimensional.comp hp))).subtype_mk _
+  let q := θ.ker.mkQ.comp p.ker.subtype
+  have he : q ∘ r = θ.ker.mkQ := by
+    funext f
+    change θ.ker.mkQ (f - (s (p f)).val) = θ.ker.mkQ f
+    have hz : θ.ker.mkQ (s (p f)).val = 0 :=
+      (Submodule.Quotient.mk_eq_zero _).mpr (s (p f)).property
+    rw [map_sub, hz, sub_zero]
+  apply AddMonoidHom.isOpenQuotientMap_of_isQuotientMap (φ := q)
+  apply IsQuotientMap.of_comp hr (θ.ker.mkQL.continuous.comp continuous_subtype_val)
+  change IsQuotientMap (q ∘ r)
+  rw [he]
+  exact θ.ker.isQuotientMap_mkQ
+
 /-- Paper: Theorem 6.3.2.1(2), p. 304, equations (6.3.2.5) and (6.3.2.7).
 On a nontrivial norm-one component the polar test subspace maps openly and
 surjectively onto the full homogeneous theta space. In Mellin coordinates
@@ -659,7 +741,20 @@ the inclusion becomes the identity of the range in (6.3.2.3).
 Deviation: The terminal residue space is zero on this component, as in (6.3.2.7). -/
 theorem globalConverse_nontrivial_exact (ω : PontryaginDual C₁) (_hω : ω ≠ 1) :
     IsOpenQuotientMap ((K(ω)).mkQ.comp (P).subtype) := by
-  sorry
+  have hex : ∃ h : C₁, (ω h : ℂ) ≠ 1 :=
+    not_forall.mp fun hall ↦ _hω (PontryaginDual.ext fun x ↦ Subtype.ext (hall x))
+  refine hex.elim fun h hh ↦ ?_
+  refine (QuotientGroup.mk_surjective (s := IdeleGroup.principalSubgroup (𝓞 F) F) h.val).elim
+    fun g hg ↦ ?_
+  have hnorm : ideleNorm F g = 1 := by
+    change ideleClassNorm F (QuotientGroup.mk g) = 1
+    rw [hg, MonoidHom.mem_ker.mp h.property]
+  exact globalConverse_nontrivial_exact_of_translate (E := ℬ) (W := C(C𝔽, ℂ))
+    (adelePolarValues (F := F)) (homogeneousAdelicThetaLinearMap F ω)
+    (adelePolarValues_continuous (F := F)) (adelePolarValues_surjective (F := F))
+    (schwartzBruhatUnitTranslate (R := 𝔸[F]) g) (ω h : ℂ) hh
+    (globalConverse_nontrivial_exact_polar_translate (F := F) g hnorm)
+    (globalConverse_nontrivial_exact_theta_translate (F := F) ω h g hg)
 
 /-- Paper: Theorem 6.3.2.1(2), p. 304, equations (6.3.2.5)–(6.3.2.6).
 The signed polar evaluations descend to a continuous residue map on the trivial
