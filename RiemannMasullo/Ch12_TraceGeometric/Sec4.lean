@@ -194,7 +194,13 @@ def sLocalTraceFourierCutoff (ρ' : Aₛ → ℂ) (b : testₛ) (x : Aₛ) : ℂ
 /-- Paper: (12.4.1.8), p. 517. The constant-one Fourier symbol recovers the test
 by inversion. -/
 theorem sLocalTraceFourierCutoff_one (b : testₛ) (x : Aₛ) :
-    sLocalTraceFourierCutoff (fun _ ↦ 1) b x = testAt(b, x) := by sorry
+    sLocalTraceFourierCutoff (fun _ ↦ 1) b x = testAt(b, x) := by
+  have h := sLocal_fourier_inversion b (-x)
+  rw [neg_neg] at h
+  unfold sLocalTraceFourierCutoff
+  simp only [one_mul]
+  unfold sAdeleSchwartzFourier at h
+  exact h
 
 /-- Paper: Step II, p. 517. For an integrable symbol the inverse Fourier transform
 of the symbol, evaluated at output minus input, is the Fourier cutoff kernel.

@@ -7,6 +7,9 @@ import all RiemannMasullo.Ch04_PeriodicSchauderBases.Sec2
 import all RiemannMasullo.Ch04_PeriodicSchauderBases.Sec4
 import all RiemannMasullo.AppD_SchwartzBruhat.Sec1c
 public import RiemannMasullo.ForMathlib.Topology.Algebra.Module.ContinuousLinearMap.Quotient
+import all RiemannMasullo.AppD_SchwartzBruhat.Sec1a
+import all RiemannMasullo.AppD_SchwartzBruhat.Sec1c
+import Mathlib.Topology.Algebra.Group.SubmonoidClosure
 import Mathlib.Analysis.Calculus.SmoothSeries
 import Mathlib.Analysis.Calculus.ParametricIntegral
 import Mathlib.Analysis.SpecialFunctions.SmoothTransition
@@ -3248,11 +3251,387 @@ theorem schwartzBruhatCyclicDifference_apply (f : S₀) (x : G) :
   change f x - ρG γ⁻¹ f x = _
   rw [schwartzBruhatTranslationAction_apply, inv_inv]
 
+open scoped ContDiff in
+/-- Local uniform summability of all jets gives a smooth sum with termwise jets. -/
+private theorem cyclicTail_smoothSeries {X : Type*} [NormedAddCommGroup X] [NormedSpace ℝ X]
+    (f : ℕ → X → ℂ) (hf : ∀ i, ContDiff ℝ ∞ (f i))
+    (hb : ∀ (x : X) (k : ℕ), ∃ u : ℕ → ℝ, Summable u ∧ ∀ i y, y ∈ Metric.ball x 1 →
+      ‖iteratedFDeriv ℝ k (f i) y‖ ≤ u i) :
+    ContDiff ℝ ∞ (fun x ↦ ∑' i, f i x) ∧ ∀ k x,
+      iteratedFDeriv ℝ k (fun y ↦ ∑' i, f i y) x = ∑' i, iteratedFDeriv ℝ k (f i) x := by
+  let jet (k i : ℕ) := iteratedFDeriv ℝ k (f i)
+  have hs (x : X) (k : ℕ) : Summable (fun i ↦ jet k i x) :=
+    (hb x k).elim fun u hu ↦ .of_norm_bounded hu.1 fun i ↦ hu.2 i x (Metric.mem_ball_self one_pos)
+  let p (x : X) (k : ℕ) := ∑' i, jet k i x
+  have h : HasFTaylorSeriesUpTo ∞ (fun x ↦ ∑' i, f i x) p := by
+    refine ⟨fun x ↦ ?_, fun k hk x ↦ ?_, fun k hk ↦ ?_⟩
+    · change (continuousMultilinearCurryFin0 ℝ X ℂ) (∑' i, jet 0 i x) = _
+      exact ((continuousMultilinearCurryFin0 ℝ X ℂ).toContinuousLinearEquiv.map_tsum).trans
+        (tsum_congr fun i ↦ (hf i).ftaylorSeries.zero_eq x)
+    · let c := continuousMultilinearCurryLeftEquiv ℝ (fun _ : Fin (k+1) ↦ X) ℂ
+      obtain ⟨u, hu, hle⟩ := hb x (k+1)
+      have he := c.toContinuousLinearEquiv.map_tsum (f := fun i ↦ jet (k+1) i x) («L» := SummationFilter.unconditional ℕ)
+      change HasFDerivAt _ (c.toContinuousLinearEquiv (∑' i, jet (k+1) i x)) x
+      rw [he]
+      exact hasFDerivAt_tsum_of_isPreconnected hu Metric.isOpen_ball (convex_ball x 1).isPreconnected
+        (fun i y _ ↦ (hf i).ftaylorSeries.fderiv k hk y) (fun i y hy ↦ (c.norm_map _).le.trans (hle i y hy))
+        (Metric.mem_ball_self one_pos) (hs x k) (Metric.mem_ball_self one_pos)
+    · rw [continuous_iff_continuousAt]
+      intro x
+      obtain ⟨u, hu, hle⟩ := hb x k
+      have hU := tendstoUniformlyOn_tsum (f := jet k) hu hle
+      exact (hU.continuousOn (Frequently.of_forall fun _ ↦ (continuous_finsetSum _ fun i _ ↦
+        (hf i).ftaylorSeries.cont k hk).continuousOn)).continuousAt (Metric.ball_mem_nhds x one_pos)
+  exact ⟨h.contDiff, fun k x ↦ (h.eq_iteratedFDeriv (by simp) x).symm⟩
+
+/-- Bound the full multilinear derivative on the cover by the weighted coordinate partials. -/
+private theorem elementaryJetBound {m n r : ℕ} {F : Type*}
+    [AddCommGroup F] [TopologicalSpace F] [DiscreteTopology F] [Finite F]
+    (f : ElementarySchwartz m n r F) (k l : ℕ) :
+    ∃ C : ℝ, ∀ (x : EuclideanSpace ℝ (Fin m) × EuclideanSpace ℝ (Fin n)) a b,
+      (1 + ‖((x.1, WithLp.toLp 2 (fun i ↦ (a i : ℝ))) : EuclideanSpace ℝ (Fin m) × EuclideanSpace ℝ (Fin r))‖)^l *
+        ‖iteratedFDeriv ℝ k (fun z ↦ f (elementaryCover z a b)) x‖ ≤ C := by
+  classical
+  let X := EuclideanSpace ℝ (Fin m) × EuclideanSpace ℝ (Fin n)
+  let Y := ElementaryLieGroup m n r F
+  let Z := EuclideanSpace ℝ (Fin m) × EuclideanSpace ℝ (Fin r)
+  let πZ (y : Y) : Z := (y.1, WithLp.toLp 2 (fun i ↦ (y.2.2.1 i : ℝ)))
+  let J := Fin m ⊕ Fin n
+  let e : J → X := Sum.elim
+    (fun i ↦ ((EuclideanSpace.single i 1 : EuclideanSpace ℝ (Fin m)), 0))
+    (fun i ↦ (0, (EuclideanSpace.single i 1 : EuclideanSpace ℝ (Fin n))))
+  let c (v : X) : J → ℝ := Sum.elim (fun j ↦ v.1 j) (fun j ↦ v.2 j)
+  have hrepr (v : X) : ∑ j, c v j • e j = v := elementary_coord_repr v
+  have hc (v : X) (j : J) : ‖c v j‖ ≤ ‖v‖ := by
+    cases j with
+    | inl j => exact (PiLp.norm_apply_le v.1 j).trans (norm_fst_le v)
+    | inr j => exact (PiLp.norm_apply_le v.2 j).trans (norm_snd_le v)
+  choose β γ hβ using fun t : Fin k → J ↦ elementary_iteratedFDeriv_coord_eq (r := r) (F := F) k t
+  obtain ⟨p, _, hp⟩ := elementarySchwartz_withSeminorms_P1 (F := F) (m := m) (n := n) (r := r)
+  refine ⟨(2:ℝ)^l * ∑ t, p (l,l,β t,γ t) f, fun x a b ↦ ?_⟩
+  let y := πZ (elementaryCover x a b)
+  change (1 + ‖y‖)^l * _ ≤ _
+  let T := iteratedFDeriv ℝ k (fun z ↦ f (elementaryCover z a b)) x
+  have hT := norm_multilinear_le_sum_of_repr e c hrepr hc T
+  refine (mul_le_mul_of_nonneg_left hT (by positivity : 0 ≤ (1 + ‖y‖)^l)).trans ?_
+  rw [Finset.mul_sum, Finset.mul_sum]
+  refine Finset.sum_le_sum fun t _ ↦ ?_
+  have h := le_iSup_of_le x (le_iSup_of_le a (le_iSup_of_le b le_rfl))
+    (f := fun (x : X) ↦ ⨆ (a : Fin r → ℤ) (b : F), ENNReal.ofReal ((1 + ‖x.1‖^l) *
+      (1 + ‖(WithLp.toLp 2 (fun i ↦ (a i : ℝ)) : EuclideanSpace ℝ (Fin r))‖^l) *
+      ‖elementaryPartial f (β t) (γ t) x a b‖))
+  rw [← hp (l,l,β t,γ t) f] at h
+  have hb := (ENNReal.ofReal_le_ofReal_iff (apply_nonneg _ _)).mp h
+  change (1 + ‖y.1‖^l) * (1 + ‖y.2‖^l) * _ ≤ _ at hb
+  rw [show T (fun i ↦ e (t i)) = _ from hβ t f.val a b (f.property.1 a b) x]
+  refine le_trans ?_ (mul_le_mul_of_nonneg_left hb (by positivity : 0 ≤ (2:ℝ)^l))
+  rw [← mul_assoc ((2:ℝ)^l)]
+  gcongr
+  let s := max 1 ‖y‖
+  have hs : 1 + ‖y‖ ≤ 2*s := by dsimp [s]; grind
+  refine (pow_le_pow_left₀ (by positivity) hs l).trans ?_
+  rw [mul_pow]
+  gcongr
+  change max 1 (max ‖y.1‖ ‖y.2‖) ^ l ≤ _
+  rcases le_total ‖y.1‖ ‖y.2‖ with h | h
+  all_goals first | rw [max_eq_right h] | rw [max_eq_left h]
+  all_goals rw [max_def]; split <;> try rw [one_pow]
+  all_goals
+    nlinarith [pow_nonneg (norm_nonneg y.1) l, pow_nonneg (norm_nonneg y.2) l,
+      mul_nonneg (pow_nonneg (norm_nonneg y.1) l) (pow_nonneg (norm_nonneg y.2) l)]
+
+private theorem elementaryTranslatedJetBound {m n r : ℕ} {F : Type*}
+    [AddCommGroup F] [TopologicalSpace F] [DiscreteTopology F] [Finite F]
+    (f : ElementarySchwartz m n r F) (k l : ℕ) :
+    ∃ C : ℝ, ∀ (d : ElementaryLieGroup m n r F) (x : EuclideanSpace ℝ (Fin m) × EuclideanSpace ℝ (Fin n)) a b,
+      (1 + ‖(((elementaryCover x a b + d).1, WithLp.toLp 2
+          (fun i ↦ ((elementaryCover x a b + d).2.2.1 i : ℝ))) : EuclideanSpace ℝ (Fin m) × EuclideanSpace ℝ (Fin r))‖)^l *
+        ‖iteratedFDeriv ℝ k (fun z ↦ f (elementaryCover z a b + d)) x‖ ≤ C := by
+  let X := EuclideanSpace ℝ (Fin m) × EuclideanSpace ℝ (Fin n)
+  obtain ⟨C, hC⟩ := elementaryJetBound f k l
+  refine ⟨C, fun d x a b ↦ ?_⟩
+  obtain ⟨t, ht⟩ := elementaryCover_surjective d.2.2.1 d.2.2.2 d.1 d.2.1
+  have he (z : X) : elementaryCover z a b + d =
+      elementaryCover (z+(d.1,t)) (a+d.2.2.1) (b+d.2.2.2) :=
+    (congrArg (elementaryCover z a b + ·) ht.symm).trans (elementaryCover_add ..)
+  simp_rw [he]
+  rw [iteratedFDeriv_comp_add_right (f := fun y ↦ f (elementaryCover y (a+d.2.2.1) (b+d.2.2.2)))]
+  exact hC (x+(d.1,t)) (a+d.2.2.1) (b+d.2.2.2)
+
+open scoped ContDiff in
+/-- The two tails agree up to sign. Each supplies rapid decay in one half-space. -/
+private theorem elementaryCyclicPrimitive {m n r : ℕ} {F : Type*}
+    [AddCommGroup F] [TopologicalSpace F] [DiscreteTopology F] [Finite F]
+    (f : ElementarySchwartz m n r F) (v : ElementaryLieGroup m n r F)
+    (hf : ∀ y : ElementaryLieGroup m n r F, HasSum (fun i : ℤ ↦ f (y + i • v)) 0) :
+    (fun y ↦ ∑' i : ℕ, f (y + i • v)) ∈ elementarySchwartzSubmodule m n r F := by
+  classical
+  let X := EuclideanSpace ℝ (Fin m) × EuclideanSpace ℝ (Fin n)
+  let Y := ElementaryLieGroup m n r F
+  let Z := EuclideanSpace ℝ (Fin m) × EuclideanSpace ℝ (Fin r)
+  let πZ (y : Y) : Z := (y.1, WithLp.toLp 2 (fun i ↦ (y.2.2.1 i : ℝ)))
+  let A : Y →+ Z := {
+    toFun := πZ
+    map_zero' := by refine Prod.ext rfl ?_; ext i; exact Int.cast_zero
+    map_add' := fun y z ↦ by refine Prod.ext rfl ?_; ext i; exact Int.cast_add .. }
+  let d := A v
+  let g (y : Y) := ∑' i : ℕ, f (y + i • v)
+  by_cases hd : d = 0
+  · -- All translated points lie on a compact orbit closure; summability forces f to vanish.
+    have hv : v.1 = 0 := congrArg Prod.fst hd
+    have ha : v.2.2.1 = 0 := by
+      ext j
+      have hh := congrArg (fun w : Z ↦ w.2 j) hd
+      exact_mod_cast (show (v.2.2.1 j : ℝ) = 0 from hh)
+    let H := (Fin n → AddCircle (1:ℝ)) × F
+    let h : H := (v.2.1,v.2.2.2)
+    let e : H →+ Y := {
+      toFun := fun u ↦ (0,u.1,0,u.2)
+      map_zero' := rfl
+      map_add' := fun _ _ ↦ Prod.ext (zero_add _).symm (Prod.ext rfl (Prod.ext (zero_add _).symm rfl)) }
+    have hev : e h = v := Prod.ext hv.symm (Prod.ext rfl (Prod.ext ha.symm rfl))
+    have h0 (y : Y) : f y = 0 := by
+      have hs : Summable fun i : ℕ ↦ f (y + i • v) := by
+        simpa only [Function.comp_def, natCast_zsmul] using
+          (hf y).summable.comp_injective (Nat.cast_injective (R := ℤ))
+      have hc : Continuous (fun z : H ↦ f (y + e z)) := (elementarySchwartz_continuous f).comp
+        (continuous_const.add (continuous_const.prodMk (continuous_fst.prodMk (continuous_const.prodMk continuous_snd))))
+      let : Fact (0 < (1:ℝ)) := ⟨one_pos⟩
+      have hcl := (mapClusterPt_zero_atTop_nsmul h).continuousAt_comp hc.continuousAt
+      have ht : Tendsto (fun i : ℕ ↦ f (y + e (i • h))) atTop (𝓝 0) := by
+        simpa only [map_nsmul, hev] using hs.tendsto_atTop_zero
+      obtain ⟨s, hs, hs'⟩ := MapClusterPt.tendsto_subseq hcl
+      simpa only [map_zero, add_zero] using tendsto_nhds_unique hs' (ht.comp hs.tendsto_atTop)
+    simp only [h0, tsum_zero]
+    exact (elementarySchwartzSubmodule m n r F).zero_mem
+  have hpos : 0 < ‖d‖ := norm_pos_iff.mpr hd
+  let w (i : ℕ) := (((i:ℝ)+1)^2)⁻¹
+  have hw : Summable w := by
+    simpa only [Function.comp_def, Nat.cast_succ] using
+      (Real.summable_nat_pow_inv.mpr (by decide : 1 < 2)).comp_injective Nat.succ_injective
+  let Fp (j : ℕ → ℤ) (a : Fin r → ℤ) (b : F) (i : ℕ) (z : X) := f (elementaryCover z a b + j i • v)
+  let J (j : ℕ → ℤ) (k i : ℕ) (x : X) (a : Fin r → ℤ) (b : F) := iteratedFDeriv ℝ k (Fp j a b i) x
+  have hshift (y : Y) (z : ℤ) : A (y + z • v) = A y + z • d := by simp only [map_add, map_zsmul, d]
+  have hjet (j : ℕ → ℤ) (k l : ℕ) : ∃ C : ℝ, ∀ i (x : X) a b,
+      (1 + ‖A (elementaryCover x a b) + j i • d‖)^l * ‖J j k i x a b‖ ≤ C := by
+    obtain ⟨C,hC⟩ := elementaryTranslatedJetBound f k l
+    exact ⟨C, fun i x a b ↦ hshift (elementaryCover x a b) (j i) ▸ hC (j i • v) x a b⟩
+  have hsm (j : ℕ → ℤ) (a : Fin r → ℤ) (b : F) :=
+    cyclicTail_smoothSeries (Fp j a b) (fun i ↦ by
+      obtain ⟨T, hT⟩ := elementarySchwartz_translate_jointly (m := m) (n := n) (r := r) (F := F)
+      have h := (T (j i • v, f)).property.1 a b
+      change ContDiff ℝ ∞ (fun z : X ↦ T (j i • v,f) (elementaryCover z a b)) at h
+      simpa only [Fp, hT, add_comm (j i • v)] using h)
+  have hi_norm (z : ℤ) : ‖z • d‖ = ‖(z : ℝ)‖ * ‖d‖ := by rw [← Int.cast_smul_eq_zsmul ℝ z, norm_smul]
+  -- Two extra powers pay for summation over the orbit.
+  have hbound (j : ℕ → ℤ) (k l : ℕ) (B R : ℝ) (hR : 0 ≤ R) : ∃ C : ℝ,
+      ∀ i (x : X) a b, let y := A (elementaryCover x a b); let s := ‖y + j i • d‖
+        (i : ℝ)*‖d‖ ≤ s + R → 1 + ‖y‖ ≤ B*(1+s) →
+          (1+‖y‖)^l * ‖J j k i x a b‖ ≤ w i * C := by
+    obtain ⟨C, hC⟩ := hjet j k (l+2)
+    let scale := (‖d‖ + R + 1)/‖d‖
+    refine ⟨B^l * scale^2 * C, ?_⟩
+    intro i x a b y s hi hy
+    have hs : 0 ≤ s := norm_nonneg _
+    have hi' : (i:ℝ) + 1 ≤ scale*(1+s) := by
+      dsimp only [scale]; rw [div_mul_eq_mul_div, le_div_iff₀ hpos]; nlinarith
+    rw [show w i = (((i:ℝ)+1)^2)⁻¹ from rfl, ← div_eq_inv_mul, le_div_iff₀ (by positivity)]
+    have hB : 0 ≤ B := by
+      by_contra! hh
+      linarith [mul_neg_of_neg_of_pos hh (show 0 < 1+s by positivity), norm_nonneg y]
+    calc
+      _ = ((1+‖y‖)^l * ((i:ℝ)+1)^2) * ‖J j k i x a b‖ := by ring
+      _ ≤ ((B*(1+s))^l * (scale*(1+s))^2) * ‖J j k i x a b‖ := by gcongr
+      _ = (B^l * scale^2) * ((1+s)^(l+2) * ‖J j k i x a b‖) := by rw [mul_pow, mul_pow, pow_add]; ring
+      _ ≤ _ := mul_le_mul_of_nonneg_left (hC ..) (by positivity)
+  -- On each unit ball, triangle inequalities give a locally uniform summable bound.
+  have hseries (j : ℕ → ℤ) (hj : ∀ i : ℕ, (i:ℝ) ≤ ‖(j i : ℝ)‖) (a : Fin r → ℤ) (b : F) := by
+    apply hsm j a b
+    intro x k
+    let R := 1 + ‖x.1‖ + ‖(WithLp.toLp 2 (fun i ↦ (a i : ℝ)) : EuclideanSpace ℝ (Fin r))‖
+    have hR : 0 ≤ R := by dsimp [R]; positivity
+    obtain ⟨C,hC⟩ := hbound j k 0 (1+R) R hR
+    refine ⟨_, hw.mul_right C, fun i z hz ↦ ?_⟩
+    let y := A (elementaryCover z a b)
+    have hy : ‖y‖ ≤ R := by
+      have h₁ : ‖z.1‖ ≤ ‖x.1‖ + 1 := calc
+        _ ≤ ‖z.1-x.1‖ + ‖x.1‖ := by simpa using norm_add_le (z.1-x.1) x.1
+        _ ≤ _ := by
+          have hh : ‖z.1 - x.1‖ ≤ ‖z - x‖ := norm_fst_le (z - x)
+          rw [Metric.mem_ball, dist_eq_norm] at hz
+          linarith
+      let a' : EuclideanSpace ℝ (Fin r) := WithLp.toLp 2 (fun i ↦ (a i : ℝ))
+      change max ‖z.1‖ ‖a'‖ ≤ 1 + ‖x.1‖ + ‖a'‖
+      rw [max_le_iff]; constructor <;> linarith [norm_nonneg x.1, norm_nonneg a']
+    have hi : (i:ℝ)*‖d‖ ≤ ‖y + j i • d‖ + R := calc
+      _ ≤ ‖j i • d‖ := hi_norm (j i) ▸ mul_le_mul_of_nonneg_right (hj i) hpos.le
+      _ ≤ ‖y + j i • d‖ + ‖y‖ := by simpa using norm_sub_le (y + j i • d) y
+      _ ≤ _ := by linarith
+    have h₁ : 1+‖y‖ ≤ (1+R)*(1+‖y+j i • d‖) := by nlinarith [norm_nonneg (y+j i • d)]
+    simpa only [pow_zero, one_mul] using hC i z a b hi h₁
+  let pos (i : ℕ) : ℤ := i
+  let neg (i : ℕ) : ℤ := -(i+1)
+  have hp (i : ℕ) : (i:ℝ) ≤ ‖(pos i : ℝ)‖ := by simp [pos]
+  have hn (i : ℕ) : (i:ℝ) ≤ ‖(neg i : ℝ)‖ := by
+    simp [neg]; linarith [neg_le_abs (-1 + -(i:ℝ))]
+  let T (j : ℕ → ℤ) a b (x : X) := ∑' i, Fp j a b i x
+  have hpT (a : Fin r → ℤ) (b : F) : (fun x : X ↦ g (elementaryCover x a b)) = T pos a b := by
+    simp only [g, T, pos, Fp, natCast_zsmul]
+  have hpn (a : Fin r → ℤ) (b : F) : T pos a b = -T neg a b := by
+    funext x
+    let y := elementaryCover x a b
+    let h (i : ℤ) := f (y + i • v)
+    have H : HasSum h 0 := hf y
+    have h₁ := H.summable.comp_injective (Nat.cast_injective (R := ℤ))
+    have h₂ := H.summable.comp_injective (show Injective neg from fun i j eq ↦ by dsimp [neg] at eq; omega)
+    exact eq_neg_of_add_eq_zero_left ((h₁.hasSum.of_nat_of_neg_add_one h₂.hasSum).unique H)
+  have hdec (j : ℕ → ℤ) (hj : ∀ i : ℕ, (i:ℝ) ≤ ‖(j i : ℝ)‖) (k l : ℕ) : ∃ C : ℝ, ∀ (x : X) a b,
+      let y := A (elementaryCover x a b)
+      (∀ i, ‖j i • d‖ ≤ ‖y + j i • d‖) → (1+‖y‖)^l * ‖iteratedFDeriv ℝ k (T j a b) x‖ ≤ C := by
+    obtain ⟨C, hC⟩ := hbound j k l 2 0 le_rfl
+    refine ⟨∑' i, w i*C, ?_⟩
+    intro x a b y hy
+    let W := (1+‖y‖)^l
+    have hW : 0 < W := by dsimp [W]; positivity
+    have hle (i : ℕ) : ‖J j k i x a b‖ ≤ w i*C/W := by
+      apply (le_div_iff₀ hW).mpr
+      rw [mul_comm]
+      apply hC
+      · rw [add_zero]; exact ((mul_le_mul_of_nonneg_right (hj i) hpos.le).trans_eq (hi_norm _).symm).trans (hy i)
+      · have h₀ : ‖y‖ ≤ ‖y+j i • d‖ + ‖j i • d‖ := by simpa using norm_sub_le (y+j i • d) (j i • d)
+        linarith [hy i]
+    rw [(hseries j hj a b).2 k x]
+    change W * ‖∑' i, J j k i x a b‖ ≤ _
+    rw [mul_comm, ← le_div_iff₀ hW]
+    exact tsum_of_norm_bounded ((hw.mul_right C).hasSum.div_const W) hle
+  -- A norming functional selects the tail that travels away from the origin.
+  obtain ⟨ell, hL, hLd⟩ := exists_dual_vector ℝ d hpos.ne'
+  have hLle (y : Z) : ‖ell y‖ ≤ ‖y‖ := (ell.le_opNorm y).trans_eq (by rw [hL,one_mul])
+  have hfinal (k l : ℕ) : ∃ C : ℝ, ∀ (x : X) a b, (1 + ‖A (elementaryCover x a b)‖)^l *
+      ‖iteratedFDeriv ℝ k (fun z ↦ g (elementaryCover z a b)) x‖ ≤ C := by
+    obtain ⟨C,hC⟩ := hdec pos hp k l
+    obtain ⟨C', hD⟩ := hdec neg hn k l
+    refine ⟨max C C', fun x a b ↦ ?_⟩
+    let y := A (elementaryCover x a b)
+    rw [hpT]
+    by_cases h : 0 ≤ ell y
+    · refine (hC x a b fun i ↦ ?_).trans (le_max_left ..)
+      refine le_trans ?_ (hLle (y + pos i • d))
+      rw [hi_norm, map_add, map_zsmul, hLd, Real.norm_eq_abs,
+        abs_of_nonneg (by simp [pos] : 0 ≤ (pos i : ℝ)), zsmul_eq_mul, Real.norm_eq_abs]
+      exact (le_add_of_nonneg_left h).trans (le_abs_self _)
+    · rw [hpn, iteratedFDeriv_neg, Pi.neg_apply, norm_neg]
+      refine (hD x a b fun i ↦ ?_).trans (le_max_right ..)
+      refine le_trans ?_ (hLle (y + neg i • d))
+      have hz : (neg i : ℝ) ≤ 0 := by dsimp [neg]; push_cast; linarith
+      rw [hi_norm, map_add, map_zsmul, hLd, Real.norm_eq_abs, abs_of_nonpos hz, zsmul_eq_mul, Real.norm_eq_abs, neg_mul]
+      change -((neg i:ℝ)*‖d‖) ≤ |ell y + (neg i:ℝ)*‖d‖|
+      exact (by linarith : -((neg i:ℝ)*‖d‖) ≤ -(ell y + (neg i:ℝ)*‖d‖)).trans (neg_le_abs _)
+  refine ⟨fun a b ↦ ?_, fun ⟨α,β,δ,ε⟩ ↦ ?_⟩
+  · change ContDiff ℝ ∞ (fun z ↦ g (elementaryCover z a b))
+    rw [hpT]; exact (hseries pos hp a b).1
+  let dirs : List X := (List.ofFn fun i ↦ List.replicate (β i) (EuclideanSpace.single i 1, 0)).flatten ++
+    (List.ofFn fun i ↦ List.replicate (δ i) (0, EuclideanSpace.single i 1)).flatten
+  obtain ⟨C, hC⟩ := hfinal dirs.length ((∑ i, α i) + ∑ i, ε i)
+  let dirWeight := ∏ i : Fin dirs.length, ‖dirs.get i‖
+  refine lt_of_le_of_lt (b := ENNReal.ofReal (C * dirWeight))
+    (iSup_le fun x ↦ iSup_le fun a ↦ iSup_le fun b ↦ ?_) ENNReal.ofReal_lt_top
+  rw [ENNReal.coe_nnreal_eq, coe_nnNorm]; apply ENNReal.ofReal_le_ofReal
+  let y := A (elementaryCover x a b)
+  let M := 1+‖y‖
+  let Jk := iteratedFDeriv ℝ dirs.length (fun z ↦ g (elementaryCover z a b)) x
+  change ‖((∏ i, (x.1 i : ℂ)^α i) * (∏ i, (a i : ℂ)^ε i)) * Jk dirs.get‖ ≤ _
+  have hx (i : Fin m) : ‖(x.1 i : ℂ)‖ ≤ M := by
+    rw [Complex.norm_real]; exact (PiLp.norm_apply_le x.1 i).trans ((norm_fst_le y).trans (le_add_of_nonneg_left zero_le_one))
+  have ha (i : Fin r) : ‖(a i : ℂ)‖ ≤ M := by
+    rw [← Complex.ofReal_intCast, Complex.norm_real]; exact (PiLp.norm_apply_le y.2 i).trans ((norm_snd_le y).trans (le_add_of_nonneg_left zero_le_one))
+  have hM : 0 ≤ M := by dsimp [M]; positivity
+  simp only [norm_mul, norm_prod, norm_pow]
+  calc
+    _ ≤ ((∏ i, M^α i)*(∏ i, M^ε i)) * (‖Jk‖ * dirWeight) := by
+      apply mul_le_mul _ (Jk.le_opNorm _) (norm_nonneg _) (by positivity)
+      exact mul_le_mul
+        (Finset.prod_le_prod₀ (by intros; positivity) fun i _ ↦ pow_le_pow_left₀ (norm_nonneg _) (hx i) _)
+        (Finset.prod_le_prod₀ (by intros; positivity) fun i _ ↦ pow_le_pow_left₀ (norm_nonneg _) (ha i) _)
+        (by positivity) (by positivity)
+    _ = M^((∑ i,α i)+∑ i, ε i)*‖Jk‖ * dirWeight := by rw [Finset.prod_pow_eq_pow_sum, Finset.prod_pow_eq_pow_sum, pow_add]; ring
+    _ ≤ _ := mul_le_mul_of_nonneg_right (hC x a b) (Finset.prod_nonneg fun _ _ ↦ norm_nonneg _)
+
+/-- Realize the tail in a single elementary stage containing the translating element. -/
+private theorem cyclicSchwartzTail_mem {G : Type*} [CommGroup G] [TopologicalSpace G]
+    [IsTopologicalGroup G] [T2Space G] [LocallyCompactSpace G] (γ : G) (f : SchwartzBruhat G)
+    (h0 : ∀ x : G, HasSum (fun n : ℤ ↦ f (γ^n*x)) 0) :
+    (fun x ↦ ∑' n : ℕ, f (γ^n*x)) ∈ schwartzBruhatSubmodule G := by
+  classical
+  obtain ⟨b,e,t,ht⟩ := (mem_schwartzBruhatSubmodule_iff _).mp f.property
+  obtain ⟨p,hp,hγ⟩ := exists_bruhatStructuralPair_le_mem b γ
+  obtain ⟨u⟩ := p.elementary
+  obtain ⟨j,hj,-⟩ := schwartzBruhatStage_transition hp e u
+  let s := j t
+  let R := schwartzBruhatStageRealization p u
+  have hs : R s = f.val := (hj t).trans ht
+  let a : p.val.1 := ⟨γ,hγ⟩
+  let Y := ElementaryLieGroup u.realDim u.torusDim u.latticeRank u.finiteFactor
+  let π : p.val.1 →* Multiplicative Y := u.equiv.toMulEquiv.toMonoidHom.comp (QuotientGroup.mk' _)
+  have hval (z : SchwartzBruhatStage u) (x : p.val.1) : R z x.val = z (π x).toAdd := by
+    rw [schwartzBruhatStageRealization_apply, dite_eq_left x.property]
+    rfl
+  have hrep (x : p.val.1) : s (π x).toAdd = f x.val := (hval s x).symm.trans (congrFun hs x.val)
+  have he (x : p.val.1) (n : ℤ) : s ((π x).toAdd + n • (π a).toAdd) = f (γ^n*x.val) := by
+    have h : π (a^n*x) = π x * (π a)^n := by rw [map_mul, map_zpow, mul_comm]
+    exact (congrArg (fun y : Multiplicative Y ↦ s y.toAdd) h.symm).trans (hrep (a^n*x))
+  have hπ : Surjective π := u.equiv.surjective.comp QuotientGroup.mk_surjective
+  have horbit (y : Y) : HasSum (fun n : ℤ ↦ s (y+n • (π a).toAdd)) 0 := by
+    obtain ⟨x,hx⟩ := hπ (Multiplicative.ofAdd y)
+    exact (h0 x.val).congr_fun fun n ↦ (congrArg (fun z : Multiplicative Y ↦ s (z.toAdd+n • (π a).toAdd)) hx.symm).trans (he x n)
+  let g : SchwartzBruhatStage u := ⟨_, elementaryCyclicPrimitive s (π a).toAdd horbit⟩
+  apply (mem_schwartzBruhatSubmodule_iff _).mpr
+  refine ⟨p,u,g, funext fun x ↦ ?_⟩
+  by_cases hx : x ∈ p.val.1
+  · refine (hval g ⟨x,hx⟩).trans (tsum_congr fun n ↦ ?_)
+    simpa only [natCast_zsmul, zpow_natCast] using he ⟨x,hx⟩ (n:ℤ)
+  · have hz (n : ℕ) : f (γ^n*x) = 0 := by
+      rw [← show R s (γ^n*x) = f (γ^n*x) from congrFun hs _, schwartzBruhatStageRealization_apply, dite_eq_right]
+      exact fun h ↦ hx ((p.val.1.mul_mem_cancel_left (p.val.1.pow_mem hγ n)).mp h)
+    rw [schwartzBruhatStageRealization_apply, dite_eq_right hx, funext hz, tsum_zero]
+
+include hγ in
+private theorem cyclic_tail_eq (f : SchwartzBruhat G) (x : G) :
+    (∑' n : ℕ, f (γ ^ n * x)) - (∑' n : ℕ, f (γ ^ n * (γ * x))) = f x := by
+  have h : Summable (fun n : ℕ ↦ f (γ ^ n * x)) := by
+    simpa only [Function.comp_def, zpow_natCast] using
+      (schwartzBruhatCyclicPeriodization_hasSum m γ hγ f x).summable.comp_injective
+        (Nat.cast_injective (R := ℤ))
+  rw [h.tsum_eq_zero_add]
+  simp only [pow_zero, one_mul, pow_succ, mul_assoc, add_sub_cancel_right]
+
+private theorem cyclicTail_range_le : (Δ₀).range ≤ (P₀).ker := by
+  rintro _ ⟨g, rfl⟩
+  apply Subtype.ext
+  funext z
+  refine QuotientGroup.induction_on z fun x ↦ ?_
+  have hg := schwartzBruhatCyclicPeriodization_hasSum m γ hγ g x
+  have hs := (Equiv.addRight (1 : ℤ)).hasSum_iff.mpr hg
+  have hd := hg.sub hs
+  apply (schwartzBruhatCyclicPeriodization_hasSum m γ hγ (Δ₀ g) x).unique
+  change HasSum (fun n : ℤ ↦ Δ₀ g (γ ^ n * x)) 0
+  simpa only [schwartzBruhatCyclicDifference_apply, Function.comp_def, Equiv.coe_addRight,
+    zpow_add_one, mul_assoc, mul_left_comm γ, sub_self] using hd
+
 include hm hms in
 /-- Paper: Corollary 4.5.3.1(2), pp. 208–209. On ordinary Schwartz–Bruhat
 functions the periodization kernel is exactly the range of the cyclic difference. -/
 theorem schwartzBruhatCyclicPeriodization_ker_eq_range :
-    (P₀).ker = (Δ₀).range := by sorry
+    (P₀).ker = (Δ₀).range := by
+  refine le_antisymm (fun f hf ↦ ?_) (cyclicTail_range_le m γ hγ)
+  have h0 : P₀ f = 0 := hf
+  have hs (x : G) : HasSum (fun n : ℤ ↦ f (γ ^ n * x)) 0 := by
+    have h := schwartzBruhatCyclicPeriodization_hasSum m γ hγ f x
+    rw [h0] at h
+    exact h
+  let g : SchwartzBruhat G := ⟨_, cyclicSchwartzTail_mem γ f hs⟩
+  exact ⟨g, Subtype.ext (funext fun x ↦ (schwartzBruhatCyclicDifference_apply γ g x).trans
+    (cyclic_tail_eq m γ hγ f x))⟩
 
 include hm hms in
 /-- Paper: Corollary 4.5.3.1(2), pp. 208–209. On each ordinary

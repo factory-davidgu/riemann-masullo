@@ -250,7 +250,8 @@ class precisely when it belongs to the next stage. -/
 theorem primaryDivisorialThetaSubquotient_mk_eq_zero (S : Finset V) (ω : PontryaginDual C₁)
     (k : ℕ) (x : divisorialThetaStage ω (primaryDivisorialPlaces F S k)) :
     (Submodule.Quotient.mk x : PrimaryDivisorialThetaSubquotient S ω k) = 0 ↔
-      x.val ∈ divisorialThetaStage ω (primaryDivisorialPlaces F S (k + 1)) := by sorry
+      x.val ∈ divisorialThetaStage ω (primaryDivisorialPlaces F S (k + 1)) := by
+  simp only [Submodule.Quotient.mk_eq_zero, Submodule.mem_comap, Submodule.subtype_apply]
 
 -- TODO(paper-gap): The claimed Schauder systems need a specified Paley–Wiener
 -- subquotient at each global stage and compatible lifts in the strip Sobolev space.
