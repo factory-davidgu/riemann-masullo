@@ -10,6 +10,7 @@ import Mathlib.Analysis.SpecialFunctions.SmoothTransition
 import Mathlib.Topology.Baire.CompleteMetrizable
 import RiemannMasullo.ForMathlib.Analysis.Distribution.SchwartzSpace.Complete
 import RiemannMasullo.ForMathlib.Analysis.Fourier.PoissonSummation
+import RiemannMasullo.ForMathlib.Topology.Algebra.Module.OpenMapping
 import RiemannMasullo.ForMathlib.Topology.MetricSpace.CompactQuotient
 
 /-!
@@ -875,7 +876,30 @@ theorem cyclicPeriodization_surjective : Surjective (cyclicPeriodization γ hγ)
   exact h1.unique h2
 
 /-- Paper: Lemma 4.2.1.5(2), p. 165. Periodization sends open sets to open sets. -/
-theorem cyclicPeriodization_isOpenMap : IsOpenMap (cyclicPeriodization γ hγ) := by sorry
+theorem cyclicPeriodization_isOpenMap : IsOpenMap (cyclicPeriodization γ hγ) := by
+  -- Open mapping theorem: a continuous linear surjection from a Fréchet space onto a Fréchet
+  -- space is open, because the range, being everything, is not meagre in the Baire target.
+  obtain ⟨hTE, -, hME, hCE⟩ :=
+    positiveRealExponentialDecay_frechet univ ordConnected_univ univ_nonempty
+  obtain ⟨hTS, -, hMS, hCS⟩ := elementarySchwartz_isFrechet (m := 0) (n := 1) (r := 0) (F := PUnit)
+  let : UniformSpace E := IsTopologicalAddGroup.rightUniformSpace E
+  let : UniformSpace S := IsTopologicalAddGroup.rightUniformSpace S
+  have : IsUniformAddGroup E := isUniformAddGroup_of_addCommGroup
+  have : IsUniformAddGroup S := isUniformAddGroup_of_addCommGroup
+  have : CompleteSpace E := hCE
+  have : CompleteSpace S := hCS
+  have : MetrizableSpace E := hME
+  have : MetrizableSpace S := hMS
+  have : T2Space S := elementarySchwartz_t2
+  have : (uniformity S).IsCountablyGenerated := by
+    rw [uniformity_eq_comap_nhds_zero S]
+    infer_instance
+  have : BaireSpace S := BaireSpace.of_completelyPseudoMetrizable
+  let A : E →L[ℂ] S := ⟨cyclicPeriodization γ hγ, cyclicPeriodization_continuous γ hγ⟩
+  refine isOpenMap_of_not_isMeagre_range A ?_
+  change ¬ IsMeagre (range (cyclicPeriodization γ hγ))
+  rw [(cyclicPeriodization_surjective γ hγ).range_eq]
+  exact not_isMeagre_of_isOpen isOpen_univ univ_nonempty
 
 /-- Paper: Lemma 4.2.1.5(2), p. 165. Bundle the periodization and its continuity
 as a continuous linear map. -/
@@ -940,7 +964,17 @@ theorem cyclicFourierCoeff_absolute :
 /-- Paper: Corollary 4.2.1.7, p. 169. The Fourier coefficient functionals
 are bounded in the strong dual. -/
 theorem cyclicFourierCoeff_bounded :
-    IsVonNBounded ℂ (range cyclicFourierCoeff) := by sorry
+    IsVonNBounded ℂ (range cyclicFourierCoeff) := by
+  apply ContinuousLinearMap.isVonNBounded_iff.mpr
+  intro B hB
+  obtain ⟨C, _, hC⟩ := elementarySchwartz_withSeminorms.isVonNBounded_iff_seminorm_bounded.mp
+    hB (0, 0, fun _ ↦ 0, 0)
+  apply (NormedSpace.isVonNBounded_iff' ℂ).mpr
+  refine ⟨C, ?_⟩
+  rintro _ ⟨_, ⟨m, rfl⟩, f, hf, rfl⟩
+  have h := norm_fourierCoeffOn_iteratedDeriv_cyclic f m 0
+  rw [iteratedDeriv_zero, ← cyclicFourierCoeff_eq_on] at h
+  exact h.trans (hC f hf).le
 
 /-- Paper: Corollary 4.2.1.7, p. 169. The Fourier coefficient functionals are
 equicontinuous as maps on the circle Schwartz space. -/

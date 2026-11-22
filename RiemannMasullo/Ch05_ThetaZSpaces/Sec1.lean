@@ -163,7 +163,151 @@ theorem globalIdelicZFunction_mem (f : ℬ𝔽) :
 /-- Paper: Definition 5.1.1.1(1), p. 223.
 The regular values of global Z-functions depend complex linearly on the test function. -/
 theorem globalIdelicZFunction_isLinear :
-    IsLinearMap ℂ (globalZValues : ℬ𝔽 → _) := by sorry
+    IsLinearMap ℂ (globalZValues : ℬ𝔽 → _) := by
+  classical
+  let : T2Space C𝔽 := (ideleGroup_quotient.{_, 0} F).2.2.2.2.2.1
+  let : LocallyCompactSpace C𝔽 := (ideleGroup_quotient.{_, 0} F).2.2.2.2.2.2.1
+  have hpos (g : C𝔽) : 0 < ((ideleClassNorm F g : ℝ≥0) : ℝ) :=
+    NNReal.coe_pos.mpr (Units.zero_lt _)
+  have hne (g : C𝔽) : (((ideleClassNorm F g : ℝ≥0) : ℝ) : ℂ) ≠ 0 :=
+    Complex.ofReal_ne_zero.mpr (hpos g).ne'
+  -- Every quasi-character lies on a norm-twist chart of a unitary character.
+  have hdecomp (c : X𝔽) : ∃ (χ : PontryaginDual C𝔽) (s : ℂ), ideleClassNormTwist χ s = c := by
+    let s := quasiCharacterAbscissa (ideleClassNorm F) (isProperMap_ideleClassNorm F)
+      (ideleClassNorm_ne_one (F := F)) c
+    let d := c * ideleClassNormTwist (1 : PontryaginDual C𝔽) (-(s : ℂ))
+    have hd (g : C𝔽) : ‖d g‖ = 1 := by
+      change ‖c g * (1 * (((ideleClassNorm F g : ℝ≥0) : ℝ) : ℂ) ^ (-(s : ℂ)))‖ = 1
+      rw [one_mul, norm_mul, norm_quasiCharacter_eq_rpow_abscissa _
+        (isProperMap_ideleClassNorm F) (ideleClassNorm_ne_one (F := F)),
+        Complex.norm_cpow_eq_rpow_re_of_pos (hpos g), Complex.neg_re, Complex.ofReal_re]
+      change ((ideleClassNorm F g : ℝ≥0) : ℝ) ^ s * ((ideleClassNorm F g : ℝ≥0) : ℝ) ^ (-s) = 1
+      rw [← Real.rpow_add (hpos g), add_neg_cancel, Real.rpow_zero]
+    let χ : PontryaginDual C𝔽 :=
+      { toFun := fun g ↦ ⟨d g, mem_sphere_zero_iff_norm.mpr (hd g)⟩
+        map_one' := Circle.ext (map_one d)
+        map_mul' := fun g h ↦ Circle.ext (map_mul d g h)
+        continuous_toFun := d.continuous.subtype_mk _ }
+    refine ⟨χ, s, ?_⟩
+    ext1 g
+    change (c g * (1 * (((ideleClassNorm F g : ℝ≥0) : ℝ) : ℂ) ^ (-(s : ℂ)))) *
+      (((ideleClassNorm F g : ℝ≥0) : ℝ) : ℂ) ^ (s : ℂ) = c g
+    rw [one_mul, mul_assoc, ← Complex.cpow_add _ _ (hne g), neg_add_cancel, Complex.cpow_zero,
+      mul_one]
+  -- The norm-twist chart centred at a point of such a chart is a translate of it.
+  have hchart (χ : PontryaginDual C𝔽) (w z : ℂ) :
+      normChart𝔽 (ideleClassNormTwist χ w) z = ideleClassNormTwist χ (w + z) := by
+    ext1 g
+    change ((χ g : ℂ) * (((ideleClassNorm F g : ℝ≥0) : ℝ) : ℂ) ^ w) *
+      (((ideleClassNorm F g : ℝ≥0) : ℝ) : ℂ) ^ z =
+        (χ g : ℂ) * (((ideleClassNorm F g : ℝ≥0) : ℝ) : ℂ) ^ (w + z)
+    rw [Complex.cpow_add _ _ (hne g), mul_assoc]
+  have habs (χ : PontryaginDual C𝔽) (s : ℂ) :
+      quasiCharacterAbscissa (ideleClassNorm F) (isProperMap_ideleClassNorm F)
+        (ideleClassNorm_ne_one (F := F)) (ideleClassNormTwist χ s) = s.re :=
+    quasiCharacterAbscissa_ideleClassNormTwist χ s
+  have habs₁ : quasiCharacterAbscissa (ideleClassNorm F) (isProperMap_ideleClassNorm F)
+      (ideleClassNorm_ne_one (F := F)) (1 : X𝔽) = 0 := by
+    have := quasiCharacterAbscissa_of_unitary_twist (ideleClassNorm F)
+      (isProperMap_ideleClassNorm F) (ideleClassNorm_ne_one (F := F)) (1 : X𝔽)
+      (1 : PontryaginDual C𝔽) 0 (fun g ↦ by simp)
+    simpa using this
+  -- To the right of one every quasi-character is regular.
+  have hregular (χ : PontryaginDual C𝔽) (w : ℂ) (hw : 1 < w.re) :
+      0 ≤ globalIdelicOrderBound (ideleClassNormTwist χ w) := by
+    have h₁ : ideleClassNormTwist χ w ≠ 1 := fun h ↦ by
+      have := habs χ w
+      rw [h, habs₁] at this
+      linarith
+    have h₂ : ideleClassNormTwist χ w ≠ ideleClassNormTwist (1 : PontryaginDual C𝔽) 1 :=
+      fun h ↦ by
+        have := habs χ w
+        rw [h, habs] at this
+        simp only [Complex.one_re] at this
+        linarith
+    simp [globalIdelicOrderBound, h₁, h₂]
+  -- Linear relations between zeta integrals to the right of one persist at regular points.
+  have key (f₁ f₂ f₃ : ℬ𝔽) (a b : ℂ)
+      (hI : ∀ c : X𝔽, c ∈ (relativeRightHalfPlane (G := C𝔽) (ideleClassNorm F)
+        (isProperMap_ideleClassNorm F) (ideleClassNorm_ne_one (F := F)) 1 : Set X𝔽) →
+        globalIdelicZetaIntegral f₃ c =
+          a * globalIdelicZetaIntegral f₁ c + b * globalIdelicZetaIntegral f₂ c)
+      (c : X𝔽) (hc : 0 ≤ globalIdelicOrderBound c) :
+      globalIdelicZFunction f₃ c =
+        a * globalIdelicZFunction f₁ c + b * globalIdelicZFunction f₂ c := by
+    obtain ⟨χ, s₀, rfl⟩ := hdecomp c
+    obtain ⟨Z₁, hZ₁, h₁⟩ := globalIdelicZFunction_mem f₁
+    obtain ⟨Z₂, hZ₂, h₂⟩ := globalIdelicZFunction_mem f₂
+    obtain ⟨Z₃, hZ₃, h₃⟩ := globalIdelicZFunction_mem f₃
+    have hM (Z : X𝔽 → ℂ)
+        (hZ : ∀ c : X𝔽, MeromorphicAt (fun z ↦ Z (normChart𝔽 c z)) 0) (w : ℂ) :
+        MeromorphicAt (fun w ↦ Z (ideleClassNormTwist χ w)) w := by
+      have h := hZ (ideleClassNormTwist χ w)
+      simp only [hchart] at h
+      have h' : MeromorphicAt ((fun w ↦ Z (ideleClassNormTwist χ w)) ∘ (· + w)) 0 := by
+        simpa only [Function.comp_def, add_comm] using h
+      simpa using meromorphicAt_comp_add_const_iff_meromorphicAt.mp h'
+    have hA (Z : X𝔽 → ℂ)
+        (hZ : AnalyticAt ℂ (fun z ↦ Z (normChart𝔽 (ideleClassNormTwist χ s₀) z)) 0) :
+        AnalyticAt ℂ (fun w ↦ Z (ideleClassNormTwist χ w)) s₀ := by
+      simp only [hchart] at hZ
+      have h := hZ.comp_of_eq
+        (analyticAt_id.sub analyticAt_const : AnalyticAt ℂ (fun w : ℂ ↦ w - s₀) s₀)
+        (sub_self s₀)
+      simpa only [Function.comp_def, Pi.sub_apply, id_eq, add_sub_cancel] using h
+    let D : ℂ → ℂ := fun w ↦ Z₃ (ideleClassNormTwist χ w) -
+      (a * Z₁ (ideleClassNormTwist χ w) + b * Z₂ (ideleClassNormTwist χ w))
+    have hDM : MeromorphicOn D Set.univ := fun w _ ↦
+      (hM Z₃ (fun c ↦ (h₃ c).1) w).sub
+        ((analyticAt_const.meromorphicAt.mul (hM Z₁ (fun c ↦ (h₁ c).1) w)).add
+          (analyticAt_const.meromorphicAt.mul (hM Z₂ (fun c ↦ (h₂ c).1) w)))
+    have hDA : AnalyticAt ℂ D s₀ :=
+      (hA Z₃ ((h₃ _).2.2 hc)).sub ((analyticAt_const.mul (hA Z₁ ((h₁ _).2.2 hc))).add
+        (analyticAt_const.mul (hA Z₂ ((h₂ _).2.2 hc))))
+    have hval (Z : X𝔽 → ℂ) (f : ℬ𝔽) (hZ : ∀ c : {c : X𝔽 // 0 ≤ globalIdelicOrderBound c},
+        Z c = globalZValues f c) (c : X𝔽) (hc : 0 ≤ globalIdelicOrderBound c) :
+        Z c = globalIdelicZFunction f c :=
+      hZ ⟨c, hc⟩
+    have hEq (w : ℂ) (hw : 1 < w.re) : D w = 0 := by
+      have hm : ideleClassNormTwist χ w ∈ (relativeRightHalfPlane (G := C𝔽) (ideleClassNorm F)
+          (isProperMap_ideleClassNorm F) (ideleClassNorm_ne_one (F := F)) 1 : Set X𝔽) := by
+        change 1 < quasiCharacterAbscissa _ _ _ _
+        rwa [habs]
+      have hr := hregular χ w hw
+      simp only [D, hval Z₁ f₁ hZ₁ _ hr, hval Z₂ f₂ hZ₂ _ hr, hval Z₃ f₃ hZ₃ _ hr,
+        globalIdelicZFunction_eq_integral _ hm, hI _ hm, sub_self]
+    have hnear : ∀ᶠ z in 𝓝 (2 : ℂ), 1 < z.re :=
+      (isOpen_lt continuous_const Complex.continuous_re).mem_nhds (by norm_num)
+    have htop : meromorphicOrderAt D 2 = ⊤ :=
+      meromorphicOrderAt_eq_top_iff.mpr ((hnear.mono hEq).filter_mono nhdsWithin_le_nhds)
+    have ho := hDM.meromorphicOrderAt_eq_top_of_isPreconnected isPreconnected_univ
+      (Set.mem_univ (2 : ℂ)) (Set.mem_univ s₀) htop
+    have hloc : D =ᶠ[𝓝[≠] s₀] fun _ ↦ 0 := meromorphicOrderAt_eq_top_iff.mp ho
+    have hD₀ : D s₀ = 0 :=
+      tendsto_nhds_unique (hDA.continuousAt.tendsto.mono_left nhdsWithin_le_nhds)
+        (tendsto_const_nhds.congr' hloc.symm)
+    rw [← hval Z₁ f₁ hZ₁ _ hc, ← hval Z₂ f₂ hZ₂ _ hc, ← hval Z₃ f₃ hZ₃ _ hc]
+    exact sub_eq_zero.mp hD₀
+  refine ⟨fun f g ↦ ?_, fun a f ↦ ?_⟩
+  · ext c
+    change globalIdelicZFunction (f + g) c.val =
+      globalIdelicZFunction f c.val + globalIdelicZFunction g c.val
+    have h := key f g (f + g) 1 1 (fun c hc ↦
+      ((integral_congr_ae (Filter.Eventually.of_forall fun x ↦
+        add_mul (f (Multiplicative.ofAdd x.val)) (g (Multiplicative.ofAdd x.val))
+          (c (QuotientGroup.mk x)))).trans
+        (integral_add (globalIdelicZetaIntegral_integrable f c hc)
+          (globalIdelicZetaIntegral_integrable g c hc))).trans
+        (congrArg₂ (· + ·) (one_mul _).symm (one_mul _).symm)) c.val c.property
+    exact h.trans (congrArg₂ (· + ·) (one_mul _) (one_mul _))
+  · ext c
+    change globalIdelicZFunction (a • f) c.val = a * globalIdelicZFunction f c.val
+    have h := key f f (a • f) a 0 (fun c hc ↦
+      ((integral_congr_ae (Filter.Eventually.of_forall fun x ↦
+        mul_assoc a (f (Multiplicative.ofAdd x.val)) (c (QuotientGroup.mk x)))).trans
+        (integral_const_mul a _)).trans
+        ((add_zero _).symm.trans (congrArg (_ + ·) (zero_mul _).symm))) c.val c.property
+    exact h.trans ((congrArg (_ + ·) (zero_mul _)).trans (add_zero _))
 
 /-- Paper: Definition 5.1.1.1(1), p. 223.
 The global idelic Mellin transform sends a test function to its continued Z-function.
