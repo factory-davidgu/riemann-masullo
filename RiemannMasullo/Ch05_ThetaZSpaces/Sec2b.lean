@@ -27,7 +27,12 @@ local notation "Ωω(" χ ")" => {c : QuasiCharacter G // ∀ g : m.ker, c g.val
 /-- Paper: (5.2.2.1), p. 232.
 Twisting a quasi-character by a complex power of the norm preserves its norm-one restriction. -/
 theorem quasiCharacterNormTwist_mem_component (c : Ωω(ω)) (z : ℂ) :
-    ∀ g : m.ker, quasiCharacterNormTwist m hm c.val z g.val = (ω g : ℂ) := by sorry
+    ∀ g : m.ker, quasiCharacterNormTwist m hm c.val z g.val = (ω g : ℂ) := by
+  intro g
+  change c.val g.val * ((((m g.val : ℝ≥0) : ℝ) : ℂ)) ^ z = _
+  rw [MonoidHom.mem_ker.mp g.property, Units.val_one, NNReal.coe_one, Complex.ofReal_one,
+    Complex.one_cpow, mul_one]
+  exact c.property g
 
 /-- Paper: (5.2.2.2), p. 232.
 The meromorphic space on a component uses the pole bounds restricted to that component.
@@ -473,7 +478,16 @@ theorem sLocalThetaToHomogeneous_commutes {ω : PontryaginDual C₁}
     let Q := (exists_sLocalThetaToHomogeneousProduct (F := F) (S := S)).choose
     P (sLocalThetaToGlobal F S x) ω =
       sLocalHomogeneousThetaToGlobal (F := F) (ω := ω) hω
-        (Q x (sLocalNormOneCharacter (F := F) S ω hω)) := by sorry
+        (Q x (sLocalNormOneCharacter (F := F) S ω hω)) := by
+  intro P Q
+  induction x using Submodule.Quotient.induction_on with
+  | _ f =>
+    exact ((exists_globalThetaToHomogeneousProduct (F := F)).choose_spec.2
+      (sAdeleSchwartzToGlobal F S f) ω).trans
+      ((congrArg (sLocalHomogeneousThetaToGlobal (F := F) (ω := ω) hω)
+        ((exists_sLocalThetaToHomogeneousProduct (F := F) (S := S)).choose_spec.2 f
+          (sLocalNormOneCharacter (F := F) S ω hω))).trans
+        (sLocalHomogeneousThetaToGlobal_mk (F := F) (ω := ω) hω f)).symm
 
 section TranslationRelations
 

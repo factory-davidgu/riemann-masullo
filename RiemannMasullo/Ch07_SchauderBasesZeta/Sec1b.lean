@@ -147,7 +147,17 @@ def sLocalRhoPoleOrder (c : QuasiCharacter (SIdeleQuotient F S)) : ℕ :=
 /-- Paper: Lemma 7.1.2.2, p. 317. The pole order is the negative of the
 order bound used in the target space of the S-local Mellin transform of §5.1. -/
 theorem sLocalIdelicOrderBound_eq_neg_poleOrder (c : QuasiCharacter (SIdeleQuotient F S)) :
-    sLocalIdelicOrderBound c = ((-(sLocalRhoPoleOrder c : ℤ) : ℤ) : WithTop ℤ) := by sorry
+    sLocalIdelicOrderBound c = ((-(sLocalRhoPoleOrder c : ℤ) : ℤ) : WithTop ℤ) := by
+  have hle : sLocalIdelicOrderBound c ≤ 0 := min_le_left _ _
+  unfold sLocalRhoPoleOrder
+  generalize sLocalIdelicOrderBound c = b at hle ⊢
+  induction b using WithTop.recTopCoe with
+  | top => exact absurd hle (by simp)
+  | coe n =>
+    have hn : n ≤ 0 := by exact_mod_cast hle
+    simp only [WithTop.untop₀_coe]
+    norm_cast
+    omega
 
 /-- Paper: Theorem 7.1.3.2, p. 324.
 A simple pole of the correcting factor has multiplicity one in a unitary chart.
@@ -155,7 +165,59 @@ Deviation: States a sanity check comparing the centered and uncentered coordinat
 theorem sLocalRhoPoleOrder_eq_one_iff (χ : U𝔽)
     (hχ : ideleClassNormTwist χ 0 ∈ unramifiedOutside F S) (s : ℂ) :
     sLocalRhoPoleOrder (chartₛ(χ, hχ) s) = 1 ↔
-      meromorphicOrderAt rhoChart(χ, hχ) s = -1 := by sorry
+      meromorphicOrderAt rhoChart(χ, hχ) s = -1 := by
+  have hcomp : (fun z ↦ sLocalRhoFactor (F := F) (S := S)
+        (quasiCharacterNormTwist (G := Jₛ) mₛ
+          (IsProperMap.continuous (isProperMap_sIdeleQuotientNorm F S)) (chartₛ(χ, hχ) s) z)) =
+      (fun z ↦ sLocalRhoFactor (chartₛ(χ, hχ) z)) ∘ (· + s) := by
+    funext z
+    simp only [Function.comp]
+    congr 1
+    ext1 g
+    simp only [quasiCharacterNormTwist]
+    have hn : (((mₛ g : ℝ≥0ˣ) : ℝ≥0) : ℂ) ≠ 0 := by simp
+    change ((_ : ℂ) * _) * _ = (_ : ℂ) * _
+    rw [mul_assoc]
+    congr 1
+    change (((mₛ g : ℝ≥0ˣ) : ℝ≥0) : ℂ) ^ s * (((mₛ g : ℝ≥0ˣ) : ℝ≥0) : ℂ) ^ z = _
+    rw [← Complex.cpow_add _ _ hn, add_comm]
+    rfl
+  have key : meromorphicOrderAt (fun z ↦ sLocalRhoFactor (F := F) (S := S)
+        (quasiCharacterNormTwist (G := Jₛ) mₛ
+          (IsProperMap.continuous (isProperMap_sIdeleQuotientNorm F S)) (chartₛ(χ, hχ) s) z)) 0
+      = meromorphicOrderAt rhoChart(χ, hχ) s := by
+    rw [hcomp, meromorphicOrderAt_comp_add_const_eq_meromorphicOrderAt, zero_add]
+  unfold sLocalRhoPoleOrder sLocalIdelicOrderBound
+  rw [key]
+  generalize meromorphicOrderAt rhoChart(χ, hχ) s = o
+  induction o using WithTop.recTopCoe with
+  | top =>
+    have h0 : (-WithTop.untop₀ (0 : WithTop ℤ)).toNat = 0 := by
+      rw [← WithTop.coe_zero, WithTop.untop₀_coe]; rfl
+    simp only [min_eq_left le_top, h0]
+    have : (⊤ : WithTop ℤ) ≠ -1 := by
+      first
+        | exact WithTop.top_ne_coe
+        | simp
+        | decide
+    simp [this]
+  | coe n =>
+    rw [← WithTop.coe_zero, ← WithTop.coe_min]
+    simp only [WithTop.untop₀_coe]
+    constructor
+    · intro h
+      have : (-(min 0 n)).toNat = 1 := h
+      have : n = -1 := by omega
+      subst this
+      rfl
+    · intro h
+      have : n = -1 := by
+        first
+          | exact_mod_cast h
+          | exact WithTop.coe_injective h
+          | simpa using h
+      subst this
+      rfl
 
 variable (χ : PontryaginDual (IdeleClassGroup (𝓞 F) F))
   (hχ : ideleClassNormTwist χ 0 ∈ unramifiedOutside F S)

@@ -91,15 +91,17 @@ the roadmap below the order of work.
 
 ### What the formalization has found
 
-[`ERRATA.md`](ERRATA.md) has about 200 entries: some 45 statements that are false as printed,
-135 that are imprecise, inconsistent or wrongly justified, 16 placeholders or missing pieces,
-and 9 reports from readers about parts not yet formalized. Most are in the appendices' and early
-chapters' accounts of standard material, and are repaired where they occur: the Lean states the
+[`ERRATA.md`](ERRATA.md) has about 350 entries: some 105 statements that are false as printed,
+220 that are imprecise, inconsistent or wrongly justified, 20 placeholders or missing pieces,
+and 9 reports from readers about parts not yet formalized. Those in the appendices' and early
+chapters' accounts of standard material are repaired where they occur: the Lean states the
 corrected form and says so.
 
-The second wave has reached the first of the paper's own constructions, and the findings there
-weigh more. The printed proof of the structure theorem for the spaces of adelic θ-functions
-(Theorem 5.2.1.1) does not work, and whether the theorem holds is being tested in Lean now. The
+The second wave has reached the paper's own constructions in Chapters 5–7, and the findings
+there weigh more. Most still come with a repair. Six steps have none so far, and later results
+use them; `ERRATA.md` lists them first. The main one is the structure theorem for the spaces of
+adelic θ-functions (Theorem 5.2.1.1): its printed proof does not work, the rest of §5.2 is now
+proved in Lean from its two central claims, and those two are neither proved nor refuted. The
 explicit formulas of §B.4, which Chapter 12 quotes, need their local terms and normalizations
 recomputed. None of the entries so far is about the trace formula itself.
 

@@ -34,7 +34,12 @@ local notation "vval(" v ")" => (Valued.v : Valuation Fᵥ(v) (WithZero (Multipl
 /-- Paper: Lemma 5.3.1.1, p. 240.
 The difference of a local test function and its inverse-unit pullback is linear. -/
 theorem finitePlaceDifference_isLinear (v : V) (π : Fᵥ(v)ˣ) :
-    IsLinearMap ℂ (fun f : ℬ(Fᵥ(v)) ↦ f - schwartzBruhatUnitTranslate π f) := by sorry
+    IsLinearMap ℂ (fun f : ℬ(Fᵥ(v)) ↦ f - schwartzBruhatUnitTranslate π f) := by
+  have hT : IsLinearMap ℂ (fun f : ℬ(Fᵥ(v)) ↦ schwartzBruhatUnitTranslate π f) := by
+    refine ⟨fun f g ↦ ?_, fun c f ↦ ?_⟩
+    · exact Subtype.ext (funext fun x ↦ rfl)
+    · exact Subtype.ext (funext fun x ↦ rfl)
+  exact (LinearMap.id - hT.mk' _).isLinear
 
 /-- Paper: Lemma 5.3.1.1, p. 240.
 The local difference subtracts pullback by multiplication by the inverse of the chosen unit
@@ -143,7 +148,23 @@ local notation "pvBundle(" v ", " π ")" =>
 /-- Paper: Lemma 5.3.1.3, p. 241.
 The bundled local averaging formula is linear. -/
 theorem finitePlacePrincipalValue_isLinear (v : V) (π : Fᵥ(v)ˣ) :
-    IsLinearMap ℂ (pvBundle(v, π)) := by sorry
+    IsLinearMap ℂ (pvBundle(v, π)) := by
+  refine ⟨fun f g ↦ ?_, fun c f ↦ ?_⟩
+  · refine Subtype.ext (funext fun x ↦ ?_)
+    have hf := (finitePlacePrincipalValue_integrable v π f x).2
+    have hg := (finitePlacePrincipalValue_integrable v π g x).2
+    change finitePlacePrincipalValueFun v π (f + g) x =
+      finitePlacePrincipalValueFun v π f x + finitePlacePrincipalValueFun v π g x
+    unfold finitePlacePrincipalValueFun
+    simp only [show ∀ y, (f + g) y = f y + g y from fun _ ↦ rfl]
+    rw [integral_add hf hg]
+    ring
+  · refine Subtype.ext (funext fun x ↦ ?_)
+    change finitePlacePrincipalValueFun v π (c • f) x = c * finitePlacePrincipalValueFun v π f x
+    unfold finitePlacePrincipalValueFun
+    simp only [show ∀ y, (c • f) y = c * f y from fun _ ↦ rfl]
+    rw [integral_const_mul]
+    ring
 
 /-- Paper: Lemma 5.3.1.3, p. 241.
 The local principal value formula is continuous. -/
@@ -564,7 +585,24 @@ A multi-index supported in one coordinate acts by the corresponding power
 of that coordinate's derivative. -/
 theorem coordinateDerivative_single {ι A : Type*} [Fintype ι] [Monoid A] (derivative : ι → A)
     (i : ι) (k : ℕ) :
-    coordinateDerivative derivative (Pi.single i k) = derivative i ^ k := by sorry
+    coordinateDerivative derivative (Pi.single i k) = derivative i ^ k := by
+  have key : ∀ l : List ι, l.Nodup →
+      (l.map fun j ↦ derivative j ^ (Pi.single i k : ι → ℕ) j).prod =
+        if i ∈ l then derivative i ^ k else 1 := by
+    intro l hl
+    induction l with
+    | nil => simp
+    | cons a t ih =>
+      rw [List.nodup_cons] at hl
+      by_cases h : a = i
+      · subst h
+        simp [hl.1, ih hl.2]
+      · rw [List.map_cons, List.prod_cons, ih hl.2, Pi.single_apply, if_neg h,
+          pow_zero, one_mul]
+        simp [Ne.symm h]
+  unfold coordinateDerivative
+  rw [key _ (Finset.nodup_toList _)]
+  simp
 
 open Classical in
 local notation "eᵣ" i => WithLp.toLp 2 (Pi.single i (1 : ℝ))

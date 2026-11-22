@@ -234,7 +234,21 @@ On both the real and complex coordinates, choosing only zero exponents gives the
 unweighted Schwartz–Bruhat space. -/
 theorem archimedeanWeightedSchwartzSubmodule_singleton_zero :
     archimedeanWeightedSchwartzSubmodule (ι := ι) (κ := κ) {0} =
-      schwartzBruhatSubmodule (archMul(ι, κ)) := by sorry
+      schwartzBruhatSubmodule (archMul(ι, κ)) := by
+  have hw : ∀ a : weights(ι, κ, ({0} : Set ℝ)), ∀ f : archMul(ι, κ) → ℂ, weightMap(a) f = f := by
+    intro a f
+    have h1 : ∀ i, (a.1 i : ℝ) = 0 := fun i ↦ by simpa using (a.1 i).property
+    have h2 : ∀ j, (a.2 j : ℝ) = 0 := fun j ↦ by simpa using (a.2 j).property
+    funext u
+    simp [h1, h2]
+  ext f
+  simp only [archimedeanWeightedSchwartzSubmodule, Submodule.mem_iInf, Submodule.mem_comap]
+  constructor
+  · intro h
+    have := h (fun _ ↦ ⟨0, by simp⟩, fun _ ↦ ⟨0, by simp⟩)
+    rwa [hw] at this
+  · intro h a
+    rwa [hw]
 
 /-- Paper: Lemma 5.3.3.3, p. 252.
 The topology is the initial locally convex topology for all the partial weight maps into
