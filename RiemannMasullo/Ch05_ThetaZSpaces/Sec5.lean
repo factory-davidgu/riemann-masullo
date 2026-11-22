@@ -61,12 +61,14 @@ theorem mem_sLocalEigendistributions (c : QuasiCharacter Jₛ) (T : D(ℬ(Aₛ))
 /-- Paper: Definition 5.5.1.1(1), p. 277.
 The S-local weight subspace is closed for the strong topology. -/
 theorem sLocalEigendistributions_isClosed (c : QuasiCharacter Jₛ) :
-    IsClosed (sLocalEigendistributions c : Set D(ℬ(Aₛ))) := by sorry
+    IsClosed (sLocalEigendistributions c : Set D(ℬ(Aₛ))) :=
+  schwartzBruhatEigendistributions_isClosed _
 
 /-- Paper: Definition 5.5.1.1(2), p. 278.
 The global weight subspace of §3.4 is closed for the strong topology. -/
 theorem adelicEigendistributions_isClosed (c : QuasiCharacter C𝔽) :
-    IsClosed (adelicEigendistributions c : Set D(ℬ(𝔸[F]))) := by sorry
+    IsClosed (adelicEigendistributions c : Set D(ℬ(𝔸[F]))) :=
+  schwartzBruhatEigendistributions_isClosed _
 
 end Eigendistributions
 

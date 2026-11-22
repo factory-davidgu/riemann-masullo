@@ -147,7 +147,17 @@ def sLocalRhoPoleOrder (c : QuasiCharacter (SIdeleQuotient F S)) : ℕ :=
 /-- Paper: Lemma 7.1.2.2, p. 317. The pole order is the negative of the
 order bound used in the target space of the S-local Mellin transform of §5.1. -/
 theorem sLocalIdelicOrderBound_eq_neg_poleOrder (c : QuasiCharacter (SIdeleQuotient F S)) :
-    sLocalIdelicOrderBound c = ((-(sLocalRhoPoleOrder c : ℤ) : ℤ) : WithTop ℤ) := by sorry
+    sLocalIdelicOrderBound c = ((-(sLocalRhoPoleOrder c : ℤ) : ℤ) : WithTop ℤ) := by
+  have hle : sLocalIdelicOrderBound c ≤ 0 := min_le_left _ _
+  unfold sLocalRhoPoleOrder
+  generalize sLocalIdelicOrderBound c = b at hle ⊢
+  induction b using WithTop.recTopCoe with
+  | top => exact absurd hle (by simp)
+  | coe n =>
+    have hn : n ≤ 0 := by exact_mod_cast hle
+    simp only [WithTop.untop₀_coe]
+    norm_cast
+    omega
 
 /-- Paper: Theorem 7.1.3.2, p. 324.
 A simple pole of the correcting factor has multiplicity one in a unitary chart.
@@ -155,7 +165,59 @@ Deviation: States a sanity check comparing the centered and uncentered coordinat
 theorem sLocalRhoPoleOrder_eq_one_iff (χ : U𝔽)
     (hχ : ideleClassNormTwist χ 0 ∈ unramifiedOutside F S) (s : ℂ) :
     sLocalRhoPoleOrder (chartₛ(χ, hχ) s) = 1 ↔
-      meromorphicOrderAt rhoChart(χ, hχ) s = -1 := by sorry
+      meromorphicOrderAt rhoChart(χ, hχ) s = -1 := by
+  have hcomp : (fun z ↦ sLocalRhoFactor (F := F) (S := S)
+        (quasiCharacterNormTwist (G := Jₛ) mₛ
+          (IsProperMap.continuous (isProperMap_sIdeleQuotientNorm F S)) (chartₛ(χ, hχ) s) z)) =
+      (fun z ↦ sLocalRhoFactor (chartₛ(χ, hχ) z)) ∘ (· + s) := by
+    funext z
+    simp only [Function.comp]
+    congr 1
+    ext1 g
+    simp only [quasiCharacterNormTwist]
+    have hn : (((mₛ g : ℝ≥0ˣ) : ℝ≥0) : ℂ) ≠ 0 := by simp
+    change ((_ : ℂ) * _) * _ = (_ : ℂ) * _
+    rw [mul_assoc]
+    congr 1
+    change (((mₛ g : ℝ≥0ˣ) : ℝ≥0) : ℂ) ^ s * (((mₛ g : ℝ≥0ˣ) : ℝ≥0) : ℂ) ^ z = _
+    rw [← Complex.cpow_add _ _ hn, add_comm]
+    rfl
+  have key : meromorphicOrderAt (fun z ↦ sLocalRhoFactor (F := F) (S := S)
+        (quasiCharacterNormTwist (G := Jₛ) mₛ
+          (IsProperMap.continuous (isProperMap_sIdeleQuotientNorm F S)) (chartₛ(χ, hχ) s) z)) 0
+      = meromorphicOrderAt rhoChart(χ, hχ) s := by
+    rw [hcomp, meromorphicOrderAt_comp_add_const_eq_meromorphicOrderAt, zero_add]
+  unfold sLocalRhoPoleOrder sLocalIdelicOrderBound
+  rw [key]
+  generalize meromorphicOrderAt rhoChart(χ, hχ) s = o
+  induction o using WithTop.recTopCoe with
+  | top =>
+    have h0 : (-WithTop.untop₀ (0 : WithTop ℤ)).toNat = 0 := by
+      rw [← WithTop.coe_zero, WithTop.untop₀_coe]; rfl
+    simp only [min_eq_left le_top, h0]
+    have : (⊤ : WithTop ℤ) ≠ -1 := by
+      first
+        | exact WithTop.top_ne_coe
+        | simp
+        | decide
+    simp [this]
+  | coe n =>
+    rw [← WithTop.coe_zero, ← WithTop.coe_min]
+    simp only [WithTop.untop₀_coe]
+    constructor
+    · intro h
+      have : (-(min 0 n)).toNat = 1 := h
+      have : n = -1 := by omega
+      subst this
+      rfl
+    · intro h
+      have : n = -1 := by
+        first
+          | exact_mod_cast h
+          | exact WithTop.coe_injective h
+          | simpa using h
+      subst this
+      rfl
 
 variable (χ : PontryaginDual (IdeleClassGroup (𝓞 F) F))
   (hχ : ideleClassNormTwist χ 0 ∈ unramifiedOutside F S)
@@ -336,7 +398,62 @@ theorem regularizedCompletedHeckeL_differentiable (χ : U𝔽) (τ : ℝ≥0ˣ �
     let δ : ℕ := open Classical in
       if χ.toMonoidHom.comp (ideleClassNorm F).ker.subtype = 1 then 1 else 0
     Differentiable ℂ (toMeromorphicNFOn (fun s ↦ (s + b) ^ δ * (1 - s - b) ^ δ * L s) univ) :=
-  by sorry
+  by
+    classical
+    have hphase := existsUnique_ideleNormSection_character_phase χ τ hτ
+    let x := hphase.exists.choose
+    let b := (x : ℂ) * Complex.I
+    by_cases hχ : χ.toMonoidHom.comp (ideleClassNorm F).ker.subtype = 1
+    · simp only [ite_eq_left hχ, pow_one]
+      let P (s : ℂ) := (s + b) * (1 - s - b)
+      change Differentiable ℂ (toMeromorphicNFOn (P * L) univ)
+      obtain ⟨t, ⟨hchar, hzero, hone, haway⟩, _⟩ :=
+        completedHeckeL_continuation_simplePoles χ L _hL _hEq hχ
+      have hx : -t = x := by
+        refine hphase.unique ?_ hphase.exists.choose_spec
+        intro u
+        have he := DFunLike.congr_fun hchar (QuotientGroup.mk (τ u))
+        change (χ (QuotientGroup.mk (τ u)) : ℂ) * _ ^ (0 : ℂ) =
+          1 * ((((ideleNorm F (τ u)).val : ℝ) : ℂ) ^ (-Complex.I * (t : ℂ))) at he
+        rw [Complex.cpow_zero, mul_one, one_mul, hτ u] at he
+        rw [Complex.ofReal_neg, show -(t : ℂ) * Complex.I = -Complex.I * (t : ℂ) by ring]
+        exact he
+      have hb : b = -(Complex.I * (t : ℂ)) := by
+        dsimp only [b]
+        rw [← hx, Complex.ofReal_neg]
+        ring
+      have hP (s : ℂ) : AnalyticAt ℂ P s := by
+        dsimp only [P]
+        fun_prop
+      have hmer : MeromorphicOn (P * L) univ :=
+        fun s hs ↦ (hP s).meromorphicAt.mul (_hL hs).meromorphicAt
+      have hcancel (s : ℂ) (hz : P s = 0) (hp : meromorphicOrderAt L s = -1) :
+          0 ≤ meromorphicOrderAt (P * L) s := by
+        rw [meromorphicOrderAt_mul (hP s).meromorphicAt (_hL (mem_univ s)).meromorphicAt, hp]
+        have hpos : 0 < meromorphicOrderAt P s := by
+          apply (tendsto_zero_iff_meromorphicOrderAt_pos (hP s).meromorphicAt).mp
+          rw [← hz]
+          exact (hP s).continuousAt.continuousWithinAt
+        generalize meromorphicOrderAt P s = w at hpos ⊢
+        cases w with
+        | top => simp
+        | coe k =>
+          have hk : (0 : ℤ) < k := WithTop.coe_lt_coe.mp hpos
+          exact WithTop.coe_le_coe.mpr (show (0 : ℤ) ≤ k + (-1) by omega)
+      intro s
+      apply AnalyticAt.differentiableAt
+      have hNF := meromorphicNFOn_toMeromorphicNFOn (P * L) univ (mem_univ s)
+      apply hNF.meromorphicOrderAt_nonneg_iff_analyticAt.mp
+      rw [meromorphicOrderAt_toMeromorphicNFOn hmer (mem_univ s)]
+      by_cases hs₀ : s = Complex.I * (t : ℂ)
+      · subst s
+        exact hcancel _ (by dsimp only [P]; rw [hb]; ring) hzero
+      by_cases hs₁ : s = 1 + Complex.I * (t : ℂ)
+      · subst s
+        exact hcancel _ (by dsimp only [P]; rw [hb]; ring) hone
+      exact ((hP s).mul (haway s (by simp [hs₀, hs₁]))).meromorphicOrderAt_nonneg
+    · simpa only [ite_eq_right hχ, pow_zero, one_mul, toMeromorphicNFOn_eq_self.mpr _hL] using
+        completedHeckeL_continuation_entire χ L _hL _hEq hχ
 
 /-- Paper: Theorem 7.1.4.2(1), p. 326.
 The generator of the spectral ideal is the completed Hecke continuation multiplied by
@@ -362,7 +479,49 @@ theorem regularizedCompletedHeckeL_ne_zero_at_canceled_poles
     let x₀ := (existsUnique_ideleNormSection_character_phase χ τ hτ).exists.choose
     let b := (x₀ : ℂ) * Complex.I
     let Λ := regularizedCompletedHeckeL χ τ hτ L hL hEq
-    Λ.val (-b) ≠ 0 ∧ Λ.val (1 - b) ≠ 0 := by sorry
+    Λ.val (-b) ≠ 0 ∧ Λ.val (1 - b) ≠ 0 := by
+  classical
+  have hphase := existsUnique_ideleNormSection_character_phase χ τ hτ
+  let x := hphase.exists.choose
+  let b := (x : ℂ) * Complex.I
+  obtain ⟨t, ⟨hchar, hzero, hone, _⟩, _⟩ :=
+    completedHeckeL_continuation_simplePoles χ L hL hEq hχ
+  have hx : -t = x := by
+    refine hphase.unique ?_ hphase.exists.choose_spec
+    intro u
+    have he := DFunLike.congr_fun hchar (QuotientGroup.mk (τ u))
+    change (χ (QuotientGroup.mk (τ u)) : ℂ) * _ ^ (0 : ℂ) =
+      1 * ((((ideleNorm F (τ u)).val : ℝ) : ℂ) ^ (-Complex.I * (t : ℂ))) at he
+    rw [Complex.cpow_zero, mul_one, one_mul, hτ u] at he
+    rw [Complex.ofReal_neg, show -(t : ℂ) * Complex.I = -Complex.I * (t : ℂ) by ring]
+    exact he
+  have hb : b = -(Complex.I * (t : ℂ)) := by
+    dsimp only [b]
+    rw [← hx, Complex.ofReal_neg]
+    ring
+  let P (z : ℂ) := (z + b) * (1 - z - b)
+  have hP (s : ℂ) : AnalyticAt ℂ P s := by
+    dsimp only [P]
+    fun_prop
+  have hD (s : ℂ) : HasDerivAt P ((1 - s - b) - (s + b)) s := by
+    simpa [P, sub_eq_add_neg] using ((hasDerivAt_id s).add_const b).fun_mul
+      (((hasDerivAt_const s (1 : ℂ)).fun_sub (hasDerivAt_id s)).sub_const b)
+  have hmer : MeromorphicOn (P * L) univ :=
+    fun s hs ↦ (hP s).meromorphicAt.mul (hL hs).meromorphicAt
+  have cancel (s : ℂ) (hz : P s = 0) (hd : (1 - s - b) - (s + b) ≠ 0)
+      (hord : meromorphicOrderAt L s = -1) : toMeromorphicNFOn (P * L) univ s ≠ 0 := by
+    have h1 := (hP s).analyticOrderAt_eq_one_of_zero_deriv_ne_zero hz (by rwa [(hD s).deriv])
+    apply (meromorphicNFOn_toMeromorphicNFOn (P * L) univ (mem_univ s)).meromorphicOrderAt_eq_zero_iff.mp
+    rw [meromorphicOrderAt_toMeromorphicNFOn hmer (mem_univ s),
+      meromorphicOrderAt_mul (hP s).meromorphicAt (hL (mem_univ s)).meromorphicAt,
+      (hP s).meromorphicOrderAt_eq, h1, hord]
+    norm_num
+  change toMeromorphicNFOn _ univ (-b) ≠ 0 ∧ toMeromorphicNFOn _ univ (1 - b) ≠ 0
+  simp only [ite_eq_left hχ, pow_one]
+  refine ⟨cancel _ (by dsimp only [P]; ring) (by ring_nf <;> norm_num) ?_,
+    cancel _ (by dsimp only [P]; ring) (by ring_nf <;> norm_num) ?_⟩
+  · simpa [hb] using hzero
+  · simpa [hb] using hone
 
 /-- Paper: Equation (7.1.4.4), p. 326.
 Evaluation of the m-th complex derivative at a point defines a continuous linear

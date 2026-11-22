@@ -203,7 +203,10 @@ local notation "translate" => fun (g : Rˣ) ↦
 /-- Paper: Remark 6.1.2.3, p. 289.
 The identity unit acts by the identity on the additive Schwartz–Bruhat space. -/
 theorem schwartzBruhatUnitRepresentation_map_one :
-    translate (1 : Rˣ) = (1 : Module.End ℂ ℬ(R)) := by sorry
+    translate (1 : Rˣ) = (1 : Module.End ℂ ℬ(R)) := by
+  refine LinearMap.ext fun f ↦ Subtype.ext (funext fun x ↦ ?_)
+  simp
+  rfl
 
 /-- Paper: Remark 6.1.2.3, p. 289.
 Pullback by the inverse of a product agrees with the composition of the two translations. -/
@@ -228,7 +231,8 @@ def schwartzBruhatUnitRepresentation : Representation ℂ Rˣ ℬ(R) where
 /-- Paper: Remark 6.1.2.3, p. 289.
 The bundled representation acts by the existing left-translation operator. -/
 theorem schwartzBruhatUnitRepresentation_apply (g : Rˣ) (f : ℬ(R)) :
-    schwartzBruhatUnitRepresentation (R := R) g f = schwartzBruhatUnitTranslate g f := by sorry
+    schwartzBruhatUnitRepresentation (R := R) g f = schwartzBruhatUnitTranslate g f := by
+  rfl
 
 end UnitRepresentation
 
@@ -444,7 +448,10 @@ The orbit integral at zero is the value at zero times the Tamagawa mass of the i
 theorem finitePlaceUnitAverage_zero (w : Places) (f : ℬᵥ(w)) :
     finitePlaceUnitAverage w f 0 =
       ((μ(w) (U(w) : Set (L(w))ˣ)).toReal : ℂ) *
-        f (Multiplicative.ofAdd 0) := by sorry
+        f (Multiplicative.ofAdd 0) := by
+  unfold finitePlaceUnitAverage
+  simp only [zero_mul, integral_const]
+  rw [Complex.real_smul, Measure.real, Measure.restrict_apply_univ]
 
 /-- Paper: (6.1.2.14), p. 292.
 Each integrand of the local averaging formula is integrable on the integer units. -/
