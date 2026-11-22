@@ -1900,7 +1900,8 @@ def globalThetaMellinIntegral (f : ℬ[F]) (c : 𝒳[F]) : ℂ :=
 /-- Paper: Theorem 3.2.2.1(2), p. 124. The theta Mellin integral is absolutely
 convergent on the right half-plane. -/
 theorem globalThetaMellinIntegral_integrable (f : ℬ[F]) (c : 𝒳[F]) (hc : c ∈ rightHalf) :
-    Integrable (fun g : C[F] ↦ adelicTheta f g * c g) (ideleClassTamagawaMeasure F) := by sorry
+    Integrable (fun g : C[F] ↦ adelicTheta f g * c g) (ideleClassTamagawaMeasure F) := by
+  exact (globalIdelicZetaIntegral_eq_thetaIntegral f c hc).1
 
 /-- Paper: Theorem 3.2.2.1(2), p. 124. Truncating the theta Mellin integral to
 norm bands converges uniformly on every compact subset of the right half-plane. -/
