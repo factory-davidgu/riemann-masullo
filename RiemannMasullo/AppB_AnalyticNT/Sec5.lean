@@ -1,6 +1,7 @@
 module
 
 public import Mathlib.Analysis.Complex.Hadamard
+public import Mathlib.Analysis.Complex.MeanValue
 public import Mathlib.Analysis.Fourier.AddCircleMulti
 public import RiemannMasullo.Ch03_IdelicZeta.Sec2
 
@@ -84,7 +85,40 @@ theorem torusFlow_denseRange_of_linearIndependent [NeZero N] {τ : Fin N → ℝ
 distinct times give distinct phases.
 Deviation: Adds the dimension hypothesis used in the proof on p. 628. -/
 theorem torusFlow_injective_of_linearIndependent (hN : 2 ≤ N) {τ : Fin N → ℝ}
-    (hτ : LinearIndependent ℚ τ) : Injective (torusFlow τ) := by sorry
+    (hτ : LinearIndependent ℚ τ) : Injective (torusFlow τ) := by
+  rw [injective_iff_map_eq_zero]
+  intro t ht
+  have hint (i : Fin N) : ∃ m : ℤ, t * τ i = (m : ℝ) := by
+    have h : torusQuotient N (t • τ) = torusQuotient N 0 := by
+      rw [map_zero]
+      exact ht
+    obtain ⟨m, hm⟩ := (torusQuotient_eq_iff _ _).mp h i
+    exact ⟨m, by simpa using hm⟩
+  by_contra ht0
+  let i₀ : Fin N := ⟨0, by omega⟩
+  let i₁ : Fin N := ⟨1, by omega⟩
+  have hne : i₀ ≠ i₁ := by
+    intro h
+    exact absurd (congrArg Fin.val h) (by simp [i₀, i₁])
+  obtain ⟨m₀, h₀⟩ := hint i₀
+  obtain ⟨m₁, h₁⟩ := hint i₁
+  have hrel : (m₁ : ℚ) • τ i₀ + (-(m₀ : ℚ)) • τ i₁ = 0 := by
+    have hmul : t * ((m₁ : ℝ) * τ i₀ - (m₀ : ℝ) * τ i₁) = 0 := by
+      have h : t * ((m₁ : ℝ) * τ i₀ - (m₀ : ℝ) * τ i₁) =
+          (m₁ : ℝ) * (t * τ i₀) - (m₀ : ℝ) * (t * τ i₁) := by ring
+      rw [h, h₀, h₁]
+      ring
+    have hzero := (mul_eq_zero.mp hmul).resolve_left ht0
+    rw [Rat.smul_def, Rat.smul_def]
+    push_cast
+    linarith
+  have hm₁ : (m₁ : ℚ) = 0 :=
+    ((LinearIndepOn.pair_iff τ hne).mp (hτ.comp _ Subtype.val_injective) _ _ hrel).1
+  have hτ₁ : τ i₁ = 0 := by
+    have hm₁' : (m₁ : ℝ) = 0 := by exact_mod_cast hm₁
+    have h : t * τ i₁ = 0 := by rw [h₁, hm₁']
+    exact (mul_eq_zero.mp h).resolve_left ht0
+  exact hτ.ne_zero i₁ hτ₁
 
 /-- Paper: Theorem B.5.2.1(1), p. 627.
 The orbit closure is the closed additive subgroup obtained by closing the range of the flow. -/
@@ -127,7 +161,16 @@ theorem mem_unitHalfOpenCube_one (x : Fin 1 → ℝ) :
 The torus volume is the pushforward of Lebesgue measure on the half-open unit cube. -/
 theorem map_volume_unitHalfOpenCube (N : ℕ) :
     (volume.restrict (unitHalfOpenCube N)).map (torusQuotient N) =
-      (volume : Measure (UnitAddTorus (Fin N))) := by sorry
+      (volume : Measure (UnitAddTorus (Fin N))) := by
+  have hcube : unitHalfOpenCube N = Set.pi univ fun _ ↦ Ico (0 : ℝ) 1 := by
+    ext x; simp [unitHalfOpenCube]
+  have hf : (torusQuotient N : (Fin N → ℝ) → UnitAddTorus (Fin N)) =
+      fun x i ↦ ((x i : ℝ) : UnitAddCircle) := rfl
+  rw [hcube, volume_pi, Measure.restrict_pi_pi, hf]
+  have hmk : MeasurePreserving ((↑) : ℝ → UnitAddCircle) (volume.restrict (Ico 0 1)) := by
+    rw [Measure.restrict_congr_set Ico_ae_eq_Ioc]
+    simpa using UnitAddCircle.measurePreserving_mk 0
+  exact (measurePreserving_pi _ (fun _ ↦ volume) fun _ ↦ hmk).map_eq
 
 /-- Paper: §B.5.2.1, p. 627.
 Riemann integrability on a torus with Haar probability is expressed by boundedness and
@@ -201,7 +244,59 @@ theorem exists_continuous_sandwich_indicator {X : Type*} [TopologicalSpace X] [T
     ∃ lower upper : C(X, Icc (0 : ℝ) 1),
       (∀ x, (lower x : ℝ) ≤ U.indicator (fun _ ↦ (1 : ℝ)) x ∧
         U.indicator (fun _ ↦ (1 : ℝ)) x ≤ (upper x : ℝ)) ∧
-      (∫ x, ((upper x : ℝ) - (lower x : ℝ)) ∂μ) < ε := by sorry
+      (∫ x, ((upper x : ℝ) - (lower x : ℝ)) ∂μ) < ε := by
+  have : IsFiniteMeasure μ := ⟨isCompact_univ.measure_lt_top⟩
+  have hδ : ENNReal.ofReal (ε / 2) ≠ 0 := (ENNReal.ofReal_pos.mpr (half_pos hε)).ne'
+  -- A compact set inside `U` and an open set around its closure, both of nearly the same mass.
+  obtain ⟨K, hKU, hK, hKμ⟩ := hU.measurableSet.exists_isCompact_lt_add (measure_ne_top μ U) hδ
+  obtain ⟨V, hV, hVo, hVμ⟩ := (closure U).exists_isOpen_lt_add (measure_ne_top μ _) hδ
+  have hcl : μ (closure U) ≤ μ U := by
+    rw [closure_eq_self_union_frontier]
+    exact (measure_union_le _ _).trans (by rw [hfront, add_zero])
+  obtain ⟨f, hf0, hf1, hf01⟩ := exists_continuous_zero_one_of_isClosed hU.isClosed_compl
+    hK.isClosed (disjoint_compl_left_iff_subset.mpr hKU)
+  obtain ⟨g, hg0, hg1, hg01⟩ := exists_continuous_zero_one_of_isClosed hVo.isClosed_compl
+    isClosed_closure (disjoint_compl_left_iff_subset.mpr hV)
+  refine ⟨⟨fun x ↦ ⟨f x, hf01 x⟩, f.continuous.subtype_mk _⟩,
+    ⟨fun x ↦ ⟨g x, hg01 x⟩, g.continuous.subtype_mk _⟩, fun x ↦ ?_, ?_⟩
+  · change f x ≤ U.indicator (fun _ ↦ (1 : ℝ)) x ∧ U.indicator (fun _ ↦ (1 : ℝ)) x ≤ g x
+    by_cases hx : x ∈ U
+    · have hgx : g x = 1 := hg1 (subset_closure hx)
+      rw [indicator_of_mem hx, hgx]
+      exact ⟨(hf01 x).2, le_rfl⟩
+    · have hfx : f x = 0 := hf0 hx
+      rw [indicator_of_notMem hx, hfx]
+      exact ⟨le_rfl, (hg01 x).1⟩
+  · change (∫ x, (g x - f x) ∂μ) < ε
+    have hKV : K ⊆ V := hKU.trans (subset_closure.trans hV)
+    have hmeas : MeasurableSet (V \ K) := hVo.measurableSet.diff hK.measurableSet
+    have hpt (x : X) : g x - f x ≤ (V \ K).indicator (fun _ ↦ (1 : ℝ)) x := by
+      by_cases hxK : x ∈ K
+      · have hfx : f x = 1 := hf1 hxK
+        rw [indicator_of_notMem (show x ∉ V \ K from fun h ↦ h.2 hxK), hfx]
+        linarith [(hg01 x).2]
+      · by_cases hxV : x ∈ V
+        · rw [indicator_of_mem (show x ∈ V \ K from ⟨hxV, hxK⟩)]
+          linarith [(hg01 x).2, (hf01 x).1]
+        · have hgx : g x = 0 := hg0 hxV
+          have hfx : f x = 0 := hf0 fun h ↦ hxV (hV (subset_closure h))
+          rw [indicator_of_notMem (show x ∉ V \ K from fun h ↦ hxV h.1), hgx, hfx, sub_zero]
+    have hint : Integrable (fun x ↦ g x - f x) μ :=
+      (g.continuous.sub f.continuous).integrable_of_hasCompactSupport
+        (HasCompactSupport.of_compactSpace _)
+    have hmass : μ (V \ K) < ENNReal.ofReal ε := by
+      rw [measure_sdiff hKV hK.measurableSet.nullMeasurableSet (measure_ne_top μ K)]
+      refine ENNReal.sub_lt_of_lt_add (measure_mono hKV) ?_
+      calc μ V < μ (closure U) + ENNReal.ofReal (ε / 2) := hVμ
+        _ ≤ μ K + ENNReal.ofReal (ε / 2) + ENNReal.ofReal (ε / 2) :=
+          add_le_add (hcl.trans hKμ.le) le_rfl
+        _ = ENNReal.ofReal ε + μ K := by
+          rw [add_assoc, ← ENNReal.ofReal_add (half_pos hε).le (half_pos hε).le, add_halves,
+            add_comm]
+    calc ∫ x, (g x - f x) ∂μ ≤ ∫ x, (V \ K).indicator (fun _ ↦ (1 : ℝ)) x ∂μ :=
+          integral_mono hint ((integrable_const 1).indicator hmeas) hpt
+      _ = μ.real (V \ K) := by rw [integral_indicator_const _ hmeas, smul_eq_mul, mul_one]
+      _ < ε := ENNReal.toReal_lt_of_lt_ofReal hmass
 
 -- TODO(paper-gap): Neither inclusion in the asserted frontier identity holds in general.
 -- Away from the coordinate seams the cube projection is a local homeomorphism, so the
@@ -423,6 +518,99 @@ theorem stronglyRecurrentOn_of_subset {a b : ℝ} (hab : a < b) {f : ℂ → ℂ
 -- any disc contained in the strip, and disc-by-disc recurrence need not give simultaneous return
 -- times on that segment. The report gives a Runge approximation counterexample.
 
+open Metric Real in
+/-- The square of the norm at the centre is at most the circle average of the squared norm. -/
+private theorem sq_norm_le_circleAverage_sq_norm {g : ℂ → ℂ} {c : ℂ} {r ρ : ℝ}
+    (hg : DifferentiableOn ℂ g (ball c r)) (hρ : ρ ∈ Ioo 0 r) :
+    ‖g c‖ ^ 2 ≤ circleAverage (fun z ↦ ‖g z‖ ^ 2) c ρ := by
+  have hd : DiffContOnCl ℂ (fun z ↦ g z ^ 2) (ball c |ρ|) := by
+    rw [abs_of_pos hρ.1]
+    exact (hg.pow 2).diffContOnCl_ball (closedBall_subset_ball hρ.2)
+  have h := norm_circleAverage_le_circleAverage_norm (f := fun z ↦ g z ^ 2) (c := c) (R := ρ)
+  rw [hd.circleAverage] at h
+  simpa only [norm_pow] using h
+
+open Metric Real in
+/-- On a circle inside the disc, the angular integral of the squared norm over `(-π, π)` is at
+least `2π` times the squared norm at the centre. -/
+private theorem integral_Ioo_sq_norm_circleMap_ge {g : ℂ → ℂ} {c : ℂ} {r ρ : ℝ}
+    (hg : DifferentiableOn ℂ g (ball c r)) (hρ : ρ ∈ Ioo 0 r) :
+    2 * π * ‖g c‖ ^ 2 ≤ ∫ θ in Ioo (-π) π, ‖g (circleMap c ρ θ)‖ ^ 2 := by
+  set F : ℝ → ℝ := fun θ ↦ ‖g (circleMap c ρ θ)‖ ^ 2
+  have hper : F.Periodic (2 * π) := fun θ ↦ by simp only [F, periodic_circleMap c ρ θ]
+  have hint := hper.intervalIntegral_add_eq (-π) 0
+  rw [show -π + 2 * π = π by ring, zero_add] at hint
+  rw [← integral_Ioc_eq_integral_Ioo, ← intervalIntegral.integral_of_le (by linarith [pi_pos]),
+    hint]
+  have h := sq_norm_le_circleAverage_sq_norm hg hρ
+  rw [circleAverage_def, smul_eq_mul] at h
+  have h2π : 0 < 2 * π := two_pi_pos
+  calc 2 * π * ‖g c‖ ^ 2 ≤ 2 * π * ((2 * π)⁻¹ * ∫ θ in 0..2 * π, F θ) := by gcongr
+    _ = ∫ θ in 0..2 * π, F θ := by field_simp
+
+open Metric Real in
+/-- On the open disc, the squared norm of a holomorphic function has integral at least
+`π r²` times its squared norm at the centre. -/
+private theorem lintegral_ball_sq_norm_ge {g : ℂ → ℂ} {c : ℂ} {r : ℝ} (hr : 0 < r)
+    (hg : DifferentiableOn ℂ g (ball c r)) :
+    ENNReal.ofReal (π * r ^ 2 * ‖g c‖ ^ 2) ≤
+      ∫⁻ z in ball c r, ENNReal.ofReal (‖g z‖ ^ 2) := by
+  set G : ℂ → ℝ≥0∞ := fun z ↦ ENNReal.ofReal (‖g z‖ ^ 2)
+  set A : Set ℝ := Ioo 0 r
+  set B : Set ℝ := Ioo (-π) π
+  have hpolar (p : ℝ × ℝ) : c + Complex.polarCoord.symm p = circleMap c p.1 p.2 := by
+    simp only [Complex.polarCoord_symm_apply, circleMap, Complex.exp_mul_I,
+      ← Complex.ofReal_cos, ← Complex.ofReal_sin]
+  have hmem {ρ : ℝ} (hρ : ρ ∈ A) (θ : ℝ) : circleMap c ρ θ ∈ ball c r := by
+    rw [mem_ball, dist_eq_norm, circleMap_sub_center, norm_circleMap_zero, abs_of_pos hρ.1]
+    exact hρ.2
+  have hcirc : Continuous (fun p : ℝ × ℝ ↦ circleMap c p.1 p.2) := by
+    unfold circleMap; fun_prop
+  have hcont : ContinuousOn (fun p : ℝ × ℝ ↦ p.1 * ‖g (circleMap c p.1 p.2)‖ ^ 2) (A ×ˢ B) :=
+    continuous_fst.continuousOn.mul ((hg.continuousOn.norm.pow 2).comp hcirc.continuousOn
+      fun p hp ↦ hmem hp.1 p.2)
+  have hAB : MeasurableSet (A ×ˢ B) := measurableSet_Ioo.prod measurableSet_Ioo
+  calc ENNReal.ofReal (π * r ^ 2 * ‖g c‖ ^ 2)
+      = ∫⁻ ρ in A, ENNReal.ofReal (ρ * (2 * π * ‖g c‖ ^ 2)) := by
+        rw [← ofReal_integral_eq_lintegral_ofReal]
+        · congr 1
+          rw [integral_mul_const, ← integral_Ioc_eq_integral_Ioo,
+            ← intervalIntegral.integral_of_le hr.le, integral_id]
+          ring
+        · exact (continuous_id.mul continuous_const).integrableOn_Icc.mono_set Ioo_subset_Icc_self
+        · filter_upwards [ae_restrict_mem measurableSet_Ioo] with ρ hρ
+          have := hρ.1.le
+          positivity
+    _ ≤ ∫⁻ ρ in A, ∫⁻ θ in B, ENNReal.ofReal (ρ * ‖g (circleMap c ρ θ)‖ ^ 2) := by
+        refine lintegral_mono_ae ?_
+        filter_upwards [ae_restrict_mem measurableSet_Ioo] with ρ hρ
+        have hF : Continuous fun θ ↦ ρ * ‖g (circleMap c ρ θ)‖ ^ 2 :=
+          continuous_const.mul ((hg.continuousOn.norm.pow 2).comp_continuous
+            (continuous_circleMap c ρ) (hmem hρ))
+        rw [← ofReal_integral_eq_lintegral_ofReal
+          (hF.integrableOn_Icc.mono_set Ioo_subset_Icc_self)
+          (Eventually.of_forall fun θ ↦ by have := hρ.1.le; positivity),
+          integral_const_mul]
+        exact ENNReal.ofReal_le_ofReal
+          (mul_le_mul_of_nonneg_left (integral_Ioo_sq_norm_circleMap_ge hg hρ) hρ.1.le)
+    _ = ∫⁻ p in A ×ˢ B, ENNReal.ofReal (p.1 * ‖g (circleMap c p.1 p.2)‖ ^ 2) := by
+        rw [Measure.volume_eq_prod, ← Measure.prod_restrict, lintegral_prod]
+        rw [Measure.prod_restrict]
+        exact ENNReal.measurable_ofReal.comp_aemeasurable (hcont.aemeasurable hAB)
+    _ = ∫⁻ p in A ×ˢ B, ENNReal.ofReal p.1 • (ball c r).indicator G
+          (c + Complex.polarCoord.symm p) := by
+        refine setLIntegral_congr_fun hAB fun p hp ↦ ?_
+        rw [hpolar, indicator_of_mem (hmem hp.1 p.2), smul_eq_mul, ← ENNReal.ofReal_mul hp.1.1.le]
+    _ ≤ ∫⁻ p in polarCoord.target, ENNReal.ofReal p.1 • (ball c r).indicator G
+          (c + Complex.polarCoord.symm p) := by
+        refine lintegral_mono_set ?_
+        exact prod_mono Ioo_subset_Ioi_self subset_rfl
+    _ = ∫⁻ z in ball c r, G z := by
+        rw [Complex.lintegral_comp_polarCoord_symm (fun w ↦ (ball c r).indicator G (c + w)),
+          lintegral_add_left_eq_self, lintegral_indicator measurableSet_ball]
+
+-- Retain the hypotheses of the existing signature that the proof does not use.
+set_option linter.unusedVariables false in
 /-- Paper: Lemma B.5.3.5, p. 633.
 If the squared area error integrated over the closure of the open set is below
 `π * δ² * X²`, the uniform error on the compact set is below `X`.
@@ -434,7 +622,45 @@ theorem areaApproximation_subset_verticalReturnTimes {a b : ℝ} (hab : a < b) {
     (hKU : K ⊆ U) {δ : ℝ} (hδ : δ = ⨅ z : K, Metric.infDist (z : ℂ) Uᶜ)
     (hδpos : 0 < δ) {T X : ℝ} (hT : 0 < T) (hX : 0 < X) :
     {t ∈ Icc (-T) T | (∫ z in closure U, ‖f (z + (t : ℂ) * Complex.I) - f z‖ ^ 2) <
-      Real.pi * δ ^ 2 * X ^ 2} ⊆ Icc (-T) T ∩ verticalReturnTimes f K X := by sorry
+      Real.pi * δ ^ 2 * X ^ 2} ⊆ Icc (-T) T ∩ verticalReturnTimes f K X := by
+  rintro t ⟨htT, hI⟩
+  refine ⟨htT, ?_⟩
+  set g : ℂ → ℂ := fun z ↦ f (z + (t : ℂ) * Complex.I) - f z
+  set I := ∫ z in closure U, ‖g z‖ ^ 2
+  have hshift : MapsTo (fun z : ℂ ↦ z + (t : ℂ) * Complex.I) (verticalStrip a b)
+      (verticalStrip a b) := fun z hz ↦ by
+    simpa [Complex.HadamardThreeLines.verticalStrip] using hz
+  have hgd : DifferentiableOn ℂ g (verticalStrip a b) :=
+    (hf.comp (differentiableOn_id.add_const _) hshift).sub hf
+  have hUs : U ⊆ verticalStrip a b := subset_closure.trans hUI
+  have hgint : IntegrableOn (fun z ↦ ‖g z‖ ^ 2) (closure U) :=
+    ((hgd.continuousOn.mono hUI).norm.pow 2).integrableOn_compact hUcompact
+  have hπδ : 0 < Real.pi * δ ^ 2 := by positivity
+  have hbound (z : ℂ) (hz : z ∈ K) : ‖g z‖ ^ 2 * (Real.pi * δ ^ 2) ≤ I := by
+    have hball : Metric.ball z δ ⊆ U := by
+      intro w hw
+      by_contra hwU
+      have h1 : δ ≤ Metric.infDist z Uᶜ := hδ ▸
+        ciInf_le ⟨0, by rintro _ ⟨w, rfl⟩; exact Metric.infDist_nonneg⟩ (⟨z, hz⟩ : K)
+      have h2 := Metric.infDist_le_dist_of_mem (x := z) (show w ∈ Uᶜ from hwU)
+      rw [Metric.mem_ball, dist_comm] at hw
+      linarith
+    have hsub : Metric.ball z δ ⊆ closure U := hball.trans subset_closure
+    have harea := lintegral_ball_sq_norm_ge hδpos (hgd.mono (hball.trans hUs))
+    rw [← ofReal_integral_eq_lintegral_ofReal (hgint.mono_set hsub)
+      (Eventually.of_forall fun _ ↦ by positivity),
+      ENNReal.ofReal_le_ofReal_iff (integral_nonneg fun _ ↦ by positivity)] at harea
+    calc ‖g z‖ ^ 2 * (Real.pi * δ ^ 2) = Real.pi * δ ^ 2 * ‖g z‖ ^ 2 := by ring
+      _ ≤ ∫ w in Metric.ball z δ, ‖g w‖ ^ 2 := harea
+      _ ≤ I := setIntegral_mono_set hgint (Eventually.of_forall fun _ ↦ by positivity)
+          (Eventually.of_forall hsub)
+  have hM : √(I / (Real.pi * δ ^ 2)) < X := by
+    rw [Real.sqrt_lt' hX, div_lt_iff₀ hπδ]
+    linarith
+  show (⨆ z : K, (‖g z‖₊ : ℝ≥0∞)) < ENNReal.ofReal X
+  refine lt_of_le_of_lt (iSup_le fun z ↦ ?_) ((ENNReal.ofReal_lt_ofReal_iff hX).mpr hM)
+  rw [← ENNReal.ofReal_coe_nnreal, coe_nnNorm]
+  exact ENNReal.ofReal_le_ofReal (Real.le_sqrt_of_sq_le ((le_div_iff₀ hπδ).mpr (hbound z z.2)))
 
 end Recurrence
 

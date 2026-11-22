@@ -87,7 +87,17 @@ def modulatedDifferenceProduct (S : List G) :
 A repeated generator gives the second finite difference at every point. -/
 theorem modulatedDifferenceProduct_pair_apply (f : ModulatedExponentialDecay m I) (x : G) :
     (modulatedDifferenceProduct m hm hms I hInt hne [γ, γ] f).val x =
-      f.val x - 2 * f.val (γ * x) + f.val (γ ^ 2 * x) := by sorry
+      f.val x - 2 * f.val (γ * x) + f.val (γ ^ 2 * x) := by
+  let Δ := modulatedCyclicDifference m γ hm hms I hInt hne
+  have eval (g : ModulatedExponentialDecay m I) (y : G) :
+      (Δ g).val y = g.val y - g.val (γ * y) :=
+    modulatedCyclicDifference_apply m γ hm hms I hInt hne g y
+  calc
+    _ = (Δ f).val x - (Δ f).val (γ * x) := eval (Δ f) x
+    _ = (f.val x - f.val (γ * x)) -
+        (f.val (γ * x) - f.val (γ ^ 2 * x)) :=
+      congrArg₂ (· - ·) (eval f x) (by simpa only [pow_two, mul_assoc] using eval f (γ * x))
+    _ = _ := by ring
 
 end Difference
 
@@ -131,7 +141,23 @@ theorem modulatedDifferenceProduct_mem_isotype
     (I : Set ℝ) (hInt : OrdConnected I) (h0 : 0 ∈ I) (S : List G) :
     ∀ f ∈ modulatedDecayIsotype m I h0 ω,
       modulatedDifferenceProduct m hm hms I hInt ⟨0, h0⟩ S f ∈
-        modulatedDecayIsotype m I h0 ω := by sorry
+        modulatedDecayIsotype m I h0 ω := by
+  induction S with
+  | nil => exact fun f hf ↦ hf
+  | cons g S ih =>
+    intro f hf
+    have hP := (mem_modulatedDecayIsotype_iff m ω I h0 _).mp (ih f hf)
+    refine (mem_modulatedDecayIsotype_iff m ω I h0
+      (modulatedDifferenceProduct m hm hms I hInt ⟨0, h0⟩ (g :: S) f)).mpr fun u x ↦ ?_
+    have h1 := modulatedCyclicDifference_apply m g hm hms I hInt ⟨0, h0⟩
+      (modulatedDifferenceProduct m hm hms I hInt ⟨0, h0⟩ S f) (u.val⁻¹ * x)
+    have h2 := modulatedCyclicDifference_apply m g hm hms I hInt ⟨0, h0⟩
+      (modulatedDifferenceProduct m hm hms I hInt ⟨0, h0⟩ S f) x
+    have hcomm : g * (u.val⁻¹ * x) = u.val⁻¹ * (g * x) := mul_left_comm _ _ _
+    exact h1.trans ((congrArg₂ (· - ·) (hP u x)
+      ((congrArg (modulatedDifferenceProduct m hm hms I hInt ⟨0, h0⟩ S f).val hcomm).trans
+        (hP u (g * x)))).trans
+      ((mul_sub _ _ _).symm.trans (congrArg ((ω u : ℂ) * ·) h2.symm)))
 
 /-- Paper: Equation (4.6.1.3), p. 210. The cyclic difference product on
 the isotype is the restriction of the ambient operator. -/
@@ -547,11 +573,45 @@ theorem schwartzBruhatDifferenceProduct_pair_apply (f : SchwartzBruhat G) (x : G
     schwartzBruhatDifferenceProduct [γ, γ] f x =
       f x - 2 * f (γ * x) + f (γ ^ 2 * x) := by sorry
 
+/-- A Schwartz–Bruhat function lies in the norm-one isotype exactly when translating its
+argument by a norm-one element multiplies its values by the character. -/
+private theorem mem_actionIsotype_translation_iff (φ : SchwartzBruhat G) :
+    φ ∈ actionIsotype ρK ω ↔ ∀ (u : K) (x : G), φ (u.val⁻¹ * x) = (ω u : ℂ) * φ x := by
+  refine (mem_actionIsotype ρK ω φ).trans (forall_congr' fun u ↦ ⟨fun h x ↦ ?_, fun h ↦ ?_⟩)
+  · have hx := congrArg (fun g : SchwartzBruhat G ↦ g x) h
+    change schwartzBruhatTranslationAction (G := G) u.val φ x = (ω u : ℂ) * φ x at hx
+    exact (schwartzBruhatTranslationAction_apply u.val x φ).symm.trans hx
+  · refine Subtype.ext (funext fun x ↦ ?_)
+    change schwartzBruhatTranslationAction (G := G) u.val φ x = (ω u : ℂ) * φ x
+    exact (schwartzBruhatTranslationAction_apply u.val x φ).trans (h x)
+
+/-- The ordinary cyclic difference at a point subtracts the value at the translate
+by the generator. -/
+private theorem schwartzBruhatCyclicDifference_eval (g : G) (f : SchwartzBruhat G) (x : G) :
+    schwartzBruhatCyclicDifference g f x = f x - f (g * x) :=
+  congrArg (f x - ·) ((schwartzBruhatTranslationAction_apply g⁻¹ x f).trans
+    (congrArg (fun y ↦ f (y * x)) (inv_inv g)))
+
 /-- Paper: Corollary 4.6.3.1, pp. 219–220. The ordinary Schwartz–Bruhat
 difference product preserves the norm-one isotype. -/
 theorem schwartzBruhatDifferenceProduct_mem_isotype :
     ∀ f ∈ actionIsotype ρK ω, schwartzBruhatDifferenceProduct S f ∈ actionIsotype ρK ω :=
-  by sorry
+  by
+  induction S with
+  | nil => exact fun f hf ↦ hf
+  | cons g S ih =>
+    intro f hf
+    have hP := (mem_actionIsotype_translation_iff m ω _).mp (ih f hf)
+    refine (mem_actionIsotype_translation_iff m ω
+      (schwartzBruhatDifferenceProduct (g :: S) f)).mpr fun u x ↦ ?_
+    have h1 := schwartzBruhatCyclicDifference_eval g (schwartzBruhatDifferenceProduct S f)
+      (u.val⁻¹ * x)
+    have h2 := schwartzBruhatCyclicDifference_eval g (schwartzBruhatDifferenceProduct S f) x
+    have hcomm : g * (u.val⁻¹ * x) = u.val⁻¹ * (g * x) := mul_left_comm _ _ _
+    exact h1.trans ((congrArg₂ (· - ·) (hP u x)
+      ((congrArg (fun y ↦ schwartzBruhatDifferenceProduct S f y) hcomm).trans
+        (hP u (g * x)))).trans
+      ((mul_sub _ _ _).symm.trans (congrArg ((ω u : ℂ) * ·) h2.symm)))
 
 variable (I : Set ℝ) (hOpen : IsOpen I) (hInt : OrdConnected I) (h0 : 0 ∈ I)
 
