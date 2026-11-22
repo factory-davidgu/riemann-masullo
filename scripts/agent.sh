@@ -313,7 +313,9 @@ $(tail -n 25 "$wt/.agent/build.txt")
   # proofs made one module take over half an hour and the whole project waited on it. Compile
   # each changed file once more on its own, and refuse work that needs more than ten minutes.
   for f in $(git diff --cached --name-only | grep -E '^RiemannMasullo/.*\.lean$' || true); do
-    rc=0; sandboxed timeout 600 lake env lean "$f" >/dev/null 2>&1 || rc=$?
+    # `lake lean`, not `lake env lean`: only the former passes the lakefile's options, and
+    # without them a linter that the project turns off makes some files take half an hour.
+    rc=0; sandboxed timeout 600 lake lean "$f" >/dev/null 2>&1 || rc=$?
     [ $rc != 124 ] || fail "A $role agent ($who) left \`$f\` taking more than ten minutes to compile. Nothing was pushed. Find the slow proof (\`set_option profiler true in\`, or compile the file up to each declaration in turn) and restructure it; see \"Keep the build fast\" in \`prompts/prover.md\`."
   done
   check="Statement check: not run (no record of the starting point)."
