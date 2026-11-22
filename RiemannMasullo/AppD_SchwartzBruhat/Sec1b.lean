@@ -3144,7 +3144,17 @@ theorem schwartzBruhat_topology_eq_final :
       locallyConvexFinalTopology
         (fun i : (a : BruhatStructuralPair G) × ElementaryLCAPresentation a.quotient ↦
           (show SchwartzBruhatStage i.2 →ₗ[ℂ] SchwartzBruhat G from
-            schwartzBruhatStageInclusion i.1 i.2)) := by sorry
+            schwartzBruhatStageInclusion i.1 i.2)) := by
+  let E := schwartzBruhatSubmodule G
+  have h (p : Seminorm ℂ E) :
+      (∀ (a : BruhatStructuralPair G) (e : ElementaryLCAPresentation a.quotient),
+        Continuous (p ∘ schwartzBruhatStageInclusion a e)) =
+      (∀ i : (a : BruhatStructuralPair G) × ElementaryLCAPresentation a.quotient,
+        Continuous (p ∘ schwartzBruhatStageInclusion i.1 i.2)) :=
+    propext ⟨fun hp i ↦ hp i.1 i.2, fun hp a e ↦ hp ⟨a, e⟩⟩
+  exact congrArg (fun P : Seminorm ℂ E → Prop ↦
+    (SeminormFamily.moduleFilterBasis (Subtype.val : Subtype P → Seminorm ℂ E)).topology)
+    (funext h)
 
 -- TODO(paper-gap): Remark D.1.5.5 identifies global smooth functions with a
 -- colimit of the smooth structural quotients. For the same extension-by-zero

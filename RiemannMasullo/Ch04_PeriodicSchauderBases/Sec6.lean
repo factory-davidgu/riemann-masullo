@@ -504,7 +504,31 @@ a lattice zero equals the derivative of the numerator divided by the
 logarithm of the generator. -/
 theorem repeatedCyclicDifference_mellin_division_eval (f : A) (n : ℤ) :
     let z : ℂ := ((2 * Real.pi * (n : ℝ) / Real.log (a.val : ℝ) : ℝ) : ℂ) * Complex.I
-    f.val z = deriv (T f).val z / (Real.log (a.val : ℝ) : ℂ) := by sorry
+    f.val z = deriv (T f).val z / (Real.log (a.val : ℝ) : ℂ) := by
+  intro z
+  let L : ℝ := Real.log (a.val : ℝ)
+  have hL : L ≠ 0 := (Real.log_pos (by exact_mod_cast ha)).ne'
+  have hLc : (L : ℂ) ≠ 0 := by exact_mod_cast hL
+  have hz : -((L : ℂ) * z) = ((-n : ℤ) : ℂ) * (2 * Real.pi * Complex.I) := by
+    dsimp [z, L] at *
+    push_cast
+    field_simp
+    <;> ring
+  have hexp : Complex.exp (-((L : ℂ) * z)) = 1 :=
+    hz ▸ Complex.exp_int_mul_two_pi_mul_I (-n)
+  have hlin : HasDerivAt (fun w : ℂ ↦ -((L : ℂ) * w)) (-(L : ℂ)) z :=
+    ((hasDerivAt_id z).const_mul (L : ℂ)).neg.congr_deriv (by simp)
+  have hfactor : HasDerivAt (fun w : ℂ ↦ 1 - Complex.exp (-((L : ℂ) * w))) (L : ℂ) z := by
+    simpa only [hexp, one_mul, neg_neg, zero_sub] using!
+      (hasDerivAt_const z (1 : ℂ)).sub hlin.cexp
+  have hf : Differentiable ℂ f.val := by
+    apply differentiableOn_univ.mp
+    simpa using f.property.2.1
+  have hderiv : HasDerivAt (T f).val ((L : ℂ) * f.val z) z := by
+    rw [show (T f).val = _ from funext (hT f)]
+    simpa only [hexp, sub_self, zero_mul, add_zero] using!
+      hfactor.mul (hf z).hasDerivAt
+  rw [hderiv.deriv, mul_div_cancel_left₀ _ hLc]
 
 include ha hT in
 /-- Paper: Example 4.6.1.6, p. 218. The normalized Fourier coefficient of
@@ -571,7 +595,23 @@ def schwartzBruhatDifferenceProduct (S : List G) : SchwartzBruhat G →L[ℂ] Sc
 Schwartz–Bruhat difference product is the second finite difference. -/
 theorem schwartzBruhatDifferenceProduct_pair_apply (f : SchwartzBruhat G) (x : G) :
     schwartzBruhatDifferenceProduct [γ, γ] f x =
-      f x - 2 * f (γ * x) + f (γ ^ 2 * x) := by sorry
+      f x - 2 * f (γ * x) + f (γ ^ 2 * x) := by
+  -- `schwartzBruhatCyclicDifference_apply` was stated with a Borel structure in scope; its
+  -- conclusion does not depend on it, so any Borel structure will do.
+  let _ : MeasurableSpace G := borel G
+  have _ : BorelSpace G := ⟨rfl⟩
+  have h : schwartzBruhatDifferenceProduct [γ, γ] f =
+      schwartzBruhatCyclicDifference γ (schwartzBruhatCyclicDifference γ f) := by
+    simp only [schwartzBruhatDifferenceProduct, List.map_cons, List.map_nil, List.prod_cons,
+      List.prod_nil, mul_one, mul_apply_eq_comp]
+  have h0 := congrArg (fun g : SchwartzBruhat G ↦ g x) h
+  have h1 := schwartzBruhatCyclicDifference_apply γ (schwartzBruhatCyclicDifference γ f) x
+  have h2 := schwartzBruhatCyclicDifference_apply γ f x
+  have h3 := schwartzBruhatCyclicDifference_apply γ f (γ * x)
+  have h4 : f (γ ^ 2 * x) = f (γ * (γ * x)) := congrArg f (by rw [sq, mul_assoc])
+  -- No `rw` on the main goal: its closing `rfl` check, like rewriting with `h2`, makes Lean
+  -- unfold the translation action defining the cyclic difference, which times out.
+  linear_combination h0 + h1 + h2 - h3 - h4
 
 /-- A Schwartz–Bruhat function lies in the norm-one isotype exactly when translating its
 argument by a norm-one element multiplies its values by the character. -/

@@ -183,7 +183,14 @@ def TorusRiemannIntegrable {X : Type*} [TopologicalSpace X] [MeasurableSpace X]
 /-- The indicator of the identity on the unit circle is Riemann integrable. -/
 theorem torusRiemannIntegrable_indicator_zero :
     TorusRiemannIntegrable (volume : Measure UnitAddCircle)
-      (({0} : Set UnitAddCircle).indicator (fun _ ↦ (1 : ℂ))) := by sorry
+      (({0} : Set UnitAddCircle).indicator (fun _ ↦ (1 : ℂ))) := by
+  refine ⟨⟨1, fun x ↦ ?_⟩, ?_⟩
+  · by_cases hx : x ∈ ({0} : Set UnitAddCircle) <;> simp [hx]
+  · have h0 : (volume : Measure UnitAddCircle) {0} = 0 := measure_singleton 0
+    filter_upwards [measure_eq_zero_iff_ae_notMem.mp h0] with x hx
+    refine continuousAt_const.congr (f := fun _ ↦ (0 : ℂ)) ?_
+    filter_upwards [isOpen_compl_singleton.mem_nhds hx] with y hy
+    exact (indicator_of_notMem hy _).symm
 
 /-- Paper: Theorem B.5.2.1(1), p. 627.
 The closed orbit subgroup is topologically isomorphic to the torus of dimension the rational
@@ -316,7 +323,8 @@ image have the same volume. Jordan measurability is expressed by the null relati
 theorem volume_interior_torusQuotient_image [NeZero N] (U : Set (unitHalfOpenCube N))
     (hU : volume (Subtype.val '' frontier U) = 0) :
     volume (interior (torusQuotient N '' (Subtype.val '' U))) =
-      volume (torusQuotient N '' (Subtype.val '' U)) := by sorry
+      volume (torusQuotient N '' (Subtype.val '' U)) :=
+  measure_interior_of_null_frontier (volume_frontier_torusQuotient_image U hU)
 
 /-- Paper: Remark B.5.2.3(2), p. 628.
 The interior of the torus image of a Jordan-measurable set has null frontier. -/
@@ -413,9 +421,96 @@ and compact containment imposed at use sites. The printed `C_{>R}` is read as `C
 def StronglyRecurrentOn (f : ℂ → ℂ) (K : Set ℂ) : Prop :=
   ∀ ε > 0, 0 < upperDensity (verticalReturnTimes f K ε)
 
+open Real in
 /-- On compact sets, the complex exponential is strongly recurrent by its imaginary period. -/
 theorem stronglyRecurrentOn_exp {K : Set ℂ} (hK : IsCompact K) :
-    StronglyRecurrentOn Complex.exp K := by sorry
+    StronglyRecurrentOn Complex.exp K := by
+  intro ε hε
+  obtain ⟨M₀, hM₀⟩ := (hK.image Complex.continuous_exp).isBounded.exists_norm_le
+  set M := max M₀ 1 with hMdef
+  have hM : 0 < M := lt_of_lt_of_le one_pos (le_max_right _ _)
+  set δ := min 1 (ε / (2 * M)) with hδdef
+  have hδ : 0 < δ := lt_min one_pos (div_pos hε (by positivity))
+  have hδ1 : δ ≤ 1 := min_le_left _ _
+  have hδM : M * δ < ε := by
+    calc M * δ ≤ M * (ε / (2 * M)) := mul_le_mul_of_nonneg_left (min_le_right _ _) hM.le
+      _ = ε / 2 := by field_simp
+      _ < ε := half_lt_self hε
+  let I (n : ℕ) : Set ℝ := Ioo (2 * π * n - δ) (2 * π * n + δ)
+  have hsub (n : ℕ) : I n ⊆ verticalReturnTimes Complex.exp K ε := by
+    intro t ht
+    have hs : |t - 2 * π * n| < δ := abs_sub_lt_iff.mpr ⟨by linarith [ht.2], by linarith [ht.1]⟩
+    have hz (z : K) : ‖Complex.exp ((z : ℂ) + (t : ℂ) * Complex.I) - Complex.exp z‖ ≤ M * δ := by
+      have he : Complex.exp ((z : ℂ) + (t : ℂ) * Complex.I) =
+          Complex.exp z * Complex.exp (Complex.I * ((t - 2 * π * n : ℝ) : ℂ)) := by
+        have : (z : ℂ) + (t : ℂ) * Complex.I =
+            ((z : ℂ) + Complex.I * ((t - 2 * π * n : ℝ) : ℂ)) + n * (2 * π * Complex.I) := by
+          push_cast; ring
+        rw [this, Complex.exp_add, Complex.exp_nat_mul_two_pi_mul_I, mul_one, Complex.exp_add]
+      have hzM : ‖Complex.exp z‖ ≤ M := (hM₀ _ ⟨z, z.2, rfl⟩).trans (le_max_left _ _)
+      have h1 : ‖Complex.exp (Complex.I * ((t - 2 * π * n : ℝ) : ℂ)) - 1‖ ≤ |t - 2 * π * n| := by
+        simpa [Real.norm_eq_abs] using
+          (norm_exp_I_mul_ofReal_sub_one_le (x := t - 2 * π * n))
+      calc ‖Complex.exp ((z : ℂ) + (t : ℂ) * Complex.I) - Complex.exp z‖
+          = ‖Complex.exp z‖ * ‖Complex.exp (Complex.I * ((t - 2 * π * n : ℝ) : ℂ)) - 1‖ := by
+            rw [he, ← norm_mul, mul_sub, mul_one]
+        _ ≤ M * |t - 2 * π * n| := mul_le_mul hzM h1 (norm_nonneg _) hM.le
+        _ ≤ M * δ := mul_le_mul_of_nonneg_left hs.le hM.le
+    show (⨆ z : K, (‖Complex.exp ((z : ℂ) + (t : ℂ) * Complex.I) - Complex.exp z‖₊ : ℝ≥0∞)) <
+      ENNReal.ofReal ε
+    calc (⨆ z : K, (‖Complex.exp ((z : ℂ) + (t : ℂ) * Complex.I) - Complex.exp z‖₊ : ℝ≥0∞))
+        ≤ ENNReal.ofReal (M * δ) := iSup_le fun z ↦ by
+          have h := ENNReal.ofReal_le_ofReal (hz z)
+          rw [ofReal_norm] at h
+          exact h
+      _ < ENNReal.ofReal ε := (ENNReal.ofReal_lt_ofReal_iff hε).mpr hδM
+  set X := verticalReturnTimes Complex.exp K ε
+  have hbound : IsBoundedUnder (· ≤ ·) atTop
+      (fun T : ℝ ↦ volume.real (Icc (-T) T ∩ X) / (2 * T)) := by
+    refine ⟨1, eventually_map.mpr ((eventually_gt_atTop (0 : ℝ)).mono fun T hT ↦ ?_)⟩
+    show volume.real (Icc (-T) T ∩ X) / (2 * T) ≤ 1
+    rw [div_le_one (by positivity : (0 : ℝ) < 2 * T)]
+    calc volume.real (Icc (-T) T ∩ X) ≤ volume.real (Icc (-T) T) :=
+          measureReal_mono inter_subset_left measure_Icc_lt_top.ne
+      _ = 2 * T := by rw [Real.volume_real_Icc_of_le (by linarith)]; ring
+  have hπ : 0 < 2 * π := by positivity
+  refine lt_of_lt_of_le (div_pos hδ hπ) (le_limsup_of_frequently_le ?_ hbound)
+  refine frequently_atTop.mpr fun T₀ ↦ ⟨2 * π * ((⌈T₀⌉₊ + 1 : ℕ) : ℝ), ?_, ?_⟩
+  · have h1 : T₀ ≤ ((⌈T₀⌉₊ + 1 : ℕ) : ℝ) := by
+      push_cast; linarith [Nat.le_ceil T₀]
+    have h2 : (1 : ℝ) ≤ 2 * π := by linarith [Real.pi_gt_three]
+    nlinarith
+  · set N := ⌈T₀⌉₊ + 1
+    have hN : (0 : ℝ) < N := by positivity
+    have hN1 : (1 : ℝ) ≤ N := Nat.one_le_cast.mpr (Nat.succ_pos _)
+    have hdisj : PairwiseDisjoint (↑(Finset.range N)) I := by
+      intro n _ m _ hnm
+      refine Set.disjoint_left.mpr fun t htn htm ↦ ?_
+      rcases lt_or_gt_of_ne hnm with h | h
+      · have : (n : ℝ) + 1 ≤ m := by exact_mod_cast h
+        have := htn.2; have := htm.1; nlinarith [Real.pi_gt_three]
+      · have : (m : ℝ) + 1 ≤ n := by exact_mod_cast h
+        have := htn.1; have := htm.2; nlinarith [Real.pi_gt_three]
+    have hU : (⋃ n ∈ Finset.range N, I n) ⊆ Icc (-(2 * π * N)) (2 * π * N) ∩ X := by
+      intro t ht
+      simp only [Set.mem_iUnion, Finset.mem_range] at ht
+      obtain ⟨n, hn, htn⟩ := ht
+      refine ⟨⟨?_, ?_⟩, hsub n htn⟩
+      · have := htn.1; have : (0 : ℝ) ≤ n := n.cast_nonneg; nlinarith [Real.pi_gt_three]
+      · have := htn.2; have : (n : ℝ) + 1 ≤ N := by exact_mod_cast hn
+        nlinarith [Real.pi_gt_three]
+    have hvol : volume.real (⋃ n ∈ Finset.range N, I n) = N * (2 * δ) := by
+      rw [measureReal_biUnion_finset hdisj (fun n _ ↦ measurableSet_Ioo)
+        (fun n _ ↦ measure_Ioo_lt_top.ne)]
+      rw [Finset.sum_congr rfl fun n _ ↦ show volume.real (I n) = _ from
+        Real.volume_real_Ioo_of_le (by linarith : 2 * π * n - δ ≤ 2 * π * n + δ)]
+      have hc (n : ℕ) : 2 * π * n + δ - (2 * π * n - δ) = 2 * δ := by ring
+      simp only [hc, Finset.sum_const, Finset.card_range, nsmul_eq_mul]
+    rw [le_div_iff₀ (by positivity)]
+    calc δ / (2 * π) * (2 * (2 * π * N)) = N * (2 * δ) := by field_simp
+      _ = volume.real (⋃ n ∈ Finset.range N, I n) := hvol.symm
+      _ ≤ volume.real (Icc (-(2 * π * N)) (2 * π * N) ∩ X) := measureReal_mono hU
+          ((measure_mono inter_subset_left).trans_lt measure_Icc_lt_top).ne
 
 -- TODO(paper-gap): Proposition B.5.3.2 forces T₀ = 0. Over ℚ with the trivial character
 -- and a finite place above 2, the denominator at T₀ vanishes.

@@ -64,7 +64,12 @@ integral of the test function weighted by the archimedean module. -/
 theorem weilArchimedeanIntegral_norm (fArch : ℬ(AArch)) :
     weilArchimedeanIntegral fArch (ideleClassNormTwist 1 1) =
       ∫ g : AArchˣ, fArch (Multiplicative.ofAdd g.val) *
-        (((sIdeleNorm F ∅ g : ℝ≥0) : ℝ) : ℂ) ∂μArch := by sorry
+        (((sIdeleNorm F ∅ g : ℝ≥0) : ℝ) : ℂ) ∂μArch := by
+  unfold weilArchimedeanIntegral
+  congr with g
+  rw [ideleClassNormTwist_one_one]
+  change _ * (((ideleNorm F (sIdeleInsertion F ∅ g) : ℝ≥0) : ℝ) : ℂ) = _
+  rw [ideleNorm_sIdeleInsertion]
 
 /-- Paper: Theorem 3.4.1.1, p. 143. The archimedean integrand is absolutely
 integrable at each quasi-character of positive abscissa. -/
@@ -667,7 +672,43 @@ def adelicStandardGaussian (χ : PontryaginDual C_F) : ℬ(𝔸[F]) :=
 at the zero adele has one factor of one over two pi per complex place. -/
 theorem adelicStandardGaussian_trivial_zero :
     adelicStandardGaussian (1 : PontryaginDual C_F) (Multiplicative.ofAdd 0) =
-      (2 * (Real.pi : ℂ))⁻¹ ^ InfinitePlace.nrComplexPlaces F := by sorry
+      (2 * (Real.pi : ℂ))⁻¹ ^ InfinitePlace.nrComplexPlaces F := by
+  classical
+  have hInf (w : InfinitePlace F) :
+      ((1 : PontryaginDual (IdeleClassGroup (𝓞 F) F)).comp
+        ⟨IdeleClassGroup.ofCompletion (𝓞 F) F w, continuous_ideleClass_ofCompletion F w⟩) = 1 :=
+    ContinuousMonoidHom.ext fun _ ↦ rfl
+  have hFin (v : HeightOneSpectrum (𝓞 F)) :
+      finiteStandardGaussian v (finitePlaceRestriction F v (ideleClassNormTwist 1 0))
+        (Multiplicative.ofAdd 0) = 1 := by
+    have hc : ∀ u, finitePlaceRestriction F v (ideleClassNormTwist 1 0) u = 1 := fun u ↦ by
+      change (((1 : PontryaginDual (IdeleClassGroup (𝓞 F) F))
+        (IdeleClassGroup.ofAdicCompletion (𝓞 F) F v u) : Circle) : ℂ) *
+        (((ideleClassNorm F (IdeleClassGroup.ofAdicCompletion (𝓞 F) F v u) : NNReal) : ℝ) : ℂ) ^
+          (0 : ℂ) = 1
+      simp
+    change finiteStandardGaussianValue v _ 0 = 1
+    simp [finiteStandardGaussianValue, hc]
+  change (∏ w : InfinitePlace F,
+      infiniteStandardGaussian w _ (Multiplicative.ofAdd ((0 : 𝔸[F]).1 w))) *
+    ∏ᶠ v : HeightOneSpectrum (𝓞 F),
+      finiteStandardGaussian v _ (Multiplicative.ofAdd ((0 : 𝔸[F]).2 v)) = _
+  simp only [hInf]
+  have h2 (v : HeightOneSpectrum (𝓞 F)) : (0 : 𝔸[F]).2 v = 0 := rfl
+  have hI (w : InfinitePlace F) :
+      infiniteStandardGaussian w 1 (Multiplicative.ofAdd ((0 : 𝔸[F]).1 w)) =
+        if w.IsReal then (1 : ℂ) else (2 * (Real.pi : ℂ))⁻¹ :=
+    infiniteStandardGaussian_trivial_zero w
+  simp only [h2, hFin, finprod_one, mul_one]
+  refine (Finset.prod_congr rfl fun w _ ↦ hI w).trans ?_
+  rw [InfinitePlace.prod_eq_prod_mul_prod]
+  have hR : ∀ w : {w : InfinitePlace F // w.IsReal},
+      (if w.1.IsReal then (1 : ℂ) else (2 * (Real.pi : ℂ))⁻¹) = 1 :=
+    fun w ↦ ite_eq_left_iff.mpr fun h ↦ absurd w.2 h
+  have hC : ∀ w : {w : InfinitePlace F // w.IsComplex},
+      (if w.1.IsReal then (1 : ℂ) else (2 * (Real.pi : ℂ))⁻¹) = (2 * (Real.pi : ℂ))⁻¹ :=
+    fun w ↦ ite_eq_right_iff.mpr fun h ↦ absurd h (InfinitePlace.not_isReal_iff_isComplex.mpr w.2)
+  simp only [hR, hC, Finset.prod_const_one, Finset.prod_const, Finset.card_univ, one_mul]
 
 /-- Paper: Definition 3.4.3.2, p. 152. The adelic Gaussian depends only on
 the restriction of the unitary representative to the norm-one classes. -/

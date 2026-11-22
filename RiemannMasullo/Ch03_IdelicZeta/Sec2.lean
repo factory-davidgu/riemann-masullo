@@ -640,13 +640,6 @@ private theorem completedHeckeL_one_order_one (L : ℂ → ℂ) (hL : Meromorphi
   have he : (-(1 : ℤ) : WithTop ℤ) + (1 : WithTop ℤ) = 0 := by norm_num
   simpa [← add_assoc, he] using congrArg (fun x : WithTop ℤ ↦ (-1) + x) horder
 
-/-- Paper: Proposition 3.2.1.3(2), p. 123. A continuation of the completed
-Dedekind zeta function in the trivial Hecke character normalization is
-holomorphic away from zero and one. -/
-theorem completedHeckeL_one_analyticOnNhd (L : ℂ → ℂ) (hL : MeromorphicNFOn L univ)
-    (h : ∀ s : halfPlane, L s = completedHeckeL (1 : U[F]) s) :
-    AnalyticOnNhd ℂ L ({0, 1}ᶜ : Set ℂ) := by sorry
-
 /-- Paper: Definition 3.2.1.4, pp. 123–124. The finite Euler product
 converges uniformly on each compact subset of the half-plane. -/
 theorem finiteHeckeL_hasProdUniformlyOn (χ : U[F]) (K : Set halfPlane) (hK : IsCompact K) :
@@ -1538,6 +1531,48 @@ private theorem globalIdelicZFunction_eq_mul_completedHeckeL_of_integral
   exact (((hZ (mem_univ s)).eventuallyEq_nhdsNE_iff_eventuallyEq_nhds
     (hAL (mem_univ s))).mp hPunctured).eq_of_nhds
 
+/-- Paper: Proposition 3.2.1.3(2), p. 123. A continuation of the completed
+Dedekind zeta function in the trivial Hecke character normalization is
+holomorphic away from zero and one. -/
+theorem completedHeckeL_one_analyticOnNhd (L : ℂ → ℂ) (hL : MeromorphicNFOn L univ)
+    (h : ∀ s : halfPlane, L s = completedHeckeL (1 : U[F]) s) :
+    AnalyticOnNhd ℂ L ({0, 1}ᶜ : Set ℂ) := by
+  obtain ⟨_, _, _, _, _, _, _, _, _, _, ⟨σ, hσ, hnorm⟩, _⟩ := ideleGroup_quotient.{_, 0} F
+  have hinj : Injective (ideleClassNormTwist (1 : U[F])) := by
+    intro z w he
+    let c : ℝ≥0ˣ →ₜ* ℂ := (ideleClassNormTwist (1 : U[F]) z).comp ⟨σ, hσ⟩
+    let valℝ (u : ℝ≥0ˣ) : ℝ := u.val
+    obtain ⟨v, _, hv⟩ := existsUnique_complexPower c
+    have hz (u : ℝ≥0ˣ) : c u = (valℝ u : ℂ) ^ z := by
+      change 1 * (classNormℝ (σ u) : ℂ) ^ z = _
+      rw [one_mul, show classNormℝ (σ u) = valℝ u from congrArg valℝ (hnorm u)]
+    have hw (u : ℝ≥0ˣ) : c u = (valℝ u : ℂ) ^ w := by
+      change ideleClassNormTwist (1 : U[F]) z (σ u) = _
+      rw [he]
+      change 1 * (classNormℝ (σ u) : ℂ) ^ w = _
+      rw [one_mul, show classNormℝ (σ u) = valℝ u from congrArg valℝ (hnorm u)]
+    exact (hv z hz).trans (hv w hw).symm
+  have hzero : ideleClassNormTwist (1 : U[F]) 0 = 1 := by
+    ext1 g
+    change 1 * (classNormℝ g : ℂ) ^ (0 : ℂ) = 1
+    simp
+  obtain ⟨fArch, hArch⟩ := exists_archimedeanHeckeTest (1 : U[F])
+  obtain ⟨f, a, ha, hf⟩ := exists_globalHeckeTest (1 : U[F]) fArch
+  have hZ (s : ℂ) : globalIdelicZFunction f (ideleClassNormTwist (1 : U[F]) s) = a * L s :=
+    globalIdelicZFunction_eq_mul_completedHeckeL_of_integral f _ L (fun _ ↦ a)
+      hL h (differentiable_const a) (fun _ ↦ ha) (fun z ↦ by
+        rw [hf z, hArch z]
+        rfl) s
+  intro s hs
+  simp only [mem_compl_iff, mem_insert_iff, mem_singleton_iff, not_or] at hs
+  have han := (globalIdelicZFunction_poles f (1 : U[F])).1 s
+    ⟨fun he ↦ hs.1 (hinj (he.trans hzero.symm)), fun he ↦ hs.2 (hinj he)⟩
+  have he : (fun z ↦ a⁻¹ * globalIdelicZFunction f (ideleClassNormTwist (1 : U[F]) z)) = L := by
+    funext z
+    rw [hZ, ← mul_assoc, inv_mul_cancel₀ ha, one_mul]
+  rw [← he]
+  exact analyticAt_const.mul han
+
 /-- Paper: Equation (3.1.1.4), p. 119. Duality in the norm-twist coordinate
 takes the inverse unitary character and reflects the exponent. -/
 private theorem dualQuasiCharacter_ideleClassNormTwist (χ : U[F]) (s : ℂ) :
@@ -1706,7 +1741,55 @@ theorem globalThetaMellinIntegral_entire_of_vanishing (f : ℬ[F])
 vanish, the entire theta Mellin transform agrees everywhere with the global Z-function. -/
 theorem globalThetaMellinIntegral_eq_continuation_of_vanishing (f : ℬ[F])
     (hf : f zeroAdele = 0) (hFourier : adeleSchwartzFourier f zeroAdele = 0) :
-    globalThetaMellinIntegral f = globalIdelicZFunction f := by sorry
+    globalThetaMellinIntegral f = globalIdelicZFunction f := by
+  let : T2Space C[F] := (ideleGroup_quotient.{_, 0} F).2.2.2.2.2.1
+  let : LocallyCompactSpace C[F] := (ideleGroup_quotient.{_, 0} F).2.2.2.2.2.2.1
+  funext c
+  let s := quasiCharacterAbscissa (ideleClassNorm F) (isProperMap_ideleClassNorm F)
+    (ideleClassNorm_ne_one (F := F)) c
+  let d := c * ideleClassNormTwist (1 : U[F]) (-(s : ℂ))
+  have hpos (g : C[F]) : 0 < classNormℝ g := NNReal.coe_pos.mpr (Units.zero_lt _)
+  have hd (g : C[F]) : ‖d g‖ = 1 := by
+    change ‖c g * (1 * (classNormℝ g : ℂ) ^ (-(s : ℂ)))‖ = 1
+    rw [one_mul, norm_mul, norm_quasiCharacter_eq_rpow_abscissa _
+      (isProperMap_ideleClassNorm F) (ideleClassNorm_ne_one (F := F)),
+      Complex.norm_cpow_eq_rpow_re_of_pos (hpos g), Complex.neg_re, Complex.ofReal_re]
+    change classNormℝ g ^ s * classNormℝ g ^ (-s) = 1
+    rw [← Real.rpow_add (hpos g), add_neg_cancel, Real.rpow_zero]
+  let χ : U[F] :=
+    { toFun := fun g ↦ ⟨d g, mem_sphere_zero_iff_norm.mpr (hd g)⟩
+      map_one' := Circle.ext (map_one d)
+      map_mul' := fun g h ↦ Circle.ext (map_mul d g h)
+      continuous_toFun := d.continuous.subtype_mk _ }
+  have hc : ideleClassNormTwist χ s = c := by
+    ext1 g
+    change (c g * (1 * (classNormℝ g : ℂ) ^ (-(s : ℂ)))) *
+      (classNormℝ g : ℂ) ^ (s : ℂ) = c g
+    rw [one_mul, mul_assoc, ← Complex.cpow_add _ _
+      (Complex.ofReal_ne_zero.mpr (hpos g).ne'), neg_add_cancel, Complex.cpow_zero, mul_one]
+  let A (z : ℂ) := globalThetaMellinIntegral f (ideleClassNormTwist χ z)
+  let Z (z : ℂ) := globalIdelicZFunction f (ideleClassNormTwist χ z)
+  have hA : Differentiable ℂ A := globalThetaMellinIntegral_entire_of_vanishing f hf hFourier χ
+  have hZ : MeromorphicNFOn Z univ := globalIdelicZFunction_meromorphic f χ
+  have hEq (z : ℂ) (hz : 1 < z.re) : A z = Z z := by
+    have hm : ideleClassNormTwist χ z ∈ rightHalf := by
+      change 1 < quasiCharacterAbscissa _ _ _ _
+      rwa [quasiCharacterAbscissa_ideleClassNormTwist]
+    exact (globalThetaMellinIntegral_eq_idelic f hm).trans
+      (globalIdelicZFunction_eq_integral f hm).symm
+  have hnear : ∀ᶠ z in 𝓝 (2 : ℂ), 1 < z.re :=
+    (isOpen_lt continuous_const Complex.continuous_re).mem_nhds (by norm_num)
+  have htop : meromorphicOrderAt (A - Z) 2 = ⊤ :=
+    meromorphicOrderAt_eq_top_iff.mpr (eventuallyEq_iff_sub.mp
+      ((hnear.mono hEq).filter_mono nhdsWithin_le_nhds))
+  have hmA : MeromorphicNFOn A univ := fun z _ ↦ (hA.analyticAt z).meromorphicNFAt
+  have ho := (hmA.meromorphicOn.sub hZ.meromorphicOn).meromorphicOrderAt_eq_top_of_isPreconnected
+    isPreconnected_univ (mem_univ (2 : ℂ)) (mem_univ (s : ℂ)) htop
+  have hlocal : A =ᶠ[𝓝[≠] (s : ℂ)] Z :=
+    eventuallyEq_iff_sub.mpr (meromorphicOrderAt_eq_top_iff.mp ho)
+  rw [← hc]
+  exact (((hmA (mem_univ _)).eventuallyEq_nhdsNE_iff_eventuallyEq_nhds
+    (hZ (mem_univ _))).mp hlocal).eq_of_nhds
 
 -- TODO(paper-gap): The absolute convergence asserted in Theorem 3.2.2.1(2)(b)
 -- fails for nontrivial norm-one characters. The modulus of the quasi-character is
