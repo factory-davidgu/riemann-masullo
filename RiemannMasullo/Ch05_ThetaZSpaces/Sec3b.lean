@@ -50,7 +50,10 @@ def archimedeanUnitModulation (K : Type*) [NormedField K] (d : ℕ) : Kˣ →ₜ
 /-- Paper: Proposition 5.3.3.2, p. 249.
 At a nonzero argument the module evaluates to the indicated power of its norm. -/
 theorem archimedeanUnitModulation_apply (K : Type*) [NormedField K] (d : ℕ) (u : Kˣ) :
-    ((archimedeanUnitModulation K d u).val : ℝ) = ‖(u : K)‖ ^ d := by sorry
+    ((archimedeanUnitModulation K d u).val : ℝ) = ‖(u : K)‖ ^ d := by
+  show (((((Units.map nnNormHom.toMonoidHom ^ d : Kˣ →* ℝ≥0ˣ) u) : ℝ≥0ˣ).val : ℝ≥0) : ℝ) = _
+  rw [MonoidHom.pow_apply]
+  simp [nnNormHom]
 
 local notation "𝓔(" K ", " d ", " I ")" => ModulatedExponentialDecay (archimedeanUnitModulation K d) I
 local notation "punctured(" K ")" => (⟨{0}ᶜ, isClosed_singleton.isOpen_compl⟩ : Opens K)
@@ -213,7 +216,8 @@ theorem archimedeanSchwartzTwist_apply (I : Set ℝ) (a : weights(ι, κ, I))
     (u : archMul(ι, κ)) :
     archimedeanSchwartzTwist I a f u =
       (↑(∏ i, ‖(u.1 i).val‖ ^ (a.1 i : ℝ)) : ℂ) *
-      (↑(∏ j, (‖(u.2 j).val‖ ^ (2 : ℕ)) ^ (a.2 j : ℝ)) : ℂ) * f.val u := by sorry
+      (↑(∏ j, (‖(u.2 j).val‖ ^ (2 : ℕ)) ^ (a.2 j : ℝ)) : ℂ) * f.val u := by
+  rfl
 
 /-- Paper: Lemma 5.3.3.3, p. 252.
 On both the real and complex coordinates, choosing only zero exponents gives the
