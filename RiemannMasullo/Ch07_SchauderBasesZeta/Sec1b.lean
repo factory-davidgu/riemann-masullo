@@ -6,6 +6,8 @@ public import RiemannMasullo.Ch05_ThetaZSpaces.Sec2
 public import Mathlib.NumberTheory.NumberField.DirichletDensity
 public import Mathlib.RingTheory.RamificationInertia.Inertia
 public import Mathlib.RingTheory.RamificationInertia.Ramification
+import Mathlib.Analysis.Complex.LocallyUniformLimit
+import RiemannMasullo.ForMathlib.Analysis.SpecialFunctions.Pow.Complex
 
 /-!
 # §7.1.3–7.1.4 Polar multiplicities and spectral biorthogonal sequences
@@ -41,7 +43,8 @@ def IsGaloisType (c : HeckeCharacter (𝓞 F) F) : Prop :=
 A pure norm power is of Galois type.
 Deviation: States a sanity check using the trivial finite-order character. -/
 theorem isGaloisType_normPower (s : ℂ) :
-    IsGaloisType (ideleClassNormTwist (1 : U𝔽) s) := by sorry
+    IsGaloisType (ideleClassNormTwist (1 : U𝔽) s) :=
+  ⟨1, s, IsOfFinOrder.one, rfl⟩
 
 /-- Paper: Remark 7.1.3.1, p. 323.
 A rational prime splits completely when every prime over it has ramification index one
@@ -263,7 +266,17 @@ purely imaginary power with a unique real frequency. -/
 theorem existsUnique_ideleNormSection_character_phase (χ : U𝔽) (τ : ℝ≥0ˣ →ₜ* I𝔽)
     (_hτ : RightInverse τ (ideleNorm F)) :
     ∃! x : ℝ, ∀ t : ℝ≥0ˣ, (χ (QuotientGroup.mk (τ t)) : ℂ) =
-      (((t : ℝ≥0) : ℝ) : ℂ) ^ ((x : ℂ) * Complex.I) := by sorry
+      (((t : ℝ≥0) : ℝ) : ℂ) ^ ((x : ℂ) * Complex.I) := by
+  let q : I𝔽 →ₜ* C𝔽 := ⟨QuotientGroup.mk' _, continuous_quotient_mk'⟩
+  let incl : Circle →ₜ* ℂ := ⟨Circle.coeHom, continuous_subtype_val⟩
+  let c := (incl.comp χ).comp (q.comp τ)
+  obtain ⟨z, ⟨hz, hval⟩, huniq⟩ := existsUnique_unitaryComplexPower c
+    (fun t ↦ Circle.norm_coe (χ (q (τ t))))
+  have him : (z.im : ℂ) * Complex.I = z := by
+    apply Complex.ext <;> simp [hz]
+  refine ⟨z.im, fun t ↦ (hval t).trans (by rw [him]), fun x hx ↦ ?_⟩
+  have he := huniq ((x : ℂ) * Complex.I) ⟨by simp, hx⟩
+  simpa using congrArg Complex.im he
 
 /-- Paper: Situation 7.1.4.1, p. 326. The Mellin transform on the polar
 subspace descends through homogeneous theta to the entire Schwartz–Bergman space.
@@ -357,7 +370,27 @@ functional in the compact-open topology. -/
 theorem entireJet_properties (ρ : ℂ) (m : ℕ) :
     let jet (f : Entire) := iteratedDeriv m (f.val : ℂ → ℂ) ρ
     (∀ f g : Entire, jet (f + g) = jet f + jet g) ∧
-      (∀ (a : ℂ) (f : Entire), jet (a • f) = a • jet f) ∧ Continuous jet := by sorry
+      (∀ (a : ℂ) (f : Entire), jet (a • f) = a • jet f) ∧ Continuous jet := by
+  dsimp only
+  have hd (f : Entire) : Differentiable ℂ (f.val : ℂ → ℂ) := f.property
+  refine ⟨fun f g ↦ iteratedDeriv_add (hd f).contDiff.contDiffAt (hd g).contDiff.contDiffAt,
+    fun a f ↦ iteratedDeriv_const_smul_field a (f.val : ℂ → ℂ), ?_⟩
+  apply continuous_iff_continuousAt.mpr
+  intro f
+  have hlim (n : ℕ) : TendstoLocallyUniformlyOn
+      (fun g : Entire ↦ iteratedDeriv n (g.val : ℂ → ℂ))
+      (iteratedDeriv n (f.val : ℂ → ℂ)) (𝓝 f) univ := by
+    induction n with
+    | zero =>
+      exact tendstoLocallyUniformlyOn_univ.mpr
+        (ContinuousMap.tendsto_iff_tendstoLocallyUniformly.mp
+          (show Tendsto (fun g : Entire ↦ g.val) (𝓝 f) (𝓝 f.val) from
+            continuous_subtype_val.continuousAt))
+    | succ n ih =>
+      simpa only [iteratedDeriv_succ, Function.comp_def] using
+        ih.deriv (Filter.Eventually.of_forall fun g ↦
+          ((hd g).contDiff.differentiable_iteratedDeriv' n).differentiableOn) isOpen_univ
+  exact (hlim m).tendsto_at (mem_univ ρ)
 
 /-- Paper: Equation (7.1.4.4), p. 326.
 The jet functional takes the m-th derivative of an entire function at the indicated point. -/
@@ -371,7 +404,7 @@ def entireJet (ρ : ℂ) (m : ℕ) : StrongDual ℂ Entire where
 The functional evaluates the prescribed complex derivative.
 Deviation: Its evaluation law is the sanity check for the bundled functional. -/
 theorem entireJet_apply (ρ : ℂ) (m : ℕ) (f : Entire) :
-    entireJet ρ m f = iteratedDeriv m (f.val : ℂ → ℂ) ρ := by sorry
+    entireJet ρ m f = iteratedDeriv m (f.val : ℂ → ℂ) ρ := rfl
 
 /-- Paper: Equation (7.1.4.3), p. 326.
 The jet space at a zero of multiplicity n is spanned by evaluations of the first n
@@ -394,7 +427,18 @@ def entireIdealAnnihilator (g : Entire) : Submodule ℂ (StrongDual ℂ Entire) 
 /-- Paper: Theorem 7.1.4.2(1), p. 326.
 The annihilator for the constant unit generator is zero.
 Deviation: States a sanity check for the annihilator. -/
-theorem entireIdealAnnihilator_one : entireIdealAnnihilator 1 = ⊥ := by sorry
+theorem entireIdealAnnihilator_one : entireIdealAnnihilator 1 = ⊥ := by
+  ext φ
+  simp only [entireIdealAnnihilator, Submodule.mem_comap, Submodule.mem_dualAnnihilator, Submodule.mem_bot]
+  have hmem : ∀ w : Entire, w ∈ Submodule.restrictScalars ℂ (Ideal.span ({1} : Set Entire)) := by
+    intro w
+    simp [Ideal.span_singleton_one]
+  constructor
+  · intro h
+    ext w
+    simpa using h w (hmem w)
+  · intro h w _
+    simp [h]
 
 -- TODO(paper-gap): In (7.1.4.2) the product is the quotient's model, while the
 -- continuous dual consists of finite-support jets as computed on p. 328.
@@ -529,7 +573,11 @@ Removing an empty set of Euler factors recovers the spectral generator.
 Deviation: States a sanity check for the orbital ideal generator. -/
 theorem orbitalHeckeGenerator_empty :
     orbitalHeckeGenerator χ τ hτ L hL hEq ∅ = regularizedCompletedHeckeL χ τ hτ L hL hEq :=
-  by sorry
+  by
+  apply Subtype.ext
+  apply ContinuousMap.ext
+  intro s
+  simp [orbitalHeckeGenerator, reciprocalPartialHeckeEulerProduct]
 
 /-- Paper: Theorem 7.1.4.3(1), pp. 331–332. At the canceled pole on the
 imaginary axis of a pure norm power, every removed finite place adds one jet.

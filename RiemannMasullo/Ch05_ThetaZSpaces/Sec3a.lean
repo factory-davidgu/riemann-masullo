@@ -468,7 +468,9 @@ theorem mem_realSchwartzFlatAtOrigin_iff (f : 𝓢(ℝ, ℂ)) :
 /-- Paper: Theorem 5.3.2.1(1), p. 243.
 The flat real Schwartz subspace is closed. -/
 theorem realSchwartzFlatAtOrigin_isClosed :
-    IsClosed (realSchwartzFlatAtOrigin : Set 𝓢(ℝ, ℂ)) := by sorry
+    IsClosed (realSchwartzFlatAtOrigin : Set 𝓢(ℝ, ℂ)) := by
+  rw [realSchwartzFlatAtOrigin, Submodule.coe_iInf]
+  exact isClosed_iInter fun k ↦ (realDiracDerivative k).isClosed_ker
 
 -- TODO(paper-gap): The coefficient seminorms in (5.3.2.2) give the coefficientwise
 -- topology on the whole polynomial space and do not give its finest locally convex topology.
@@ -771,7 +773,9 @@ theorem mem_complexSchwartzFlatAtOrigin_iff (f : 𝓢(ℂ, ℂ)) :
 /-- Paper: Theorem 5.3.2.5(1), p. 246.
 The flat complex Schwartz subspace is closed. -/
 theorem complexSchwartzFlatAtOrigin_isClosed :
-    IsClosed (complexSchwartzFlatAtOrigin : Set 𝓢(ℂ, ℂ)) := by sorry
+    IsClosed (complexSchwartzFlatAtOrigin : Set 𝓢(ℂ, ℂ)) := by
+  simp only [complexSchwartzFlatAtOrigin, Submodule.coe_iInf]
+  exact isClosed_iInter fun k ↦ isClosed_iInter fun l ↦ (complexDiracDerivative k l).isClosed_ker
 
 /-- Paper: Theorem 5.3.2.5(1), p. 246.
 The quotient adjoint identifies the strong dual of the complex flat quotient with
