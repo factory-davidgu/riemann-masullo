@@ -1449,6 +1449,52 @@ theorem scalarIntervalSobolev_enorm_Ici_eq_top (a s : ℝ) (_hs : 0 ≤ s)
     linarith [Real.add_one_le_exp (max (max a 0) (K.toReal / x₀) * x₀)]
   exact absurd (hKle _ (le_max_left _ _)) (not_le.2 ((ENNReal.lt_ofReal_iff_toReal_lt hK).2 hlt))
 
+/-- An integrable function on the real line whose Fourier transform vanishes identically is
+zero almost everywhere: pair it with the Fourier transforms of Schwartz functions. -/
+private theorem ae_eq_zero_of_fourier_eq_zero {h : ℝ → ℂ} (hh : Integrable h)
+    (hF : ∀ y : ℝ, FourierTransform.fourier h y = 0) : h =ᵐ[volume] 0 := by
+  refine ae_eq_zero_of_integral_contDiff_smul_eq_zero hh.locallyIntegrable fun g hg hgc ↦ ?_
+  have hg₁ : HasCompactSupport (Complex.ofRealCLM ∘ g) := hgc.comp_left rfl
+  let ψ : SchwartzMap ℝ ℂ := hg₁.toSchwartzMap (Complex.ofRealCLM.contDiff.comp hg)
+  let φ : SchwartzMap ℝ ℂ := FourierTransform.fourierInv ψ
+  have hφ : FourierTransform.fourier φ = ψ := FourierTransform.fourier_fourierInv_eq ψ
+  have key : ∫ ξ, FourierTransform.fourier (φ : ℝ → ℂ) ξ • h ξ =
+      ∫ x, φ x • FourierTransform.fourier h x := by
+    simpa using! VectorFourier.integral_bilin_fourierIntegral_eq_flip
+      (ContinuousLinearMap.lsmul ℂ ℂ) (L := innerₗ ℝ) Real.continuous_fourierChar
+      continuous_inner φ.integrable hh
+  calc ∫ x, g x • h x = ∫ x, ψ x • h x := by
+        refine integral_congr_ae (ae_of_all _ fun x ↦ ?_)
+        exact (Complex.coe_smul (g x) (h x)).symm
+    _ = ∫ ξ, FourierTransform.fourier (φ : ℝ → ℂ) ξ • h ξ := by
+        rw [← SchwartzMap.fourier_coe, hφ]
+    _ = ∫ x, φ x • FourierTransform.fourier h x := key
+    _ = 0 := by simp [hF]
+
+/-- On the open strip of a compact base interval, each moment of a weighted L² class against
+a real exponential is integrable. -/
+private theorem intervalSobolev_integrable_moment (a b s : ℝ) (hs : 0 ≤ s)
+    (f : CompactIntervalSobolev volume id a b s) {σ : ℝ} (hσ : σ ∈ Ioo a b) (n : ℕ) :
+    Integrable (fun x : ℝ ↦ f x * (x : ℂ) ^ n * Complex.exp ((σ : ℂ) * (x : ℂ))) volume := by
+  obtain ⟨δ, hδ, hδa, hδb⟩ : ∃ δ : ℝ, 0 < δ ∧ δ ≤ σ - a ∧ δ ≤ b - σ :=
+    ⟨min (σ - a) (b - σ), lt_min (sub_pos.2 hσ.1) (sub_pos.2 hσ.2),
+      min_le_left _ _, min_le_right _ _⟩
+  obtain ⟨_, hΛ⟩ := weightedL2_moment_functional (continuous_intervalSobolevDensity' a b s)
+    (intervalSobolevDensity_pos a b s) (σ : ℂ) n MeasurableSet.univ (δ := 2 * δ) (K := 1)
+    (mul_pos two_pos hδ) zero_le_one fun x _ ↦ by
+      have h1 : (1 : ℝ) ≤ (1 + x ^ 2) ^ (s / 2) :=
+        Real.one_le_rpow (by nlinarith [sq_nonneg x]) (by linarith)
+      rw [one_mul, Complex.ofReal_re]
+      unfold intervalSobolevDensity
+      refine le_trans ?_ (le_mul_of_one_le_right (le_max_of_le_left (Real.exp_pos _).le) h1)
+      rcases le_total 0 x with hx | hx
+      · rw [abs_of_nonneg hx]
+        exact le_max_of_le_right (Real.exp_le_exp.2
+          (by nlinarith [mul_nonneg (sub_nonneg.2 hδb) hx]))
+      · rw [abs_of_nonpos hx]
+        exact le_max_of_le_left (Real.exp_le_exp.2
+          (by nlinarith [mul_nonneg (sub_nonneg.2 hδa) (neg_nonneg.2 hx)]))
+  simpa only [Set.indicator_univ, mul_assoc] using (hΛ f).1
 -- TODO(paper-gap): Lemma 9.2.2.2(3) treats the infinite supremum as a finite
 -- norm and identifies it with the topology of individual line norms.
 -- TODO(paper-gap): Definition 9.2.2.3 does not specify how the derivative index k
@@ -1472,7 +1518,49 @@ theorem scalarIntervalSobolev_mellin_holomorphic (a b s : ℝ) (_hab : a < b) (_
     let M := fun (f : E) z ↦ ∫ x : ℝ, f x * Complex.exp (z * (x : ℂ))
     (∀ f : E, (∀ z ∈ strip, Integrable (fun x : ℝ ↦ f x * Complex.exp (z * (x : ℂ)))) ∧
       DifferentiableOn ℂ (M f) strip) ∧ Injective (fun f ↦ fun z : strip ↦ M f z.val) := by
-  sorry
+  intro E strip M
+  have hmom (f : E) (z : ℂ) (hz : z ∈ strip) :=
+    iteratedDeriv_exp_moment (h := (f : ℝ → ℂ))
+      (fun σ hσ n ↦ intervalSobolev_integrable_moment a b s _hs f hσ n) 0 (z := z) hz
+  have hint (f : E) (z : ℂ) (hz : z ∈ strip) :
+      Integrable (fun x : ℝ ↦ f x * Complex.exp (z * (x : ℂ))) := by
+    simpa only [pow_zero, mul_one] using (hmom f z hz).2.1
+  refine ⟨fun f ↦ ⟨hint f, fun z hz ↦ ?_⟩, fun f₁ f₂ heq ↦ ?_⟩
+  · exact (hmom f z hz).1.differentiableAt.differentiableWithinAt
+  · have hσ : ((a + b) / 2 : ℝ) ∈ Ioo a b := ⟨by linarith, by linarith⟩
+    have hzmem (y : ℝ) : (((a + b) / 2 : ℝ) : ℂ) + ((-2 * Real.pi * y : ℝ) : ℂ) * Complex.I ∈
+        strip := by
+      change (_ : ℂ).re ∈ Ioo a b
+      simpa using hσ
+    have hσmem : (((a + b) / 2 : ℝ) : ℂ) ∈ strip := by
+      change (_ : ℂ).re ∈ Ioo a b
+      simpa using hσ
+    have hh : Integrable (fun x : ℝ ↦ (f₁ x - f₂ x) *
+        Complex.exp ((((a + b) / 2 : ℝ) : ℂ) * (x : ℂ))) :=
+      ((hint f₁ _ hσmem).sub (hint f₂ _ hσmem)).congr
+        (ae_of_all _ fun x ↦ (sub_mul _ _ _).symm)
+    have hzero := ae_eq_zero_of_fourier_eq_zero hh fun y ↦ by
+      rw [Real.fourier_real_eq_integral_exp_smul]
+      have hfun : (fun v : ℝ ↦ Complex.exp (((-2 * Real.pi * v * y : ℝ) : ℂ) * Complex.I) •
+          ((f₁ v - f₂ v) * Complex.exp ((((a + b) / 2 : ℝ) : ℂ) * (v : ℂ)))) = fun v : ℝ ↦
+          f₁ v * Complex.exp (((((a + b) / 2 : ℝ) : ℂ) +
+            ((-2 * Real.pi * y : ℝ) : ℂ) * Complex.I) * (v : ℂ)) -
+          f₂ v * Complex.exp (((((a + b) / 2 : ℝ) : ℂ) +
+            ((-2 * Real.pi * y : ℝ) : ℂ) * Complex.I) * (v : ℂ)) := by
+        funext v
+        have hz : ((((a + b) / 2 : ℝ) : ℂ) + ((-2 * Real.pi * y : ℝ) : ℂ) * Complex.I) * (v : ℂ) =
+            ((-2 * Real.pi * v * y : ℝ) : ℂ) * Complex.I + (((a + b) / 2 : ℝ) : ℂ) * (v : ℂ) := by
+          push_cast
+          ring
+        rw [smul_eq_mul, hz, Complex.exp_add]
+        ring
+      rw [hfun, integral_sub (hint f₁ _ (hzmem y)) (hint f₂ _ (hzmem y))]
+      exact sub_eq_zero.2 (congrFun heq ⟨_, hzmem y⟩)
+    have hvol : (f₁ : ℝ → ℂ) =ᵐ[volume] f₂ := by
+      filter_upwards [hzero] with x hx
+      have hx' : (f₁ x - f₂ x) * Complex.exp ((((a + b) / 2 : ℝ) : ℂ) * (x : ℂ)) = 0 := hx
+      exact sub_eq_zero.1 ((mul_eq_zero.1 hx').resolve_right (Complex.exp_ne_zero _))
+    exact Lp.ext ((withDensity_absolutelyContinuous _ _).ae_le hvol)
 
 /-- Paper: Proposition 9.2.2.4(2), p. 414. On either endpoint line of a
 nondegenerate compact base interval, the interior Mellin integral has an almost-everywhere
