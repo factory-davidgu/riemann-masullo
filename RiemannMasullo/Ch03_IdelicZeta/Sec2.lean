@@ -1706,7 +1706,55 @@ theorem globalThetaMellinIntegral_entire_of_vanishing (f : ℬ[F])
 vanish, the entire theta Mellin transform agrees everywhere with the global Z-function. -/
 theorem globalThetaMellinIntegral_eq_continuation_of_vanishing (f : ℬ[F])
     (hf : f zeroAdele = 0) (hFourier : adeleSchwartzFourier f zeroAdele = 0) :
-    globalThetaMellinIntegral f = globalIdelicZFunction f := by sorry
+    globalThetaMellinIntegral f = globalIdelicZFunction f := by
+  let : T2Space C[F] := (ideleGroup_quotient.{_, 0} F).2.2.2.2.2.1
+  let : LocallyCompactSpace C[F] := (ideleGroup_quotient.{_, 0} F).2.2.2.2.2.2.1
+  funext c
+  let s := quasiCharacterAbscissa (ideleClassNorm F) (isProperMap_ideleClassNorm F)
+    (ideleClassNorm_ne_one (F := F)) c
+  let d := c * ideleClassNormTwist (1 : U[F]) (-(s : ℂ))
+  have hpos (g : C[F]) : 0 < classNormℝ g := NNReal.coe_pos.mpr (Units.zero_lt _)
+  have hd (g : C[F]) : ‖d g‖ = 1 := by
+    change ‖c g * (1 * (classNormℝ g : ℂ) ^ (-(s : ℂ)))‖ = 1
+    rw [one_mul, norm_mul, norm_quasiCharacter_eq_rpow_abscissa _
+      (isProperMap_ideleClassNorm F) (ideleClassNorm_ne_one (F := F)),
+      Complex.norm_cpow_eq_rpow_re_of_pos (hpos g), Complex.neg_re, Complex.ofReal_re]
+    change classNormℝ g ^ s * classNormℝ g ^ (-s) = 1
+    rw [← Real.rpow_add (hpos g), add_neg_cancel, Real.rpow_zero]
+  let χ : U[F] :=
+    { toFun := fun g ↦ ⟨d g, mem_sphere_zero_iff_norm.mpr (hd g)⟩
+      map_one' := Circle.ext (map_one d)
+      map_mul' := fun g h ↦ Circle.ext (map_mul d g h)
+      continuous_toFun := d.continuous.subtype_mk _ }
+  have hc : ideleClassNormTwist χ s = c := by
+    ext1 g
+    change (c g * (1 * (classNormℝ g : ℂ) ^ (-(s : ℂ)))) *
+      (classNormℝ g : ℂ) ^ (s : ℂ) = c g
+    rw [one_mul, mul_assoc, ← Complex.cpow_add _ _
+      (Complex.ofReal_ne_zero.mpr (hpos g).ne'), neg_add_cancel, Complex.cpow_zero, mul_one]
+  let A (z : ℂ) := globalThetaMellinIntegral f (ideleClassNormTwist χ z)
+  let Z (z : ℂ) := globalIdelicZFunction f (ideleClassNormTwist χ z)
+  have hA : Differentiable ℂ A := globalThetaMellinIntegral_entire_of_vanishing f hf hFourier χ
+  have hZ : MeromorphicNFOn Z univ := globalIdelicZFunction_meromorphic f χ
+  have hEq (z : ℂ) (hz : 1 < z.re) : A z = Z z := by
+    have hm : ideleClassNormTwist χ z ∈ rightHalf := by
+      change 1 < quasiCharacterAbscissa _ _ _ _
+      rwa [quasiCharacterAbscissa_ideleClassNormTwist]
+    exact (globalThetaMellinIntegral_eq_idelic f hm).trans
+      (globalIdelicZFunction_eq_integral f hm).symm
+  have hnear : ∀ᶠ z in 𝓝 (2 : ℂ), 1 < z.re :=
+    (isOpen_lt continuous_const Complex.continuous_re).mem_nhds (by norm_num)
+  have htop : meromorphicOrderAt (A - Z) 2 = ⊤ :=
+    meromorphicOrderAt_eq_top_iff.mpr (eventuallyEq_iff_sub.mp
+      ((hnear.mono hEq).filter_mono nhdsWithin_le_nhds))
+  have hmA : MeromorphicNFOn A univ := fun z _ ↦ (hA.analyticAt z).meromorphicNFAt
+  have ho := (hmA.meromorphicOn.sub hZ.meromorphicOn).meromorphicOrderAt_eq_top_of_isPreconnected
+    isPreconnected_univ (mem_univ (2 : ℂ)) (mem_univ (s : ℂ)) htop
+  have hlocal : A =ᶠ[𝓝[≠] (s : ℂ)] Z :=
+    eventuallyEq_iff_sub.mpr (meromorphicOrderAt_eq_top_iff.mp ho)
+  rw [← hc]
+  exact (((hmA (mem_univ _)).eventuallyEq_nhdsNE_iff_eventuallyEq_nhds
+    (hZ (mem_univ _))).mp hlocal).eq_of_nhds
 
 -- TODO(paper-gap): The absolute convergence asserted in Theorem 3.2.2.1(2)(b)
 -- fails for nontrivial norm-one characters. The modulus of the quasi-character is
