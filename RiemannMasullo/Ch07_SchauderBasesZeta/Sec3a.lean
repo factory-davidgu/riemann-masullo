@@ -326,7 +326,94 @@ There is a unique phase in the given interval for which the adjusted character
 is trivial on the chosen local uniformizer. -/
 theorem existsUnique_sLocalOrbitalPhase (χ : PontryaginDual Jₛ) (v : S)
     (u : (v.val.adicCompletion F)ˣ) (_hu : uniformizerNorm(v, u)) :
-    ∃! t : ℝ, phase(χ, v, u, t) := by sorry
+    ∃! t : ℝ, phase(χ, v, u, t) := by
+  have hq : (1 : ℝ) < (v.val.asIdeal.absNorm : ℝ) := by
+    exact_mod_cast HeightOneSpectrum.one_lt_absNorm v.val
+  have hq_pos : (0 : ℝ) < (v.val.asIdeal.absNorm : ℝ) := zero_lt_one.trans hq
+  have hlog : (0 : ℝ) < Real.log (v.val.asIdeal.absNorm : ℝ) := Real.log_pos hq
+  have hqinv_pos : (0 : ℝ) < ((v.val.asIdeal.absNorm : ℝ)⁻¹) := inv_pos.mpr hq_pos
+  have hnorm_eq :
+      sLocalFiniteRestriction v (chart((1 : PontryaginDual Jₛ)) 1) u =
+        (((v.val.asIdeal.absNorm : ℝ)⁻¹ : ℝ) : ℂ) := by
+    rw [sLocalFiniteRestriction_norm v u]
+    simpa [Units.map, nnNormHom] using congrArg (fun r : ℝ ↦ (r : ℂ)) _hu
+  let eProd := ContinuousMulEquiv.prodUnits
+    (InfiniteAdeleRing F) ((w : S) → HeightOneSpectrum.adicCompletion F (Subtype.val w))
+  let eFin := ContinuousMulEquiv.piUnits
+    (M := fun w : S ↦ HeightOneSpectrum.adicCompletion F (Subtype.val w))
+  let g : Jₛ :=
+    (QuotientGroup.mk : (SAdeleRing F S)ˣ → Jₛ)
+      (eProd.symm (1, eFin.symm (@Pi.mulSingle _ _ _ (Classical.decEq _) v u)))
+  have hmod : (((mₛ g : ℝ≥0) : ℝ) : ℂ) = (((v.val.asIdeal.absNorm : ℝ)⁻¹ : ℝ) : ℂ) := by
+    have h1 := hnorm_eq
+    change (((1 : PontryaginDual Jₛ) g : Circle) : ℂ) * (((mₛ g : ℝ≥0) : ℝ) : ℂ) ^ (1 : ℂ) = _ at h1
+    simpa [Complex.cpow_one] using h1
+  have heval (t : ℝ) :
+      sLocalFiniteRestriction v (chart(χ) (-(t : ℂ) * Complex.I)) u =
+        ((χ g : Circle) : ℂ) *
+          Complex.exp (((t * Real.log (v.val.asIdeal.absNorm : ℝ) : ℝ) : ℂ) * Complex.I) := by
+    change ((χ g : Circle) : ℂ) * (((mₛ g : ℝ≥0) : ℝ) : ℂ) ^ (-(t : ℂ) * Complex.I) = _
+    rw [hmod, Complex.cpow_def_of_ne_zero (Complex.ofReal_ne_zero.mpr hqinv_pos.ne')]
+    rw [← Complex.ofReal_log hqinv_pos.le, Real.log_inv]
+    congr 2
+    push_cast
+    ring
+  let w : ℂ := ((χ g)⁻¹ : Circle)
+  have hw_norm : ‖w‖ = 1 := Circle.norm_coe _
+  have hw_mul : ((χ g : Circle) : ℂ) * w = 1 := by
+    change ((χ g : Circle) : ℂ) * (((χ g)⁻¹ : Circle) : ℂ) = 1
+    rw [← Circle.coe_mul, mul_inv_cancel, Circle.coe_one]
+  let θ : ℝ := if 0 ≤ w.arg then w.arg else w.arg + 2 * Real.pi
+  have hθ_mem : θ ∈ Ico 0 (2 * Real.pi) := by
+    dsimp [θ]
+    split_ifs with h
+    · exact ⟨h, (Complex.arg_le_pi w).trans_lt (by linarith [Real.pi_pos])⟩
+    · have hlt : w.arg < 0 := not_le.mp h
+      exact ⟨by linarith [Complex.neg_pi_lt_arg w], by linarith⟩
+  have hθ_exp : Complex.exp ((θ : ℂ) * Complex.I) = w := by
+    have hbase : Complex.exp ((w.arg : ℂ) * Complex.I) = w := by
+      have h := Complex.norm_mul_exp_arg_mul_I w
+      rw [hw_norm, Complex.ofReal_one, one_mul] at h
+      exact h
+    dsimp [θ]
+    split_ifs with h
+    · exact hbase
+    · push_cast
+      rw [add_mul, Complex.exp_add, Complex.exp_two_pi_mul_I, mul_one]
+      exact hbase
+  refine ⟨θ / Real.log (v.val.asIdeal.absNorm : ℝ), ⟨?_, ?_⟩, ?_⟩
+  · constructor
+    · exact div_nonneg hθ_mem.1 hlog.le
+    · exact div_lt_div_of_pos_right hθ_mem.2 hlog
+  · rw [heval, div_mul_cancel₀ _ hlog.ne', hθ_exp, hw_mul]
+  · rintro t ⟨ht_mem, ht_eq⟩
+    rw [heval] at ht_eq
+    have hexp :
+        Complex.exp (((t * Real.log (v.val.asIdeal.absNorm : ℝ) : ℝ) : ℂ) * Complex.I) =
+          Complex.exp ((θ : ℂ) * Complex.I) := by
+      rw [hθ_exp]
+      exact mul_left_cancel₀ (Circle.coe_ne_zero (χ g)) (ht_eq.trans hw_mul.symm)
+    obtain ⟨k, hk⟩ := Complex.exp_eq_exp_iff_exists_int.mp hexp
+    have him : t * Real.log (v.val.asIdeal.absNorm : ℝ) = θ + (k : ℝ) * (2 * Real.pi) := by
+      have h := congrArg Complex.im hk
+      simpa [Complex.add_im, Complex.mul_im, Complex.mul_re] using h
+    have ht_lo : 0 ≤ t * Real.log (v.val.asIdeal.absNorm : ℝ) := mul_nonneg ht_mem.1 hlog.le
+    have ht_hi : t * Real.log (v.val.asIdeal.absNorm : ℝ) < 2 * Real.pi :=
+      (lt_div_iff₀ hlog).mp ht_mem.2
+    have h2pi : (0 : ℝ) < 2 * Real.pi := by positivity
+    have hk_lt_mul : (k : ℝ) * (2 * Real.pi) < 1 * (2 * Real.pi) := by
+      linarith [hθ_mem.1, ht_hi]
+    have hk_gt_mul : (-1 : ℝ) * (2 * Real.pi) < (k : ℝ) * (2 * Real.pi) := by
+      linarith [hθ_mem.2, ht_lo]
+    have hk_lt : (k : ℝ) < 1 := lt_of_mul_lt_mul_right hk_lt_mul h2pi.le
+    have hk_gt : (-1 : ℝ) < (k : ℝ) := lt_of_mul_lt_mul_right hk_gt_mul h2pi.le
+    have hk0 : k = 0 := by
+      have h1 : k < 1 := Int.cast_lt.mp (by simpa using hk_lt)
+      have h2 : -1 < k := Int.cast_lt.mp (by simpa using hk_gt)
+      omega
+    subst hk0
+    simp only [Int.cast_zero, zero_mul, add_zero] at him
+    exact (eq_div_iff hlog.ne').mpr him
 
 /-- Paper: Equation (7.3.1.11), p. 344.
 At a contributing finite place, the pole on the given component has a unique lattice index. -/
