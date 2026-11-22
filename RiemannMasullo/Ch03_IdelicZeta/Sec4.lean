@@ -799,7 +799,8 @@ theorem adelicStandardGaussian_eq_of_restriction (χ ψ : PontryaginDual C_F)
       simp only [dite_eq_right hw, hm]
   have hFin (v : V) (x : v.adicCompletion F) :
       finiteStandardGaussianValue v (finitePlaceRestriction F v (ideleClassNormTwist χ 0)) x =
-        finiteStandardGaussianValue v (finitePlaceRestriction F v (ideleClassNormTwist ψ 0)) x := by
+        finiteStandardGaussianValue v
+          (finitePlaceRestriction F v (ideleClassNormTwist ψ 0)) x := by
     have hu : ∀ u ∈ integerUnits(v), finitePlaceRestriction F v (ideleClassNormTwist χ 0) u =
         finitePlaceRestriction F v (ideleClassNormTwist ψ 0) u := fun u hu ↦
       DFunLike.congr_fun h ⟨IdeleClassGroup.ofAdicCompletion (𝓞 F) F v u, by
