@@ -3,6 +3,7 @@ module
 public import RiemannMasullo.Ch05_ThetaZSpaces.Sec3b
 public import Mathlib.Algebra.Exact.Basic
 public import Mathlib.MeasureTheory.Function.L2Space
+import RiemannMasullo.ForMathlib.Analysis.SpecialFunctions.Pow.Complex
 
 /-! # Second Structure Theorem and the S-local Čech sequence
 
@@ -366,7 +367,15 @@ A weighted test function lies in the isotype exactly when it obeys the
 norm-one translation law at every idele class. -/
 theorem mem_sLocalDecayIsotype (I : Set ℝ) (ω : PontryaginDual J₁) (φ : Ẽ(I)) :
     φ ∈ sLocalDecayIsotype (F := F) (S := S) I ω ↔
-      ∀ (u : J₁) (g : Jₛ), φ.val (u.val⁻¹ * g) = (ω u : ℂ) * φ.val g := by sorry
+      ∀ (u : J₁) (g : Jₛ), φ.val (u.val⁻¹ * g) = (ω u : ℂ) * φ.val g := by
+  have criterion {U X E : Type _} [AddCommGroup E] [Module ℂ E]
+      (ev : X → E →ₗ[ℂ] ℂ) (shift : U → X → X) (c : U → ℂ) (f : E) :
+      f ∈ (⨅ u, ⨅ x, LinearMap.ker (ev (shift u x) - c u • ev x)) ↔
+        ∀ u x, ev (shift u x) f = c u * ev x f := by
+    simp only [Submodule.mem_iInf, LinearMap.mem_ker, LinearMap.sub_apply,
+      LinearMap.smul_apply, smul_eq_mul, sub_eq_zero]
+  exact criterion (fun g : Jₛ ↦ decayEval(I, g)) (fun (u : J₁) g ↦ u.val⁻¹ * g)
+    (fun u ↦ (ω u : ℂ)) φ
 
 /-- Paper: (5.4.2.3), p. 275, and Proposition D.3.3.12, p. 811.
 The coordinate equations give the Appendix D isotype for its translation action. -/
@@ -471,7 +480,16 @@ Restriction of a unitary character to the norm section defines a unique real
 frequency in the Mellin coordinate. -/
 theorem existsUnique_sLocalCechFrequency (χ : PontryaginDual Jₛ) (τ : ℝ≥0ˣ →ₜ* Jₛ) :
     ∃! x : ℝ, ∀ t : ℝ≥0ˣ, (χ (τ t) : ℂ) = (normℝ(t) : ℂ) ^ ((x : ℂ) * Complex.I) :=
-  by sorry
+  by
+    let incl : Circle →ₜ* ℂ := ⟨Circle.coeHom, continuous_subtype_val⟩
+    let c := incl.comp (χ.comp τ)
+    obtain ⟨z, ⟨hz, hval⟩, huniq⟩ := existsUnique_unitaryComplexPower c
+      (fun t ↦ Circle.norm_coe (χ (τ t)))
+    have him : (z.im : ℂ) * Complex.I = z := by
+      apply Complex.ext <;> simp [hz]
+    refine ⟨z.im, fun t ↦ (hval t).trans (by rw [him]), fun x hx ↦ ?_⟩
+    have he := huniq ((x : ℂ) * Complex.I) ⟨by simp, hx⟩
+    simpa using congrArg Complex.im he
 
 local notation "mellinIntegrand(" τ ", " φ ", " z ")" =>
   (fun t : ℝ≥0ˣ ↦ (φ) ((τ) t) * (normℝ(t) : ℂ) ^ (z))

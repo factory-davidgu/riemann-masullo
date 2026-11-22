@@ -57,7 +57,14 @@ def rationalPrimeSplitsCompletely (F : Type*) [Field F] [NumberField F] (p : Rat
 Every rational prime splits completely in the base field.
 Deviation: States a sanity check for the definition of complete splitting. -/
 theorem rationalPrimeSplitsCompletely_rat (p : RatPrimes) :
-    rationalPrimeSplitsCompletely ℚ p := by sorry
+    rationalPrimeSplitsCompletely ℚ p := by
+  intro v _
+  let q := v.asIdeal
+  let : q.IsPrime := v.isPrime
+  let : q.IsMaximal := v.isMaximal
+  let : q.LiesOver q := ⟨(Ideal.comap_id q).symm⟩
+  refine ⟨Ideal.ramificationIdx_eq_one q (𝓞 ℚ), ?_⟩
+  exact (Ideal.inertiaDeg_eq_of_isMaximal q q).trans (Module.finrank_self (𝓞 ℚ ⧸ q))
 
 local notation "overₚ(" T "," p ")" =>
   @Finset.filter Primes (fun v : Primes ↦ HeightOneSpectrum.under (𝓞 ℚ) v = p)

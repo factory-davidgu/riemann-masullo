@@ -261,6 +261,17 @@ This worktree also holds the statements of earlier sections that are not on \`ma
     mkdir -p "$main/.agent/base"
     (cd "$wt" && scripts/signatures.sh) >"$main/.agent/base/$role-$n.txt" 2>"$wt/.agent/base-build.txt" ||
       { echo "could not build the starting point; see $wt/.agent/base-build.txt" >&2; exit 1; }
+  elif [ "$role" != scout ]; then
+    # Revising a pull request: what must not change is what is on main. The pull request's own
+    # files may change, and the record of an earlier run must not be used (for a section
+    # digested on top of statements still in review it holds their unreviewed form). So record
+    # the declarations of every module except those the pull request itself adds or changes.
+    mkdir -p "$main/.agent/base"
+    own=$(git -C "$wt" diff --name-only "$(git -C "$wt" merge-base "$up/main" HEAD)" HEAD -- 'RiemannMasullo/*.lean' || true)
+    ( cd "$wt" && lake build RiemannMasullo >/dev/null 2>"$wt/.agent/base-build.txt" &&
+      mods=$(find RiemannMasullo -name '*.lean' | sort | grep -vxF -f <(printf '%s\n' $own /dev/null) | sed 's#/#.#g; s#\.lean$##') &&
+      lake env lean --run scripts/Signatures.lean $mods ) >"$main/.agent/base/$role-$n.txt" 2>>"$wt/.agent/base-build.txt" ||
+      { echo "could not build the starting point; see $wt/.agent/base-build.txt" >&2; exit 1; }
   fi
 
   if [ $mode = setup ]; then
