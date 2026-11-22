@@ -55,7 +55,8 @@ def sLocalEigendistributions (c : QuasiCharacter Jₛ) : Submodule ℂ D(ℬ(A�
 Membership is the weight equation after translating a test by an S-idele. -/
 theorem mem_sLocalEigendistributions (c : QuasiCharacter Jₛ) (T : D(ℬ(Aₛ))) :
     T ∈ sLocalEigendistributions c ↔ ∀ (u : Aₛˣ) (f : ℬ(Aₛ)),
-      T (schwartzBruhatUnitTranslate u f) = c (QuotientGroup.mk u) * T f := by sorry
+      T (schwartzBruhatUnitTranslate u f) = c (QuotientGroup.mk u) * T f := by
+  exact Iff.rfl
 
 /-- Paper: Definition 5.5.1.1(1), p. 277.
 The S-local weight subspace is closed for the strong topology. -/
@@ -160,7 +161,8 @@ def sLocalThetaEigendistribution (c : QuasiCharacter Jₛ) : D(SLocalAdelicTheta
 The descended generator evaluates on a theta class by acting on its Schwartz–Bruhat
 representative. -/
 theorem sLocalThetaEigendistribution_mk (c : QuasiCharacter Jₛ) (f : ℬ(Aₛ)) :
-    sLocalThetaEigendistribution c ((Kₛ).mkQL f) = sLocalNormalizedEigendistribution c f := by sorry
+    sLocalThetaEigendistribution c ((Kₛ).mkQL f) = sLocalNormalizedEigendistribution c f := by
+  rfl
 
 /-- Paper: Theorem 5.5.1.2(2), p. 278.
 The eigenspace in the S-local theta dual is the line through the descended generator.
@@ -232,7 +234,8 @@ def globalThetaEigendistribution (c : QuasiCharacter C𝔽) : D(GlobalAdelicThet
 /-- Paper: Theorem 5.5.1.3(2), p. 279.
 The descended global generator evaluates on a theta class by acting on its representative. -/
 theorem globalThetaEigendistribution_mk (c : QuasiCharacter C𝔽) (f : ℬ(𝔸[F])) :
-    globalThetaEigendistribution c ((K𝔽).mkQL f) = adelicNormalizedEigendistribution c f := by sorry
+    globalThetaEigendistribution c ((K𝔽).mkQL f) = adelicNormalizedEigendistribution c f := by
+  rfl
 
 /-- Paper: Theorem 5.5.1.3(2), p. 279.
 The eigenspace in the global theta dual is the line through the descended generator,
@@ -282,13 +285,26 @@ The two descended values on a theta class are the evaluations at zero of its
 representative and of the Fourier transform of that representative. -/
 theorem globalThetaPolarValues_mk (f : ℬ(𝔸[F])) :
     globalThetaPolarValues (F := F) ((K𝔽).mkQL f) =
-      (f zeroAdele, adeleSchwartzFourier f zeroAdele) := by sorry
+      (f zeroAdele, adeleSchwartzFourier f zeroAdele) := by
+  rfl
+
+/-- Two continuous linear maps on a quotient module are equal when they agree on the classes
+of all representatives. -/
+private theorem globalThetaPolarValues_unique_aux {E G : Type*} [AddCommGroup E] [Module ℂ E]
+    [TopologicalSpace E] [AddCommGroup G] [Module ℂ G] [TopologicalSpace G]
+    (K : Submodule ℂ E) (P Q : (E ⧸ K) →L[ℂ] G) (h : ∀ f, P (K.mkQL f) = Q (K.mkQL f)) :
+    P = Q := by
+  refine ContinuousLinearMap.ext fun x ↦ ?_
+  obtain ⟨f, rfl⟩ := K.mkQ_surjective x
+  exact h f
 
 /-- Paper: Lemma 5.5.2.1, p. 280.
 The evaluations on test representatives uniquely determine the descended pair. -/
 theorem globalThetaPolarValues_unique (P : Θ →L[ℂ] ℂ × ℂ)
     (hP : ∀ f : ℬ(𝔸[F]), P ((K𝔽).mkQL f) = (f zeroAdele, adeleSchwartzFourier f zeroAdele)) :
-    P = globalThetaPolarValues (F := F) := by sorry
+    P = globalThetaPolarValues (F := F) := by
+  exact globalThetaPolarValues_unique_aux _ P _ fun f ↦ (hP f).trans
+    (globalThetaPolarValues_mk f).symm
 
 /-- Paper: Lemma 5.5.2.1, p. 280.
 Evaluation at zero on the global theta quotient has weight one. -/
@@ -333,7 +349,11 @@ vanishes at zero, since each translated summand is the same value.
 Deviation: The printed divergence claim requires a nonzero value at zero. -/
 theorem summable_globalZeroEval_orbit_iff (f : ℬ(𝔸[F])) :
     Summable (fun a : Fˣ ↦ f (Multiplicative.ofAdd
-      ((algebraMap F 𝔸[F]) ((a⁻¹ : Fˣ) : F) * 0))) ↔ f zeroAdele = 0 := by sorry
+      ((algebraMap F 𝔸[F]) ((a⁻¹ : Fˣ) : F) * 0))) ↔ f zeroAdele = 0 := by
+  have : Infinite Fˣ := Infinite.of_injective
+    (fun n : ℕ ↦ Units.mk0 ((n : F) + 1) (Nat.cast_add_one_ne_zero n))
+    fun _ _ h ↦ Nat.cast_injective (add_right_cancel (congrArg Units.val h))
+  simp only [mul_zero, summable_const_iff]
 
 end PolarValues
 
@@ -397,10 +417,18 @@ section StructureTheorem
 -- vectors in a spectral interval need not be eigenvectors at a point of that interval.
 -- On L²(ℝ, dx), multiplication by x ↦ exp(itx) has no nonzero common eigenvectors.
 
+/-- Pullback along a quotient map of topological vector spaces is injective on continuous
+linear functionals, because the quotient map is surjective. -/
+private theorem sLocalHomogeneousThetaTranspose_injective_aux {E : Type*} [AddCommGroup E]
+    [Module ℂ E] [TopologicalSpace E] (K : Submodule ℂ E) :
+    Injective (pull(K)) :=
+  fun U V h ↦ globalThetaPolarValues_unique_aux K U V fun f ↦ DFunLike.congr_fun h f
+
 /-- Paper: Theorem 5.5.3.2(1), p. 282.
 Pullback along the homogeneous S-local theta quotient is injective on strong duals. -/
 theorem sLocalHomogeneousThetaTranspose_injective (ω : PontryaginDual (mₛ).ker) :
-    Injective (pull(Kₛω(ω))) := by sorry
+    Injective (pull(Kₛω(ω))) := by
+  exact sLocalHomogeneousThetaTranspose_injective_aux _
 
 /-- Paper: Theorem 5.5.3.2(1), p. 282.
 Distributions pulled back from the homogeneous S-local theta quotient have weight
@@ -426,7 +454,8 @@ theorem sLocalHomogeneousThetaTranspose_closure_range (ω : PontryaginDual (mₛ
 /-- Paper: Theorem 5.5.3.2(2), p. 282.
 Pullback along the ordinary S-local theta quotient is injective on strong duals. -/
 theorem sLocalThetaTranspose_injective :
-    Injective (pull(Kₛ)) := by sorry
+    Injective (pull(Kₛ)) := by
+  exact sLocalHomogeneousThetaTranspose_injective_aux _
 
 /-- Paper: Theorem 5.5.3.2(2), p. 282.
 Distributions pulled back from the S-local theta quotient are invariant under the
