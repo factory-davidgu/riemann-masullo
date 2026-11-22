@@ -1504,6 +1504,55 @@ theorem finiteLogFourier_eq_neg_haar (v : Primes(F)) (f : 𝒮ₐ(v.adicCompleti
 -- TODO(paper-gap): Jᵥ is unbounded near zero and is not an additive
 -- Schwartz–Bruhat test. The normalization at one is on its punctured-field representative.
 
+/-- Every additive test of a finite completion is the Fourier transform of an additive test. -/
+private theorem finiteLogFourier_unique_surjective (v : Primes(F))
+    (g : 𝒮ₐ(v.adicCompletion F)) :
+    ∃ f : 𝒮ₐ(v.adicCompletion F), ∀ y,
+      tamagawaFourier ν𝔭(v) ψ𝔭(v) (fun x ↦ f (Multiplicative.ofAdd x)) y =
+        g (Multiplicative.ofAdd y) := by
+  let K := v.adicCompletion F
+  let G := Multiplicative K
+  let : ProperSpace K := properSpace_adicCompletion v
+  let : BorelSpace K := ⟨rfl⟩
+  obtain ⟨e, he, -⟩ := finiteLocalAdditiveTamagawaMeasure_selfDual F v
+  let μ : Measure G := ν𝔭(v)
+  have hHaar := finiteLocalAdditiveTamagawaMeasure_isAddHaar F v
+  let : μ.IsHaarMeasure :=
+    { toIsFiniteMeasureOnCompacts := hHaar.toIsFiniteMeasureOnCompacts
+      toIsOpenPosMeasure := hHaar.toIsOpenPosMeasure
+      map_mul_left_eq_self := fun x ↦ hHaar.map_add_left_eq_self x.toAdd }
+  let : μ.Regular := finiteLocalAdditiveTamagawaMeasure_regular F v
+  obtain ⟨T, hT⟩ := schwartzBruhat_fourier_equiv μ
+  obtain ⟨P, hP⟩ := exists_schwartzBruhat_comp_equivCLM e.symm
+  have key (h : SchwartzBruhat G) (y : K) :
+      tamagawaFourier ν𝔭(v) ψ𝔭(v) (fun x ↦ h (Multiplicative.ofAdd x)) y =
+        T h (e (Multiplicative.ofAdd y)) := by
+    have h1 : tamagawaFourier ν𝔭(v) ψ𝔭(v) (fun x ↦ h (Multiplicative.ofAdd x)) y =
+        lcaFourier μ (fun x : G ↦ h (Multiplicative.ofAdd x.toAdd)) (e (Multiplicative.ofAdd y)) :=
+      tamagawaFourier_eq_lcaFourier _ _ _ y _ fun x ↦ (he y x).trans
+        (congrArg _ (mul_comm y x))
+    exact h1.trans ((hT h).2 _).symm
+  refine ⟨T.symm (P g), fun y ↦ ?_⟩
+  rw [key, T.apply_symm_apply, hP, e.symm_apply_apply]
+
+/-- The indicator of a closed ball of positive radius in a finite completion is an additive
+test. -/
+private theorem finiteLogFourier_unique_ballTest (v : Primes(F)) (x : v.adicCompletion F)
+    {r : ℝ} (hr : 0 < r) :
+    ∃ g : 𝒮ₐ(v.adicCompletion F), ∀ y,
+      g (Multiplicative.ofAdd y) = (Metric.closedBall x r).indicator (fun _ ↦ (1 : ℂ)) y := by
+  let : ProperSpace (v.adicCompletion F) := properSpace_adicCompletion v
+  have hU : IsClopen (Metric.closedBall x r) := IsUltrametricDist.isClopen_closedBall x hr.ne'
+  obtain ⟨g, hg⟩ := (mem_finitePlaceSchwartz_iff F v
+    ((Metric.closedBall x r).indicator (fun _ ↦ (1 : ℂ)))).mpr
+    ⟨by
+        have h : IsLocallyConstant (LocallyConstant.charFn ℂ hU : _ → ℂ) :=
+          (LocallyConstant.charFn ℂ hU).isLocallyConstant
+        rw [LocallyConstant.coe_charFn] at h
+        exact h,
+      HasCompactSupport.intro (isCompact_closedBall x r) fun y hy ↦ indicator_of_notMem hy _⟩
+  exact ⟨g, hg⟩
+
 /-- Paper: Proposition B.4.3.1, p. 618. The restriction away from zero of the
 Fourier transform determines the normalized logarithm among continuous representatives off zero.
 Deviation: The representative acts by integration on Fourier-transformed tests. -/
@@ -1514,7 +1563,148 @@ theorem finiteLogFourier_unique (v : Primes(F)) (J : v.adicCompletion F → ℂ)
     (_hAway : ∀ f : 𝒮ₐ(v.adicCompletion F), addTest(f) 0 = 0 →
       (∫ y, J y * tamagawaFourier ν𝔭(v) ψ𝔭(v) addTest(f) y ∂ν𝔭(v)) =
         -(∫ u : (v.adicCompletion F)ˣ, addTest(f) u.val ∂μ𝔭(v)) / (V𝔭(v) : ℂ)) :
-    ∀ x ≠ 0, J x = (J𝔭(v) x : ℝ) := by sorry
+    ∀ x ≠ 0, J x = (J𝔭(v) x : ℝ) := by
+  let : ProperSpace (v.adicCompletion F) := properSpace_adicCompletion v
+  let : BorelSpace (v.adicCompletion F) := ⟨rfl⟩
+  let : (ν𝔭(v)).IsAddHaarMeasure := finiteLocalAdditiveTamagawaMeasure_isAddHaar F v
+  -- The difference with the normalized logarithm.
+  let L : v.adicCompletion F → ℂ := fun y ↦ ((J𝔭(v) y : ℝ) : ℂ)
+  -- Integrability of `J` and of `L` against every test.
+  have hJint (g : 𝒮ₐ(v.adicCompletion F)) :
+      Integrable (fun y ↦ J y * g (Multiplicative.ofAdd y)) ν𝔭(v) := by
+    obtain ⟨f, hf⟩ := finiteLogFourier_unique_surjective v g
+    have h := _hInt f
+    simp only [hf] at h
+    exact h
+  have hLint (g : 𝒮ₐ(v.adicCompletion F)) :
+      Integrable (fun y ↦ L y * g (Multiplicative.ofAdd y)) ν𝔭(v) :=
+    finiteLog_integrable_mul_test v g
+  -- `J` and `L` agree on tests of integral zero.
+  have hzero (g : 𝒮ₐ(v.adicCompletion F))
+      (hg : ∫ y, g (Multiplicative.ofAdd y) ∂ν𝔭(v) = 0) :
+      ∫ y, J y * g (Multiplicative.ofAdd y) ∂ν𝔭(v) =
+        ∫ y, L y * g (Multiplicative.ofAdd y) ∂ν𝔭(v) := by
+    obtain ⟨f, hf⟩ := finiteLogFourier_unique_surjective v g
+    have hf0 : f (Multiplicative.ofAdd 0) = 0 := by
+      have h := (finiteLocal_integral_tamagawaFourier v f).2
+      simp only [hf] at h
+      exact h.symm.trans hg
+    have h1 := _hAway f hf0
+    have h2 := (finiteLogFourier_eq_neg_haar v f hf0).2.2
+    simp only [hf] at h1 h2
+    exact h1.trans h2.symm
+  -- Integrals against ball indicators are integrals over the balls.
+  have hon (g : 𝒮ₐ(v.adicCompletion F)) (s : Set (v.adicCompletion F)) (hs : MeasurableSet s)
+      (hg : ∀ y, g (Multiplicative.ofAdd y) = s.indicator (fun _ ↦ (1 : ℂ)) y)
+      (Φ : v.adicCompletion F → ℂ) (hΦ : Integrable (fun y ↦ Φ y * g (Multiplicative.ofAdd y)) ν𝔭(v)) :
+      IntegrableOn Φ s ν𝔭(v) ∧
+        ∫ y, Φ y * g (Multiplicative.ofAdd y) ∂ν𝔭(v) = ∫ y in s, Φ y ∂ν𝔭(v) := by
+    have e : (fun y ↦ Φ y * g (Multiplicative.ofAdd y)) = s.indicator Φ := funext fun y ↦ by
+      rw [hg y]
+      simp only [indicator_apply]
+      split_ifs <;> simp
+    rw [e] at hΦ ⊢
+    exact ⟨(integrable_indicator_iff hs).mp hΦ, integral_indicator hs⟩
+  let D : v.adicCompletion F → ℂ := fun y ↦ J y - L y
+  have hball (x : v.adicCompletion F) {r : ℝ} (hr : 0 < r) :
+      IntegrableOn D (Metric.closedBall x r) ν𝔭(v) ∧
+        IntegrableOn D (Metric.closedBall 1 r) ν𝔭(v) ∧
+        ∫ y in Metric.closedBall x r, D y ∂ν𝔭(v) =
+          ∫ y in Metric.closedBall 1 r, D y ∂ν𝔭(v) := by
+    have hm := (Metric.isClosed_closedBall (x := x) (ε := r)).measurableSet
+    have hm1 := (Metric.isClosed_closedBall (x := (1 : v.adicCompletion F)) (ε := r)).measurableSet
+    obtain ⟨gx, hgx⟩ := finiteLogFourier_unique_ballTest v x hr
+    obtain ⟨g1, hg1⟩ := finiteLogFourier_unique_ballTest v 1 hr
+    obtain ⟨hJx, eJx⟩ := hon gx _ hm hgx J (hJint gx)
+    obtain ⟨hJ1, eJ1⟩ := hon g1 _ hm1 hg1 J (hJint g1)
+    obtain ⟨hLx, eLx⟩ := hon gx _ hm hgx L (hLint gx)
+    obtain ⟨hL1, eL1⟩ := hon g1 _ hm1 hg1 L (hLint g1)
+    have hsub (y : v.adicCompletion F) : (gx - g1) (Multiplicative.ofAdd y) =
+        gx (Multiplicative.ofAdd y) - g1 (Multiplicative.ofAdd y) := rfl
+    have hfin (z : v.adicCompletion F) : ν𝔭(v) (Metric.closedBall z r) ≠ ⊤ :=
+      (isCompact_closedBall z r).measure_lt_top.ne
+    have hconst (g : 𝒮ₐ(v.adicCompletion F)) (z : v.adicCompletion F)
+        (hg : ∀ y, g (Multiplicative.ofAdd y) =
+          (Metric.closedBall z r).indicator (fun _ ↦ (1 : ℂ)) y) :
+        Integrable (fun y ↦ g (Multiplicative.ofAdd y)) ν𝔭(v) ∧
+          ∫ y, g (Multiplicative.ofAdd y) ∂ν𝔭(v) = ((ν𝔭(v)).real (Metric.closedBall z r) : ℂ) := by
+      have hm' := (Metric.isClosed_closedBall (x := z) (ε := r)).measurableSet
+      rw [funext hg]
+      refine ⟨(integrable_indicator_iff hm').mpr (integrableOn_const (hfin z)), ?_⟩
+      rw [integral_indicator hm', setIntegral_const, Complex.real_smul, mul_one]
+    obtain ⟨igx, Igx⟩ := hconst gx x hgx
+    obtain ⟨ig1, Ig1⟩ := hconst g1 1 hg1
+    have hmeas : (ν𝔭(v)).real (Metric.closedBall x r) =
+        (ν𝔭(v)).real (Metric.closedBall 1 r) := by
+      rw [Measure.addHaar_real_closedBall_center,
+        Measure.addHaar_real_closedBall_center (ν𝔭(v)) (1 : v.adicCompletion F)]
+    have h0 : ∫ y, (gx - g1) (Multiplicative.ofAdd y) ∂ν𝔭(v) = 0 := by
+      simp only [hsub]
+      rw [integral_sub igx ig1, Igx, Ig1, hmeas, sub_self]
+    have hz := hzero (gx - g1) h0
+    simp only [hsub, mul_sub] at hz
+    rw [integral_sub (hJint gx) (hJint g1), integral_sub (hLint gx) (hLint g1),
+      eJx, eJ1, eLx, eL1] at hz
+    refine ⟨hJx.sub hLx, hJ1.sub hL1, ?_⟩
+    rw [integral_sub hJx hLx, integral_sub hJ1 hL1]
+    linear_combination hz
+  -- `D` is continuous away from zero and vanishes at one.
+  have hDcont : ContinuousOn D ({0}ᶜ) := by
+    refine _hcont.sub (Complex.continuous_ofReal.comp_continuousOn ?_)
+    refine ContinuousOn.div_const ?_ _
+    exact Real.continuousOn_log.comp continuous_norm.continuousOn fun y hy ↦ by
+      simpa using hy
+  have hD1 : D 1 = 0 := by simp [D, L, _hOne]
+  intro x hx
+  suffices hDx : D x = 0 by
+    have := sub_eq_zero.mp hDx
+    exact this
+  rw [← hD1]
+  refine eq_of_forall_dist_le fun ε hε ↦ ?_
+  have hcx : ContinuousAt D x := hDcont.continuousAt (isOpen_compl_singleton.mem_nhds hx)
+  have hc1 : ContinuousAt D 1 :=
+    hDcont.continuousAt (isOpen_compl_singleton.mem_nhds one_ne_zero)
+  obtain ⟨rx, hrx, hx'⟩ := Metric.continuousAt_iff.mp hcx (ε / 2) (half_pos hε)
+  obtain ⟨r1, hr1, h1'⟩ := Metric.continuousAt_iff.mp hc1 (ε / 2) (half_pos hε)
+  have hr : 0 < min rx r1 / 2 := half_pos (lt_min hrx hr1)
+  have hrx' : min rx r1 / 2 < rx :=
+    (half_lt_self (lt_min hrx hr1)).trans_le (min_le_left _ _)
+  have hr1' : min rx r1 / 2 < r1 :=
+    (half_lt_self (lt_min hrx hr1)).trans_le (min_le_right _ _)
+  obtain ⟨hIx, hI1, hEq⟩ := hball x hr
+  have hfin (z : v.adicCompletion F) : ν𝔭(v) (Metric.closedBall z (min rx r1 / 2)) < ⊤ :=
+    (isCompact_closedBall z _).measure_lt_top
+  have hpos : 0 < (ν𝔭(v)).real (Metric.closedBall x (min rx r1 / 2)) :=
+    ENNReal.toReal_pos ((Metric.isOpen_ball.measure_pos _ ⟨x, Metric.mem_ball_self hr⟩).trans_le
+      (measure_mono Metric.ball_subset_closedBall)).ne' (hfin x).ne
+  have hmeas : (ν𝔭(v)).real (Metric.closedBall x (min rx r1 / 2)) =
+      (ν𝔭(v)).real (Metric.closedBall 1 (min rx r1 / 2)) := by
+    rw [Measure.addHaar_real_closedBall_center,
+      Measure.addHaar_real_closedBall_center (ν𝔭(v)) (1 : v.adicCompletion F)]
+  have bound (z : v.adicCompletion F) (hI : IntegrableOn D (Metric.closedBall z (min rx r1 / 2)) ν𝔭(v))
+      (hz : ∀ y, dist y z < min rx r1 / 2 + (min rx r1 / 2) → dist (D y) (D z) < ε / 2) :
+      ‖(∫ y in Metric.closedBall z (min rx r1 / 2), D y ∂ν𝔭(v)) -
+          (ν𝔭(v)).real (Metric.closedBall z (min rx r1 / 2)) • D z‖ ≤
+        ε / 2 * (ν𝔭(v)).real (Metric.closedBall z (min rx r1 / 2)) := by
+    rw [← setIntegral_const, ← integral_sub hI (integrableOn_const (hfin z).ne)]
+    refine norm_setIntegral_le_of_norm_le_const (hfin z) fun y hy ↦ ?_
+    rw [← dist_eq_norm]
+    exact (hz y ((Metric.mem_closedBall.mp hy).trans_lt (by linarith))).le
+  have bx := bound x hIx fun y hy ↦ hx' (hy.trans_le (by linarith [min_le_left rx r1]))
+  have b1 := bound 1 hI1 fun y hy ↦ h1' (hy.trans_le (by linarith [min_le_right rx r1]))
+  rw [hEq] at bx
+  rw [← hmeas] at b1
+  have hdist : (ν𝔭(v)).real (Metric.closedBall x (min rx r1 / 2)) * dist (D x) (D 1) ≤
+      (ν𝔭(v)).real (Metric.closedBall x (min rx r1 / 2)) * ε := by
+    rw [dist_eq_norm, ← Real.norm_of_nonneg hpos.le, ← norm_smul, smul_sub]
+    calc _ = ‖((∫ y in Metric.closedBall 1 (min rx r1 / 2), D y ∂ν𝔭(v)) -
+            (ν𝔭(v)).real (Metric.closedBall x (min rx r1 / 2)) • D 1) -
+          ((∫ y in Metric.closedBall 1 (min rx r1 / 2), D y ∂ν𝔭(v)) -
+            (ν𝔭(v)).real (Metric.closedBall x (min rx r1 / 2)) • D x)‖ := by
+          congr 1; abel
+      _ ≤ _ := (norm_sub_le _ _).trans (add_le_add b1 bx)
+      _ = _ := by rw [Real.norm_of_nonneg hpos.le]; ring
+  exact le_of_mul_le_mul_left hdist hpos
 
 -- TODO(paper-gap): (B.4.3.13)–(B.4.3.14) multiply the Fourier distributions by
 -- the local norm-one volumes 2 and 2π. Dilation gives the wrong delta term
@@ -1600,6 +1790,134 @@ local notation "zeroExtend(" f ")" => (Function.extend Units.val (f : _ → ℂ)
 local notation "weightedTranslate(" abs ", " f ")" =>
   (fun x ↦ zeroExtend(f) (1 + x) / (Real.sqrt (abs (1 + x)) : ℂ))
 
+/-- The finite Fourier transform is additive and homogeneous on continuous compactly
+supported functions. -/
+private theorem exists_finiteConnesPrincipalValue_fourier_linear (v : Primes(F)) (c : ℂ)
+    (u w : v.adicCompletion F → ℂ) (hu : Continuous u) (hu' : HasCompactSupport u)
+    (hw : Continuous w) (hw' : HasCompactSupport w) (y : v.adicCompletion F) :
+    tamagawaFourier ν𝔭(v) ψ𝔭(v) (fun x ↦ u x + w x) y =
+        tamagawaFourier ν𝔭(v) ψ𝔭(v) u y + tamagawaFourier ν𝔭(v) ψ𝔭(v) w y ∧
+      tamagawaFourier ν𝔭(v) ψ𝔭(v) (fun x ↦ c * u x) y =
+        c * tamagawaFourier ν𝔭(v) ψ𝔭(v) u y := by
+  let : ProperSpace (v.adicCompletion F) := properSpace_adicCompletion v
+  let : BorelSpace (v.adicCompletion F) := ⟨rfl⟩
+  have hHaar := finiteLocalAdditiveTamagawaMeasure_isAddHaar F v
+  have hψ0 := finiteLocalStandardCharacter_exists_continuousMonoidHom F v
+  have hψ : Continuous (finiteLocalStandardCharacter F v) :=
+    (hψ0.choose.continuous.comp continuous_ofAdd).congr hψ0.choose_spec.1
+  have hχ : Continuous fun x : v.adicCompletion F ↦ star (ψ𝔭(v) (x * y) : ℂ) :=
+    continuous_star.comp (continuous_subtype_val.comp (hψ.comp (continuous_id.mul continuous_const)))
+  have hi (z : v.adicCompletion F → ℂ) (hz : Continuous z) (hz' : HasCompactSupport z) :
+      Integrable (fun x ↦ z x * star (ψ𝔭(v) (x * y) : ℂ)) ν𝔭(v) :=
+    (hz.mul hχ).integrable_of_hasCompactSupport hz'.mul_right
+  unfold tamagawaFourier
+  refine ⟨?_, ?_⟩
+  · rw [← integral_add (hi u hu hu') (hi w hw hw')]
+    exact integral_congr_ae (ae_of_all _ fun x ↦ add_mul _ _ _)
+  · rw [← integral_const_mul]
+    exact integral_congr_ae (ae_of_all _ fun x ↦ mul_assoc _ _ _)
+
+/-- Every additive and homogeneous functional on the additive tests of a finite completion is
+continuous, since their topology is the finest locally convex one. -/
+private theorem exists_finiteConnesPrincipalValue_ofLinear (v : Primes(F))
+    (L : 𝒮ₐ(v.adicCompletion F) → ℂ) (hadd : ∀ f g, L (f + g) = L f + L g)
+    (hsmul : ∀ (c : ℂ) f, L (c • f) = c * L f) (P : 𝒮ₐ(v.adicCompletion F) → ℂ → Prop)
+    (hP : ∀ f, P f (L f)) :
+    ∃ T : StrongDual ℂ (𝒮ₐ(v.adicCompletion F)), ∀ f, P f (T f) := by
+  let ℓ : 𝒮ₐ(v.adicCompletion F) →ₗ[ℂ] ℂ :=
+    { toFun := L
+      map_add' := hadd
+      map_smul' := hsmul }
+  have h := continuous_of_finestLocallyConvex (𝒮ₐ(v.adicCompletion F)) (M := ℂ) ℓ
+  exact ⟨⟨ℓ, (congrArg (fun t ↦ @Continuous _ ℂ t _ ℓ)
+    (finitePlaceSchwartz_finestTopology F v)).mpr h⟩, hP⟩
+
+/-- The logarithm pairs integrably with the dilated Fourier transform of an additive test. -/
+private theorem exists_finiteConnesPrincipalValue_integrable (v : Primes(F))
+    (a : (v.adicCompletion F)ˣ) (f : 𝒮ₐ(v.adicCompletion F)) :
+    Integrable (fun y ↦ ((J𝔭(v) y : ℝ) : ℂ) *
+      tamagawaFourier ν𝔭(v) ψ𝔭(v) addTest(f) (a.val * y)) ν𝔭(v) := by
+  obtain ⟨g, hg⟩ := finiteLocal_exists_fourier_test v f
+  have hint : Integrable (fun y ↦ ((J𝔭(v) y : ℝ) : ℂ) *
+      tamagawaFourier ν𝔭(v) ψ𝔭(v) addTest(f) y) ν𝔭(v) :=
+    (finiteLog_integrable_mul_test v g).congr (ae_of_all _ fun y ↦ by
+      simp only [hg])
+  exact (finiteLogFourier_comp_mul v f a hint).1
+
+/-- The pairing of the logarithm with the dilated Fourier transform is additive. -/
+private theorem exists_finiteConnesPrincipalValue_add (v : Primes(F))
+    (a : (v.adicCompletion F)ˣ) (f g : 𝒮ₐ(v.adicCompletion F)) :
+    ∫ y, ((J𝔭(v) y : ℝ) : ℂ) * tamagawaFourier ν𝔭(v) ψ𝔭(v) addTest(f + g) (a.val * y) ∂ν𝔭(v) =
+      (∫ y, ((J𝔭(v) y : ℝ) : ℂ) * tamagawaFourier ν𝔭(v) ψ𝔭(v) addTest(f) (a.val * y) ∂ν𝔭(v)) +
+        ∫ y, ((J𝔭(v) y : ℝ) : ℂ) * tamagawaFourier ν𝔭(v) ψ𝔭(v) addTest(g) (a.val * y)
+          ∂ν𝔭(v) := by
+  have hreg (f : 𝒮ₐ(v.adicCompletion F)) :
+      Continuous (fun x : v.adicCompletion F ↦ f (Multiplicative.ofAdd x)) ∧
+        HasCompactSupport (fun x : v.adicCompletion F ↦ f (Multiplicative.ofAdd x)) :=
+    ⟨(schwartzBruhat_continuous f).comp continuous_ofAdd,
+      ((mem_finitePlaceSchwartz_iff F v _).1 ⟨f, fun _ ↦ rfl⟩).2⟩
+  refine Eq.trans ?_ (integral_add (exists_finiteConnesPrincipalValue_integrable v a f)
+    (exists_finiteConnesPrincipalValue_integrable v a g))
+  refine integral_congr_ae (ae_of_all _ fun y ↦ ?_)
+  have h : tamagawaFourier ν𝔭(v) ψ𝔭(v) addTest(f + g) (a.val * y) =
+      tamagawaFourier ν𝔭(v) ψ𝔭(v) addTest(f) (a.val * y) +
+        tamagawaFourier ν𝔭(v) ψ𝔭(v) addTest(g) (a.val * y) :=
+    (exists_finiteConnesPrincipalValue_fourier_linear v 1 _ _ (hreg f).1 (hreg f).2
+      (hreg g).1 (hreg g).2 (a.val * y)).1
+  exact (congrArg (((J𝔭(v) y : ℝ) : ℂ) * ·) h).trans (mul_add _ _ _)
+
+/-- The pairing of the logarithm with the dilated Fourier transform is homogeneous. -/
+private theorem exists_finiteConnesPrincipalValue_smul (v : Primes(F))
+    (a : (v.adicCompletion F)ˣ) (c : ℂ) (f : 𝒮ₐ(v.adicCompletion F)) :
+    ∫ y, ((J𝔭(v) y : ℝ) : ℂ) * tamagawaFourier ν𝔭(v) ψ𝔭(v) addTest(c • f) (a.val * y) ∂ν𝔭(v) =
+      c * ∫ y, ((J𝔭(v) y : ℝ) : ℂ) * tamagawaFourier ν𝔭(v) ψ𝔭(v) addTest(f) (a.val * y)
+        ∂ν𝔭(v) := by
+  have hreg : Continuous (fun x : v.adicCompletion F ↦ f (Multiplicative.ofAdd x)) ∧
+      HasCompactSupport (fun x : v.adicCompletion F ↦ f (Multiplicative.ofAdd x)) :=
+    ⟨(schwartzBruhat_continuous f).comp continuous_ofAdd,
+      ((mem_finitePlaceSchwartz_iff F v _).1 ⟨f, fun _ ↦ rfl⟩).2⟩
+  refine Eq.trans ?_ (integral_const_mul c _)
+  refine integral_congr_ae (ae_of_all _ fun y ↦ ?_)
+  have h : tamagawaFourier ν𝔭(v) ψ𝔭(v) addTest(c • f) (a.val * y) =
+      c * tamagawaFourier ν𝔭(v) ψ𝔭(v) addTest(f) (a.val * y) :=
+    (exists_finiteConnesPrincipalValue_fourier_linear v c _ _ hreg.1 hreg.2
+      hreg.1 hreg.2 (a.val * y)).2
+  exact (congrArg (((J𝔭(v) y : ℝ) : ℂ) * ·) h).trans (mul_left_comm _ _ _)
+
+/-- The scaled pairing is `√‖a‖` times the dilated pairing, and integrable. -/
+private theorem exists_finiteConnesPrincipalValue_scale (v : Primes(F))
+    (a : (v.adicCompletion F)ˣ) (f : 𝒮ₐ(v.adicCompletion F)) :
+    Integrable (logFourierIntegrand(scaledMeasure(v, a), scaledChar(v, a), J𝔭(v), addTest(f)))
+        scaledMeasure(v, a) ∧
+      -(V𝔭(v) : ℂ) * ((√‖a.val‖ * √‖a.val‖ : ℝ) : ℂ) *
+          ∫ y, ((J𝔭(v) y : ℝ) : ℂ) * tamagawaFourier ν𝔭(v) ψ𝔭(v) addTest(f) (a.val * y)
+            ∂ν𝔭(v) =
+        -(V𝔭(v) : ℂ) * ∫ y, logFourierIntegrand(scaledMeasure(v, a), scaledChar(v, a), J𝔭(v),
+          addTest(f)) y ∂scaledMeasure(v, a) := by
+  have hc : (ENNReal.ofReal √‖a.val‖).toReal = √‖a.val‖ :=
+    ENNReal.toReal_ofReal (Real.sqrt_nonneg _)
+  -- Changing the character and the measure dilates the transform and scales it by `√‖a‖`.
+  have hF (y : v.adicCompletion F) :
+      tamagawaFourier (ENNReal.ofReal √‖a.val‖ • ν𝔭(v)) (fun x ↦ ψ𝔭(v) (a.val * x))
+        addTest(f) y = (√‖a.val‖ : ℝ) • tamagawaFourier ν𝔭(v) ψ𝔭(v) addTest(f) (a.val * y) := by
+    unfold tamagawaFourier
+    rw [integral_smul_measure, hc]
+    congr 1
+    refine integral_congr_ae (ae_of_all _ fun x ↦ ?_)
+    simp only [mul_left_comm a.val x y]
+  have hK : logFourierIntegrand(scaledMeasure(v, a), scaledChar(v, a), J𝔭(v), addTest(f)) =
+      fun y ↦ ((√‖a.val‖ : ℝ) : ℂ) * (((J𝔭(v) y : ℝ) : ℂ) *
+        tamagawaFourier ν𝔭(v) ψ𝔭(v) addTest(f) (a.val * y)) := by
+    funext y
+    rw [hF, Complex.real_smul]
+    ring
+  rw [hK]
+  refine ⟨((exists_finiteConnesPrincipalValue_integrable v a f).const_mul _).smul_measure
+    ENNReal.ofReal_ne_top, ?_⟩
+  rw [integral_smul_measure, hc, integral_const_mul, Complex.real_smul]
+  push_cast
+  ring
+
 /-- Paper: Definition B.4.4.1(1), p. 619. The scaled finite Fourier
 pairing defines a continuous linear functional on additive tests.
 Deviation: The additive character is allowed to be any translate of the standard character
@@ -1609,7 +1927,17 @@ theorem exists_finiteConnesPrincipalValue (v : Primes(F)) (a : (v.adicCompletion
       ∀ f : 𝒮ₐ(v.adicCompletion F),
         let ν := scaledMeasure(v, a)
         let K : v.adicCompletion F → ℂ := logFourierIntegrand(ν, scaledChar(v, a), J𝔭(v), addTest(f))
-        Integrable K ν ∧ T f = -(V𝔭(v) : ℂ) * ∫ y, K y ∂ν := by sorry
+        Integrable K ν ∧ T f = -(V𝔭(v) : ℂ) * ∫ y, K y ∂ν :=
+  exists_finiteConnesPrincipalValue_ofLinear v (fun f ↦
+    -(V𝔭(v) : ℂ) * ((√‖a.val‖ * √‖a.val‖ : ℝ) : ℂ) *
+      ∫ y, ((J𝔭(v) y : ℝ) : ℂ) * tamagawaFourier ν𝔭(v) ψ𝔭(v) addTest(f) (a.val * y) ∂ν𝔭(v))
+    (fun f g ↦ by rw [exists_finiteConnesPrincipalValue_add, mul_add])
+    (fun c f ↦ by rw [exists_finiteConnesPrincipalValue_smul, mul_left_comm])
+    (fun f z ↦ Integrable (logFourierIntegrand(scaledMeasure(v, a), scaledChar(v, a), J𝔭(v),
+        addTest(f))) scaledMeasure(v, a) ∧
+      z = -(V𝔭(v) : ℂ) * ∫ y, logFourierIntegrand(scaledMeasure(v, a), scaledChar(v, a), J𝔭(v),
+        addTest(f)) y ∂scaledMeasure(v, a))
+    (exists_finiteConnesPrincipalValue_scale v a)
 
 /-- Paper: Definition B.4.4.1(1), p. 619. Connes's finite additive
 principal value pairs the Fourier-transformed test with the normalized logarithm.
@@ -3253,6 +3581,20 @@ theorem summable_bruhatMellin_of_polynomialCount
       (∏ j : Fin d, (((e g).2.1 j : Circle) : ℂ) ^ z.val.2.1 j) *
       (z.val.2.2 (e g).2.2 : ℂ) ∂μ‖) := by sorry
 
+private theorem summable_ideleClassMellin_completedHeckeZeros_weight
+    {G : Type*} [CommGroup G] [TopologicalSpace G] [IsTopologicalGroup G] [T2Space G]
+    [LocallyCompactSpace G] (m : G →ₜ* ℝ≥0ˣ) (hm : IsModulation m) (hms : Surjective m)
+    (f : 𝒟(G)) (b : ℝ) :
+    ∃ f' : 𝒟(G), ∀ g, f'.val g = (((m g).val : ℝ) : ℂ) ^ (b : ℂ) * f.val g := by
+  have hS : modulationWeight m b f.val ∈ schwartzBruhatSubmodule G :=
+    modulationWeight_mem_schwartzBruhat m univ ⟨b, mem_univ _⟩
+      ⟨f.val, bruhatCompactSupport_le_modulatedExponentialDecay m univ hm hms f.property⟩
+  refine ⟨⟨modulationWeight m b f.val, (mem_bruhatSmoothSubmodule_iff _).2
+    (schwartzBruhat_isBruhatSmooth (G := G) ⟨_, hS⟩), f.property.2.mul_left⟩, ?_⟩
+  intro g
+  change ((((m g).val : ℝ) ^ b : ℝ) : ℂ) * f.val g = _
+  rw [Complex.ofReal_cpow (m g).val.coe_nonneg]
+
 -- TODO(paper-gap): On p. 625, passing to a Lie quotient eliminates other kernel
 -- characters. A uniform zero count with multiplicity for the remaining characters
 -- is still needed to apply the corrected Lemma B.4.4.8.
@@ -3265,8 +3607,37 @@ theorem summable_ideleClassMellin_completedHeckeZeros (τ : ℝ≥0ˣ →ₜ* C[
     (_hτ : RightInverse τ (ideleClassNorm F)) (Z : Set (chartZeros(τ)))
     (f : 𝒟(C[F])) (a : ℝ) :
     Summable (fun z : Z ↦ ‖zeroMultiplicity(z.val) *
-      ∫ g, classMellinIntegrand(f, zeroCharacter(z.val), (a : ℂ)) g ∂classMeasure‖) :=
-  by sorry
+      ∫ g, classMellinIntegrand(f, zeroCharacter(z.val), (a : ℂ)) g ∂classMeasure‖) := by
+  -- Absorb the shift from the centered exponent of the idelic explicit formula into the test.
+  obtain ⟨m, hmNorm, hm, hms⟩ := exists_ideleClassModulation F
+  obtain ⟨f', h'⟩ := summable_ideleClassMellin_completedHeckeZeros_weight
+    (G := C[F]) m hm hms f (a + 1 / 2)
+  have hw (g : C[F]) : f'.val g * classWeight(g, -1 / 2) = f.val g * classWeight(g, (a : ℂ)) := by
+    have hx : 0 < ((ideleClassNorm F g).val : ℝ) := NNReal.coe_pos.mpr (Units.zero_lt _)
+    rw [h', show m g = ideleClassNorm F g from DFunLike.congr_fun hmNorm g, mul_comm _ (f.val g),
+      mul_assoc, ← Complex.cpow_add _ _ (Complex.ofReal_ne_zero.mpr hx.ne')]
+    push_cast
+    ring_nf
+  have hvol : 0 < classVolume := by
+    rw [normOneIdeleClassTamagawaMeasure_volume]
+    have := NumberField.classNumber_pos F
+    have := NumberField.Units.regulator_pos F
+    have := NumberField.Units.torsionOrder_pos F
+    have := Int.natAbs_pos.mpr (NumberField.discr_ne_zero F)
+    rw [ENNReal.toReal_ofReal (by positivity)]
+    positivity
+  -- Restrict the absolutely summable spectral family and undo its volume normalization.
+  obtain ⟨S, _, _, _, hSval, _, _, _, hsum, _⟩ := idelicExplicitFormula τ _hτ
+  refine (((hsum f').subtype (fun z ↦ z ∈ Z)).mul_left ‖(classVolume : ℂ)‖).congr fun z ↦ ?_
+  change ‖(classVolume : ℂ)‖ * ‖S z.val f'‖ = _
+  rw [← norm_mul, hSval]
+  congr 1
+  rw [← mul_assoc, mul_div_assoc', mul_div_cancel_left₀ _ (Complex.ofReal_ne_zero.mpr hvol.ne')]
+  congr 1
+  apply integral_congr_ae
+  filter_upwards with g
+  calc _ = (f'.val g * classWeight(g, -1 / 2)) * zeroCharacter(z.val) g := by ring
+       _ = _ := by rw [hw]; ring
 
 end IdelicExplicitFormula
 

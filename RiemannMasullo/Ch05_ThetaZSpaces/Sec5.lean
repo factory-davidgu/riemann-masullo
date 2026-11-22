@@ -79,6 +79,180 @@ section SLocal
 local notation "unitMass(" v ")" =>
   ((finiteLocalMultiplicativeTamagawaMeasure F v) (HeightOneSpectrum.adicCompletionIntegers F v).units).toReal
 
+private theorem sLocalNormalizedEigendistribution_mass_ne_zero :
+    (↑(∏ v : S, unitMass(v.val)) : ℂ) ≠ 0 := by
+  classical
+  apply Complex.ofReal_ne_zero.mpr
+  apply Finset.prod_ne_zero_iff.mpr
+  intro v hv
+  rw [finiteLocalMultiplicativeTamagawaMeasure_integerUnits, ENNReal.toReal_ne_zero]
+  refine ⟨ENNReal.inv_ne_zero.mpr ENNReal.ofReal_ne_top, ENNReal.inv_ne_top.mpr ?_⟩
+  refine (ENNReal.ofReal_pos.mpr (Real.sqrt_pos.mpr (pow_pos ?_ _))).ne'
+  exact_mod_cast (NumberField.HeightOneSpectrum.one_lt_absNorm v.val).trans' zero_lt_one
+
+private theorem sLocalNormalizedEigendistribution_chart (c : QuasiCharacter Jₛ) :
+    ∃ (χ : PontryaginDual Jₛ) (s : ℂ), chartₛ(χ) s = c := by
+  let : LocallyCompactSpace (SAdeleRing F S)ˣ := (sIdeleGroup_description F S).2.2.1
+  have := isClosed_sProjectedDiagonal (F := F) (S := S)
+  have hne : ∃ g, mₛ g ≠ 1 := by
+    obtain ⟨τ, hτ⟩ := sIdeleQuotientNorm_exists_section F S
+    obtain ⟨t, ht⟩ := exists_ne (1 : ℝ≥0ˣ)
+    exact ⟨τ t, (hτ t).trans_ne ht⟩
+  let a := quasiCharacterAbscissa mₛ (isProperMap_sIdeleQuotientNorm F S) hne c
+  let d := quasiCharacterNormTwist mₛ (isProperMap_sIdeleQuotientNorm F S).continuous c (-(a : ℂ))
+  have hrad (g : Jₛ) : (((mₛ g : ℝ≥0) : ℝ) : ℂ) ^ (a : ℂ) = (‖c g‖ : ℂ) := by
+    rw [← Complex.ofReal_cpow (NNReal.coe_nonneg _) a,
+      norm_quasiCharacter_eq_rpow_abscissa mₛ (isProperMap_sIdeleQuotientNorm F S) hne]
+  have hd (g : Jₛ) : d g = c g / (‖c g‖ : ℂ) := by
+    change c g * _ ^ (-(a : ℂ)) = _
+    rw [Complex.cpow_neg, hrad, div_eq_mul_inv]
+  have hn (g : Jₛ) : ‖c g‖ ≠ 0 := norm_ne_zero_iff.mpr ((Group.isUnit g).map c).ne_zero
+  let χ : PontryaginDual Jₛ :=
+    { toFun := fun g ↦ ⟨d g, mem_sphere_zero_iff_norm.mpr (by
+        rw [hd, norm_div, Complex.norm_of_nonneg (norm_nonneg _), div_self (hn g)])⟩
+      map_one' := Subtype.ext d.map_one
+      map_mul' x y := Subtype.ext (d.map_mul x y)
+      continuous_toFun := d.continuous.subtype_mk _ }
+  refine ⟨χ, (a : ℂ), ?_⟩
+  ·
+    ext1 g
+    change d g * (((mₛ g : ℝ≥0) : ℝ) : ℂ) ^ (a : ℂ) = c g
+    rw [hd, hrad, div_mul_cancel₀ _ (Complex.ofReal_ne_zero.mpr (hn g))]
+
+
+private theorem sLocalNormalizedEigendistribution_combine {E : Type*} [AddCommGroup E] [Module ℂ E] [TopologicalSpace E]
+    (Z : E →L[ℂ] ℂ) (I N : E → ℂ) (a : ℂ)
+    (hZ : ∀ f, Z f = I f) (hN : ∀ f, N f = I f / a) :
+    ∃ L : E →L[ℂ] ℂ, ∀ f, L f = N f := by
+  refine ⟨a⁻¹ • Z, fun f ↦ ?_⟩
+  change a⁻¹ * Z f = N f
+  rw [hN f, ← hZ f, div_eq_mul_inv, mul_comm]
+
+private theorem sLocalNormalizedEigendistribution_base (χ : PontryaginDual Jₛ) {z : ℂ} (hz : 0 < z.re) :
+    ∃ L : ℬ(Aₛ) →L[ℂ] ℂ, ∀ f, L f = sLocalNormalizedZFunction f (chartₛ(χ) z) := by
+  let d := chartₛ(χ) z
+  have hd : ∃ (ψ : PontryaginDual Jₛ) (t : ℂ), 0 < t.re ∧ d = chartₛ(ψ) t := ⟨χ, z, hz, rfl⟩
+  have h := sLocalIdelicZetaIntegral_tempered d hd
+  have hz' : z ∈ Complex.re ⁻¹' Set.Ioi 0 := hz
+  with_reducible_and_instances
+    exact sLocalNormalizedEigendistribution_combine (E := ℬ(Aₛ)) h.choose (fun f ↦ sLocalIdelicZetaIntegral f d)
+      (fun f ↦ sLocalNormalizedZFunction f d) (sLocalHeckeL d) h.choose_spec
+      (fun f ↦ sLocalNormalizedZFunction_eq_div (F := F) (S := S) f χ hz')
+private theorem sLocalNormalizedEigendistribution_taylor {f : ℂ → ℂ} {c z : ℂ} {r : ℝ}
+    (hf : DifferentiableOn ℂ f (Metric.ball c r)) (hz : z ∈ Metric.ball c r) :
+    HasSum (fun n : ℕ ↦ (n.factorial : ℂ)⁻¹ • (z - c) ^ n • iteratedDeriv n f c) (f z) := by
+  obtain ⟨r', hr', hr'₀, hzr'⟩ : ∃ r' < r, 0 < r' ∧ z ∈ Metric.ball c r' := by
+    obtain ⟨r', h₁, h₂⟩ := exists_between (Metric.mem_ball'.mp hz)
+    exact ⟨r', h₂, Metric.pos_of_mem_ball h₁, Metric.mem_ball'.mpr h₁⟩
+  lift r' to NNReal using hr'₀.le
+  have hz' : z - c ∈ Metric.eball 0 r' := by
+    rw [Metric.eball_coe]
+    simpa only [mem_ball_iff_norm, sub_zero] using hzr'
+  grw [← hr'] at hf
+  have H := hf.hasFPowerSeriesOnBall hr'₀ |>.hasSum_iteratedFDeriv hz'
+  simp only [add_sub_cancel] at H
+  convert H with n
+  simpa only [iteratedDeriv_eq_iteratedFDeriv, smul_eq_mul, mul_one, Finset.prod_const,
+    Finset.card_fin]
+    using ((iteratedFDeriv ℂ n f c).map_smul_univ (fun _ ↦ z - c) (fun _ ↦ 1)).symm
+
+
+/-- A pointwise holomorphic family of functionals on a barrelled space consists of continuous
+linear functionals throughout a connected open set if it does so in a neighborhood of one point. -/
+private theorem sLocalNormalizedEigendistribution_continuation
+    {E : Type*} [AddCommGroup E] [Module ℂ E] [UniformSpace E] [IsUniformAddGroup E]
+    [ContinuousSMul ℂ E] [BarrelledSpace ℂ E] (Φ : E → ℂ → ℂ) {U : Set ℂ}
+    (hU : IsOpen U) (hconn : IsPreconnected U) (hΦ : ∀ f, AnalyticOnNhd ℂ (Φ f) U)
+    {b : ℂ} (hb : b ∈ U) (hbase : ∀ᶠ z in 𝓝 b, ∃ L : E →L[ℂ] ℂ, ∀ f, L f = Φ f z)
+    {z : ℂ} (hz : z ∈ U) : ∃ L : E →L[ℂ] ℂ, ∀ f, L f = Φ f z := by
+  classical
+  let P := {z : ℂ | ∃ L : E →L[ℂ] ℂ, ∀ f, L f = Φ f z}
+  let V := interior P ∩ U
+  have hV : IsOpen V := isOpen_interior.inter hU
+  have analyticDeriv (f : E) {x : ℂ} (hx : x ∈ U) (n : ℕ) : AnalyticAt ℂ (iteratedDeriv n (Φ f)) x := by
+    induction n with
+    | zero => simpa only [iteratedDeriv_zero] using hΦ f x hx
+    | succ n ih => rw [iteratedDeriv_succ]; exact ih.deriv
+  -- Difference quotients recover the Taylor coefficients wherever the evaluations are continuous.
+  have hcoeff (n : ℕ) : ∀ y ∈ V, ∃ L : E →L[ℂ] ℂ, ∀ f, L f = iteratedDeriv n (Φ f) y := by
+    induction n with
+    | zero => exact fun y hy ↦ by simp only [iteratedDeriv_zero]; exact (interior_subset hy.1 : y ∈ P)
+    | succ n ih =>
+      intro x hx
+      let A (y : ℂ) : E →L[ℂ] ℂ := if hy : y ∈ V then (ih y hy).choose else 0
+      have hA {y : ℂ} (hy : y ∈ V) (f : E) : A y f = iteratedDeriv n (Φ f) y := by
+        simpa only [A, dite_eq_left hy] using (ih y hy).choose_spec f
+      let D (y : ℂ) := (y - x)⁻¹ • (A y - A x)
+      have hlim : Filter.Tendsto (fun y f ↦ D y f) (𝓝[≠] x) (𝓝 fun f ↦ iteratedDeriv (n + 1) (Φ f) x) := by
+        refine tendsto_pi_nhds.mpr fun f ↦ ?_
+        have hd := analyticDeriv f hx.2 n
+        rw [iteratedDeriv_succ]
+        refine hd.differentiableAt.hasDerivAt.tendsto_slope.congr' ?_
+        filter_upwards [mem_nhdsWithin_of_mem_nhds (hV.mem_nhds hx)] with y hy
+        simp only [D, smul_apply, sub_apply, hA hy, hA hx, slope, vsub_eq_sub]
+      exact ⟨continuousLinearMapOfTendsto D hlim, fun _ ↦ rfl⟩
+  -- The Taylor series propagates continuity across every ball contained in the domain.
+  have hball (y : ℂ) (hy : y ∈ V) {r : ℝ} (hr : Metric.ball y r ⊆ U) : Metric.ball y r ⊆ P := by
+    choose A hA using fun n ↦ hcoeff n y hy
+    intro x hx
+    let T (s : Finset ℕ) : E →L[ℂ] ℂ := ∑ n ∈ s, (n.factorial : ℂ)⁻¹ • (x - y) ^ n • A n
+    have hlim : Filter.Tendsto (fun s f ↦ T s f) Filter.atTop (𝓝 fun f ↦ Φ f x) := by
+      refine tendsto_pi_nhds.mpr fun f ↦ ?_
+      have h := sLocalNormalizedEigendistribution_taylor ((hΦ f).differentiableOn.mono hr) hx
+      simp only [T, sum_apply, smul_apply, hA]
+      exact h
+    exact ⟨continuousLinearMapOfTendsto T hlim, fun _ ↦ rfl⟩
+  apply interior_subset (s := P)
+  suffices h : U ⊆ V from (h hz).1
+  refine hconn.subset_of_closure_inter_subset hV ⟨b, hb, mem_interior_iff_mem_nhds.mpr hbase, hb⟩ ?_
+  rintro x ⟨hx, hxU⟩
+  obtain ⟨r, hr, hsub⟩ := Metric.isOpen_iff.mp hU x hxU
+  obtain ⟨y, hy, hxy⟩ := Metric.mem_closure_iff.mp hx (r / 2) (half_pos hr)
+  have hballU : Metric.ball y (r / 2) ⊆ U := (Metric.ball_subset_ball' (by
+    rw [dist_comm y x]; linarith : r / 2 + dist y x ≤ r)).trans hsub
+  exact ⟨interior_maximal (hball y hy hballU) Metric.isOpen_ball hxy, hxU⟩
+
+private theorem sLocalNormalizedEigendistribution_chart_continuous (χ : PontryaginDual Jₛ) (s : ℂ) :
+    ∃ L : ℬ(Aₛ) →L[ℂ] ℂ, ∀ f, L f = sLocalNormalizedZFunction f (chartₛ(χ) s) := by
+  let : BarrelledSpace ℂ ℬ(Aₛ) := (sAdeleSchwartz_montel (F := F) S).1
+  have hpos : ∀ᶠ z : ℂ in 𝓝 1, 0 < z.re :=
+    (isOpen_lt continuous_const Complex.continuous_re).mem_nhds (by norm_num)
+  exact sLocalNormalizedEigendistribution_continuation
+    (fun f : ℬ(Aₛ) ↦ fun z ↦ sLocalNormalizedZFunction f (chartₛ(χ) z))
+    isOpen_univ isPreconnected_univ (fun f ↦ sLocalNormalizedZFunction_entire f χ)
+    (b := 1) (mem_univ _) (hpos.mono fun _ ↦ sLocalNormalizedEigendistribution_base χ) (mem_univ s)
+
+
+private theorem sLocalNormalizedEigendistribution_unique {E : Type*} [AddCommGroup E]
+    [Module ℂ E] [TopologicalSpace E] (m : ℂ) (hm : m ≠ 0)
+    (L : E →L[ℂ] ℂ) (N : E → ℂ) (hL : ∀ f, L f = N f) :
+    ∃! T : E →L[ℂ] ℂ, ∀ f, m * T f = N f := by
+  refine ⟨m⁻¹ • L, ?_, ?_⟩
+  · intro f
+    change m * (m⁻¹ * L f) = N f
+    rw [← mul_assoc, mul_inv_cancel₀ hm, one_mul, hL f]
+  · intro T hT
+    apply ContinuousLinearMap.ext
+    intro f
+    apply mul_left_cancel₀ hm
+    change m * T f = m * (m⁻¹ * L f)
+    rw [hT f, ← mul_assoc, mul_inv_cancel₀ hm, one_mul, hL f]
+
+private theorem sLocalNormalizedEigendistribution_unique' {E : Type*} [AddCommGroup E]
+    [Module ℂ E] [TopologicalSpace E] (m : ℂ) (hm : m ≠ 0)
+    (N : E → ℂ) (h : ∃ L : E →L[ℂ] ℂ, ∀ f, L f = N f) :
+    ∃! T : E →L[ℂ] ℂ, ∀ f, m * T f = N f := by
+  obtain ⟨L, hL⟩ := h
+  exact sLocalNormalizedEigendistribution_unique m hm L N hL
+
+private theorem sLocalNormalizedEigendistribution_propagate {E C I J : Type*}
+    [AddCommGroup E] [Module ℂ E] [TopologicalSpace E] (Z : E → C → ℂ)
+    (chart : I → J → C) (hchart : ∀ c, ∃ i j, chart i j = c)
+    (hZ : ∀ i j, ∃ L : E →L[ℂ] ℂ, ∀ f, L f = Z f (chart i j)) (c : C) :
+    ∃ L : E →L[ℂ] ℂ, ∀ f, L f = Z f c := by
+  obtain ⟨i, j, rfl⟩ := hchart c
+  exact hZ i j
+
 /-- Paper: Theorem 5.5.1.2(1), p. 278.
 The continued normalized S-local zeta values give the tensor generator as a
 continuous linear functional.
@@ -86,13 +260,120 @@ Deviation: The product of the finite integer-unit masses accounts for the
 Tamagawa normalization of the local factors, as in §3.4. -/
 theorem existsUnique_sLocalNormalizedEigendistribution (c : QuasiCharacter Jₛ) :
     ∃! T : D(ℬ(Aₛ)), ∀ f : ℬ(Aₛ),
-      (↑(∏ v : S, unitMass(v.val)) : ℂ) * T f = sLocalNormalizedZFunction f c := by sorry
+      (↑(∏ v : S, unitMass(v.val)) : ℂ) * T f = sLocalNormalizedZFunction f c := by
+  let Z : ℬ(Aₛ) → QuasiCharacter Jₛ → ℂ := fun f d ↦ sLocalNormalizedZFunction f d
+  let chart : PontryaginDual Jₛ → ℂ → QuasiCharacter Jₛ := fun χ z ↦ chartₛ(χ) z
+  have hc : ∀ d, ∃ χ z, chart χ z = d := sLocalNormalizedEigendistribution_chart (F := F) (S := S)
+  have hz : ∀ χ z, ∃ L : ℬ(Aₛ) →L[ℂ] ℂ, ∀ f, L f = Z f (chart χ z) :=
+    sLocalNormalizedEigendistribution_chart_continuous (F := F) (S := S)
+  have h : ∃ L : ℬ(Aₛ) →L[ℂ] ℂ, ∀ f, L f = Z f c := by
+    with_reducible_and_instances
+      exact sLocalNormalizedEigendistribution_propagate (E := ℬ(Aₛ)) Z chart hc hz c
+  have hm := sLocalNormalizedEigendistribution_mass_ne_zero (F := F) (S := S)
+  with_reducible_and_instances
+    exact sLocalNormalizedEigendistribution_unique' (E := ℬ(Aₛ)) _ hm (fun f ↦ Z f c) h
 
 /-- Paper: Theorem 5.5.1.2(1), p. 278.
 The S-local generator is the functional given by the continued normalized zeta values.
 Deviation: The normalization incorporates the finite integer-unit masses. -/
 def sLocalNormalizedEigendistribution (c : QuasiCharacter Jₛ) : D(ℬ(Aₛ)) :=
   (existsUnique_sLocalNormalizedEigendistribution c).exists.choose
+
+private theorem sLocalNormalizedEigendistribution_gaussian_arch
+    (χ : PontryaginDual Jₛ) (w : InfinitePlace F) (η : PontryaginDual w.Completionˣ)
+    (hη : (circleToComplex).comp η = sLocalInfiniteRestriction w ((circleToComplex).comp χ)) :
+    letI : MeasurableSpace w.Completion := borel _
+    ∀ᶠ z : ℂ in Filter.codiscrete ℂ, 0 < z.re →
+      localIdelicZetaIntegral (infiniteLocalMultiplicativeTamagawaMeasure F w)
+        (fun x ↦ infiniteStandardGaussian w η (Multiplicative.ofAdd x))
+        (sLocalInfiniteRestriction w (chartₛ(χ) z)) =
+          infiniteLocalEulerFactor w (sLocalInfiniteRestriction w (chartₛ(χ) z)) := by
+  let : MeasurableSpace w.Completion := borel _
+  let twist := quasiCharacterNormTwist _ (continuous_infiniteLocalModule w) ((circleToComplex).comp η)
+  have he (z : ℂ) : sLocalInfiniteRestriction w (chartₛ(χ) z) = twist z := by
+    ext1 g
+    have hn := sLocalInfiniteRestriction_normTwist (S := S) w z g
+    change (1 : ℂ) * _ = _ at hn
+    rw [one_mul] at hn
+    exact congrArg₂ (· * ·) (DFunLike.congr_fun hη.symm g) hn
+  obtain ⟨D, -, hD, hZ⟩ := infiniteEigendistribution_normalized w η
+  filter_upwards [hZ] with z hz hpos
+  rw [he, ← infiniteLocalIdelicZFunction_eq_integral w _ η hpos, hz,
+    ((hD z (D z)).mp rfl).2, mul_one]
+
+private theorem sLocalNormalizedEigendistribution_gaussian_finChart
+    (χ : PontryaginDual Jₛ) (v : S) :
+    ∃ η : PontryaginDual (v.val.adicCompletion F)ˣ, ∀ z,
+      sLocalFiniteRestriction v (chartₛ(χ) z) =
+        quasiCharacterNormTwist _ (continuous_finiteLocalModule v.val) ((circleToComplex).comp η) z := by
+  let h := sLocalFiniteInsertion_properties v
+  let i : (v.val.adicCompletion F)ˣ →ₜ* Jₛ :=
+    ⟨{ toFun := fun g ↦ QuotientGroup.mk ((ContinuousMulEquiv.prodUnits (InfiniteAdeleRing F)
+          ((v : S) → v.val.adicCompletion F)).symm (1, ContinuousMulEquiv.piUnits.symm
+            (@Pi.mulSingle _ _ _ (Classical.decEq _) v g))),
+       map_one' := h.1, map_mul' := h.2.1 }, h.2.2⟩
+  refine ⟨χ.comp i, fun z ↦ ContinuousMonoidHom.ext fun g ↦ ?_⟩
+  have hn := sLocalFiniteRestriction_norm v g
+  change ((1 : PontryaginDual Jₛ) (i g) : ℂ) *
+    (((mₛ (i g) : ℝ≥0) : ℝ) : ℂ) ^ (1 : ℂ) = _ at hn
+  simp only [PontryaginDual.one_apply, Circle.coe_one, one_mul, Complex.cpow_one] at hn
+  exact congrArg (fun t : ℂ ↦ (χ (i g) : ℂ) * t ^ z) hn
+
+private theorem sLocalNormalizedEigendistribution_gaussian_finTest
+    (v : HeightOneSpectrum (𝓞 F)) (η : PontryaginDual (v.adicCompletion F)ˣ) (s z : ℂ) :
+    let twist := quasiCharacterNormTwist _ (continuous_finiteLocalModule v) ((circleToComplex).comp η)
+    finiteStandardGaussian v (twist s) = finiteStandardGaussian v (twist z) := by
+  intro twist
+  let U := (v.adicCompletionIntegers F).units
+  have hu (u : (v.adicCompletion F)ˣ) (h : u ∈ U) : twist s u = twist z u := by
+    have hn := Valued.toNormedField.norm_eq_one_iff.mpr
+      (HeightOneSpectrum.adicCompletionIntegers.mem_units_iff_valued_eq_one.mp h)
+    change (η u : ℂ) * (‖u.val‖ : ℂ) ^ s = (η u : ℂ) * (‖u.val‖ : ℂ) ^ z
+    simp [hn]
+  have h1 : (∀ u ∈ U, twist s u = 1) ↔ ∀ u ∈ U, twist z u = 1 :=
+    forall₂_congr fun u h ↦ by rw [hu u h]
+  apply Subtype.ext
+  funext x
+  change finiteStandardGaussianValue v (twist s) x.toAdd = finiteStandardGaussianValue v (twist z) x.toAdd
+  rw [finiteStandardGaussianValue, finiteStandardGaussianValue]
+  by_cases h0 : ∀ u ∈ U, twist s u = 1
+  · rw [ite_eq_left h0, ite_eq_left (h1.mp h0)]
+  · rw [ite_eq_right h0, ite_eq_right (mt h1.mpr h0)]
+    by_cases hx : x.toAdd ∈ Units.val '' (U : Set (v.adicCompletion F)ˣ)
+    · rw [Set.indicator_of_mem hx, Set.indicator_of_mem hx]
+      obtain ⟨u, hu', he⟩ := hx
+      rw [← he, dite_eq_left u.ne_zero, dite_eq_left u.ne_zero, Units.mk0_val, hu u hu']
+    · rw [Set.indicator_of_notMem hx, Set.indicator_of_notMem hx]
+
+private theorem sLocalNormalizedEigendistribution_gaussian_fin
+    (χ : PontryaginDual Jₛ) (v : S) (s z : ℂ) (hz : 0 < z.re)
+    (hL : finiteLocalEulerFactor v.val (sLocalFiniteRestriction v (chartₛ(χ) z)) ≠ 0) :
+    letI : MeasurableSpace (v.val.adicCompletion F)ˣ := borel _
+    localIdelicZetaIntegral (finiteLocalMultiplicativeTamagawaMeasure F v.val)
+      (fun x ↦ finiteStandardGaussian v.val (sLocalFiniteRestriction v (chartₛ(χ) s))
+        (Multiplicative.ofAdd x)) (sLocalFiniteRestriction v (chartₛ(χ) z)) =
+      unitMass(v.val) * finiteLocalEulerFactor v.val (sLocalFiniteRestriction v (chartₛ(χ) z)) := by
+  obtain ⟨η, he⟩ := sLocalNormalizedEigendistribution_gaussian_finChart χ v
+  let twist := quasiCharacterNormTwist _ (continuous_finiteLocalModule v.val) ((circleToComplex).comp η)
+  have hne : twist z ≠ 1 := by
+    intro h
+    apply hL
+    rw [(he z).trans h]
+    simp [finiteLocalEulerFactor]
+  obtain ⟨D, -, hD, hZ⟩ := finiteEigendistribution_normalized v.val η
+  rw [he s, he z, sLocalNormalizedEigendistribution_gaussian_finTest v.val η s z,
+    ← finiteLocalIdelicZFunction_eq_integral v.val _ η hz, hZ z hne,
+    ((hD z (D z)).mp rfl).2, mul_one]
+
+private theorem sLocalNormalizedEigendistribution_gaussian_heckeL_ne_zero (χ : PontryaginDual Jₛ) :
+    ∀ᶠ z : ℂ in Filter.codiscrete ℂ, sLocalHeckeL (chartₛ(χ) z) ≠ 0 := by
+  filter_upwards [sLocalRhoFactor_mul_dual χ, sLocalRhoFactor_eq_epsilon_mul χ] with z hprod hρ
+  let c := chartₛ(χ) z
+  have hr : sLocalRhoFactor c ≠ 0 := left_ne_zero_of_mul
+    (hprod.trans_ne ((Group.isUnit (QuotientGroup.mk (-1 : Aₛˣ) : Jₛ)).map c).ne_zero)
+  intro h
+  apply hr
+  exact hρ.trans (by rw [show sLocalHeckeL c = 0 from h, zero_div, mul_zero])
 
 /-- Paper: Theorem 5.5.1.2(1), p. 278.
 The normalized S-local generator takes the value one on the pure tensor of the
@@ -106,7 +387,46 @@ theorem sLocalNormalizedEigendistribution_gaussian (χ : PontryaginDual Jₛ) (s
       (∏ w, infiniteStandardGaussian w (χArch w) (Multiplicative.ofAdd (x.1 w))) *
         ∏ v : S, finiteStandardGaussian v.val (sLocalFiniteRestriction v (chartₛ(χ) s))
           (Multiplicative.ofAdd (x.2 v))) :
-    sLocalNormalizedEigendistribution (chartₛ(χ) s) f = 1 := by sorry
+    sLocalNormalizedEigendistribution (chartₛ(χ) s) f = 1 := by
+  classical
+  let M : ℂ := ↑(∏ v : S, unitMass(v.val))
+  let Z (z : ℂ) := sLocalNormalizedZFunction f (chartₛ(χ) z)
+  have ha : AnalyticOnNhd ℂ Z univ := sLocalNormalizedZFunction_entire f χ
+  have hpos : ∀ᶠ z in 𝓝[≠] (1 : ℂ), 0 < z.re := nhdsWithin_le_nhds
+    ((isOpen_Ioi.preimage Complex.continuous_re).mem_nhds (show (1 : ℂ) ∈ Complex.re ⁻¹' Ioi 0 by simp))
+  have harch := Filter.eventually_all.mpr (fun w ↦
+    sLocalNormalizedEigendistribution_gaussian_arch χ w (χArch w) (hχ w))
+  -- On the convergence half-plane the zeta integral factors, and the Euler factors cancel.
+  have hZ : ∀ᶠ z in 𝓝[≠] (1 : ℂ), Z z = M := by
+    filter_upwards [hpos, nhdsNE_le_codiscrete _ harch,
+      nhdsNE_le_codiscrete _ (sLocalNormalizedEigendistribution_gaussian_heckeL_ne_zero χ)] with z hz hA hL
+    let c := chartₛ(χ) z
+    have hF : ∏ v : S, finiteLocalEulerFactor v.val (sLocalFiniteRestriction v c) ≠ 0 :=
+      right_ne_zero_of_mul hL
+    change sLocalNormalizedZFunction f c = M
+    rw [sLocalNormalizedZFunction_eq_div f χ hz, div_eq_iff hL,
+      sLocalIdelicZetaIntegral_pureTensor c ⟨χ, z, hz, rfl⟩ f
+        (fun w ↦ infiniteStandardGaussian w (χArch w))
+        (fun v ↦ finiteStandardGaussian v.val (sLocalFiniteRestriction v (chartₛ(χ) s))) hf]
+    rw [Finset.prod_congr (s₁ := Finset.univ) rfl (fun w _ ↦ hA w hz),
+      Finset.prod_congr (s₁ := Finset.univ) rfl (fun v _ ↦
+        sLocalNormalizedEigendistribution_gaussian_fin χ v s z hz
+          (Finset.prod_ne_zero_iff.mp hF v (Finset.mem_univ v)))]
+    simp only [M, Complex.ofReal_prod, Finset.prod_mul_distrib, sLocalHeckeL]
+    exact mul_left_comm _ _ _
+  -- Continue this constant value along the whole norm chart.
+  have hAll : Z = fun _ ↦ M := ha.eq_of_frequently_eq (z₀ := 1) analyticOnNhd_const hZ.frequently
+  have hM : M ≠ 0 := by
+    apply Complex.ofReal_ne_zero.mpr
+    refine Finset.prod_ne_zero_iff.mpr fun v _ ↦ ?_
+    rw [finiteLocalMultiplicativeTamagawaMeasure_integerUnits, ENNReal.toReal_inv,
+      ENNReal.toReal_ofReal (Real.sqrt_nonneg _)]
+    apply inv_ne_zero
+    refine (Real.sqrt_pos.mpr (pow_pos ?_ _)).ne'
+    exact_mod_cast (NumberField.HeightOneSpectrum.one_lt_absNorm v.val).trans' zero_lt_one
+  have hspec : M * sLocalNormalizedEigendistribution (chartₛ(χ) s) f = Z s :=
+    (existsUnique_sLocalNormalizedEigendistribution (chartₛ(χ) s)).exists.choose_spec f
+  exact mul_left_cancel₀ hM (hspec.trans ((congrFun hAll s).trans (mul_one M).symm))
 
 /-- Paper: Theorem 5.5.1.2(1), p. 278.
 On a pure tensor the S-local generator is the product of the local Gaussian-normalized

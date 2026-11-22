@@ -92,11 +92,34 @@ def sLocalPWThetaSobolevMap {a : ℝ} (ha : 0 < a) (ω : PontryaginDual J₁)
   MemLp.toLp (localWeightedTheta(a, ω, f))
     (sLocalPWTheta_memLp (F := F) (S := S) (s := s) ha ω f)
 
+private theorem sLocalPWThetaSobolevMap_apply_ae_of_withDensity {α : Type*} [MeasurableSpace α]
+    {μ : Measure α} {w : α → ℝ} (hm : AEMeasurable w μ) (hw : ∀ x, 0 < w x) {P : α → Prop}
+    (h : ∀ᵐ x ∂(μ.withDensity fun x ↦ ENNReal.ofReal (w x)), P x) : ∀ᵐ x ∂μ, P x := by
+  have := (withDensity_absolutelyContinuous' (μ := μ) (f := fun x ↦ ENNReal.ofReal (w x))
+    hm.ennreal_ofReal (Filter.Eventually.of_forall fun x ↦ (ENNReal.ofReal_pos.2 (hw x)).ne'))
+  exact this.ae_le h
+
+private theorem sLocalPWThetaSobolevMap_apply_dens_pos (a b s t : ℝ) :
+    0 < intervalSobolevDensity a b s t :=
+  mul_pos (lt_max_of_lt_left (Real.exp_pos _)) (Real.rpow_pos_of_pos (by positivity) _)
+
+private theorem sLocalPWThetaSobolevMap_apply_dens_meas (a b s : ℝ) :
+    Measurable (intervalSobolevDensity a b s) := by
+  unfold intervalSobolevDensity
+  fun_prop
+
 /-- Paper: (11.2.1.1) and (11.2.1.6), pp. 487–488.
 The local Sobolev map is represented almost everywhere by the weighted homogeneous theta. -/
 theorem sLocalPWThetaSobolevMap_apply {a : ℝ} (ha : 0 < a) (ω : PontryaginDual J₁) (f : Zₛ) :
     (sLocalPWThetaSobolevMap (F := F) (S := S) (s := s) ha ω f : SIdeleQuotient F S → ℂ) =ᵐ[sLocalQuotientTamagawaMeasure F S]
-      localWeightedTheta(a, ω, f) := by sorry
+      localWeightedTheta(a, ω, f) := by
+  have : OpensMeasurableSpace (SIdeleQuotient F S) := ⟨le_of_eq rfl⟩
+  have hm : Measurable (fun g : SIdeleQuotient F S ↦ Real.log (((mₛ(S)) g).val : ℝ)) :=
+    Real.measurable_log.comp ((measurable_coe_nnreal_real).comp
+      ((Units.continuous_val.comp (mₛ(S)).continuous).measurable))
+  exact sLocalPWThetaSobolevMap_apply_ae_of_withDensity
+    ((sLocalPWThetaSobolevMap_apply_dens_meas 0 0 s).comp hm).aemeasurable
+    (fun _ ↦ sLocalPWThetaSobolevMap_apply_dens_pos _ _ _ _) (MemLp.coeFn_toLp _)
 
 /-- Paper: (11.2.1.2) and (11.2.1.7), pp. 487–488.
 Globalized polar-free tests yield weighted Sobolev vectors.
@@ -115,7 +138,13 @@ def globalPWThetaSobolevMap (a : ℝ) (ω : PontryaginDual C₁) (f : Zₛ) :=
 The global Sobolev map is represented almost everywhere by the weighted homogeneous theta. -/
 theorem globalPWThetaSobolevMap_apply (a : ℝ) (ω : PontryaginDual C₁) (f : Zₛ) :
     (globalPWThetaSobolevMap (F := F) (S := S) (s := s) a ω f : C𝔽 → ℂ) =ᵐ[μ𝔽]
-      globalWeightedTheta(a, ω, f) := by sorry
+      globalWeightedTheta(a, ω, f) := by
+  have hm : Measurable (fun g : C𝔽 ↦ Real.log (((m𝔽) g).val : ℝ)) :=
+    Real.measurable_log.comp ((measurable_coe_nnreal_real).comp
+      ((Units.continuous_val.comp (m𝔽).continuous).measurable))
+  exact sLocalPWThetaSobolevMap_apply_ae_of_withDensity
+    ((sLocalPWThetaSobolevMap_apply_dens_meas (-(0 : ℝ)) 0 s).comp hm).aemeasurable
+    (fun _ ↦ sLocalPWThetaSobolevMap_apply_dens_pos _ _ _ _) (MemLp.coeFn_toLp _)
 
 /-- Paper: Definition 11.2.1.1(1) and (11.2.1.1), p. 487.
 The local absolute level is the weighted Sobolev closure of homogeneous theta
@@ -179,7 +208,10 @@ def absolutePWProjection (a : ℝ) (ω : PontryaginDual C₁) (Λ : ℝ) :
 The absolute projection fixes vectors in the absolute level. -/
 theorem absolutePWProjection_apply_of_mem (a : ℝ) (ω : PontryaginDual C₁) (Λ : ℝ)
     (u : GeoIsotype(ω)) (_hu : u ∈ absLevel(a, ω, Λ)) :
-    absolutePWProjection (F := F) (S := S) hs a ω Λ u = u := by sorry
+    absolutePWProjection (F := F) (S := S) hs a ω Λ u = u := by
+  letI : IsClosed (absLevel(a, ω, Λ) : Set GeoIsotype(ω)) :=
+    (Submodule.isClosed_topologicalClosure _).preimage continuous_subtype_val
+  exact Submodule.starProjection_eq_self_iff.mpr _hu
 
 /-- Paper: Definition 11.2.1.1(3), p. 488.
 Absolute condensation first projects onto the absolute level, then convolves
@@ -196,7 +228,9 @@ theorem absolutePWCondensation_apply_of_mem (a : ℝ) (ω : PontryaginDual C₁)
     (φ : BruhatCompactSupport C𝔽) (hφ : supportedAboveOne(φ))
     (u : GeoIsotype(ω)) (_hu : u ∈ absLevel(a, ω, Λ)) :
     absolutePWCondensation (F := F) (S := S) hs a ω Λ φ hφ u =
-      onIsotype(ω, (ambientGeom(a)).comp (geoAction(φ))) u := by sorry
+      onIsotype(ω, (ambientGeom(a)).comp (geoAction(φ))) u := by
+  have h := absolutePWProjection_apply_of_mem (F := F) (S := S) hs a ω Λ u _hu
+  simp only [absolutePWCondensation, ContinuousLinearMap.comp_apply, h]
 
 local notation "PicTrivial" => Subsingleton (CommRing.Pic ((S : Set V).integer F))
 local notation "Pgeom(" a ", " ω ")" => onIsotype(ω, ambientGeom(a))
@@ -312,7 +346,10 @@ def invariantPWProjection (a : ℝ) (ω : PontryaginDual C₁) (Λ : ℝ) :
 The invariant projection fixes vectors in the invariant level. -/
 theorem invariantPWProjection_apply_of_mem (a : ℝ) (ω : PontryaginDual C₁) (Λ : ℝ)
     (u : GeoIsotype(ω)) (_hu : u ∈ invLevel(a, ω, Λ)) :
-    invariantPWProjection (F := F) (S := S) hs a ω Λ u = u := by sorry
+    invariantPWProjection (F := F) (S := S) hs a ω Λ u = u := by
+  letI : IsClosed (invLevel(a, ω, Λ) : Set GeoIsotype(ω)) :=
+    (Submodule.isClosed_topologicalClosure _).preimage continuous_subtype_val
+  exact Submodule.starProjection_eq_self_iff.mpr _hu
 
 /-- Paper: Definition 11.2.1.3(3), p. 489.
 Invariant condensation first projects onto the invariant level, then convolves
@@ -329,7 +366,9 @@ theorem invariantPWCondensation_apply_of_mem (a : ℝ) (ω : PontryaginDual C₁
     (φ : BruhatCompactSupport C𝔽) (hφ : supportedAboveOne(φ))
     (u : GeoIsotype(ω)) (_hu : u ∈ invLevel(a, ω, Λ)) :
     invariantPWCondensation (F := F) (S := S) hs a ω Λ φ hφ u =
-      onIsotype(ω, (ambientGeom(a)).comp (geoAction(φ))) u := by sorry
+      onIsotype(ω, (ambientGeom(a)).comp (geoAction(φ))) u := by
+  have h := invariantPWProjection_apply_of_mem (F := F) (S := S) hs a ω Λ u _hu
+  simp only [invariantPWCondensation, ContinuousLinearMap.comp_apply, h]
 
 /-- Paper: Theorem 11.2.1.4(1), p. 489.
 The invariant projections converge strongly to the isotypic geometric projection.
@@ -389,7 +428,8 @@ zero class exactly when it belongs to the closed principal-value subspace.
 Deviation: Use the closed image from §11.2.0. -/
 theorem primeOrbitalSobolevQuotient_mk_eq_zero (p : HeightOneSpectrum (𝓞 ℚ)) {s : ℝ} (hs : 0 ≤ s)
     (ω : PontryaginDual C₁) (u : Wω(hs, ω)) :
-    ((N(p, hs, ω)).mkQ u : Q(p, hs, ω)) = 0 ↔ u ∈ N(p, hs, ω) := by sorry
+    ((N(p, hs, ω)).mkQ u : Q(p, hs, ω)) = 0 ↔ u ∈ N(p, hs, ω) :=
+  Submodule.Quotient.mk_eq_zero _
 
 /-- Paper: (11.2.2.1), p. 489. The prime quotient is separable in the quotient norm.
 Deviation: Use the closed principal-value denominator. -/

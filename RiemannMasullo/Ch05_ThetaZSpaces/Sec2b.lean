@@ -3,6 +3,9 @@ module
 public import RiemannMasullo.Ch05_ThetaZSpaces.Sec2
 public import RiemannMasullo.Ch04_PeriodicSchauderBases.Sec3b
 import RiemannMasullo.ForMathlib.Topology.Algebra.Module.StrongDualQuotient
+import RiemannMasullo.ForMathlib.Topology.ContinuousMap.Sigma
+
+import all RiemannMasullo.AppC_LCTVS.Sec1
 
 /-! # Homogeneous theta spaces and Fourier descent
 
@@ -45,6 +48,93 @@ def meromorphicNormOneComponent (orderBound : QuasiCharacter G → WithTop ℤ) 
       quasiCharacterNormTwist_mem_component m hm ω c z⟩)
     (fun c ↦ orderBound c.val)
 
+/-- Restriction and gluing for meromorphic functions on a disjoint open partition
+preserved by the charts. The pole bound need not make the regular locus open. -/
+private theorem meromorphicWithPoleBound_equiv_openPartition {X I : Type*} [TopologicalSpace X]
+    (chart : X → ℂ → X) (b : X → WithTop ℤ) (U : I → Set X)
+    (ho : ∀ i, IsOpen (U i)) (hu : ∀ x, ∃! i, x ∈ U i)
+    (ht : ∀ i (x : U i) z, chart x z ∈ U i) :
+    let V := fun i ↦ meromorphicWithPoleBound (X := U i)
+      (fun x z ↦ ⟨chart x z, ht i x z⟩) (fun x ↦ b x.val)
+    ∃ e : ↥(meromorphicWithPoleBound chart b) ≃L[ℂ] (∀ i, ↥(V i)),
+      ∀ f i x, (e f i).val x = f.val ⟨x.val.val, x.property⟩ := by
+  classical
+  intro V
+  let M := meromorphicWithPoleBound chart b
+  let R := {x : X // 0 ≤ b x}
+  let S := fun i ↦ {x : U i // 0 ≤ b x.val}
+  let inc (i) : C(S i, R) := ⟨fun x ↦ ⟨x.val.val, x.property⟩,
+    (continuous_subtype_val.comp continuous_subtype_val).subtype_mk _⟩
+  let idx (x : X) := (hu x).exists.choose
+  have hidx (x : X) : x ∈ U (idx x) := (hu x).exists.choose_spec
+  -- The regular locus itself is the topological sum of its pieces.
+  let forget (p : Σ i, S i) : R := inc p.1 p.2
+  have bij : Bijective forget := by
+    constructor
+    · rintro ⟨i, x⟩ ⟨j, y⟩ h
+      have he : x.val.val = y.val.val := congrArg Subtype.val h
+      have hij := (hu x.val.val).unique x.val.property (he ▸ y.val.property)
+      subst j
+      exact congrArg (Sigma.mk i) (Subtype.ext (Subtype.ext he))
+    · intro x
+      exact ⟨⟨idx x, ⟨⟨x, hidx x⟩, x.property⟩⟩, rfl⟩
+  let D : (Σ i, S i) ≃ₜ R := (Equiv.ofBijective forget bij).toHomeomorphOfContinuousOpen
+    (continuous_sigma fun i ↦ (inc i).continuous)
+    (isOpenMap_sigma.mpr fun i ↦ (ho i).isOpenMap_subtype_val.restrictPreimage {x | 0 ≤ b x})
+  let res (f : M) (i : I) : V i := ⟨f.val.comp (inc i), by
+    obtain ⟨Z, hreg, hchart⟩ := f.property
+    exact ⟨fun x ↦ Z x.val, fun x ↦ hreg (inc i x), fun x ↦ hchart x.val⟩⟩
+  let onSum (f : ∀ i, V i) : C((Σ i, S i), ℂ) :=
+    ⟨fun p ↦ (f p.1).val p.2, continuous_sigma fun i ↦ (f i).val.continuous⟩
+  let assemble (f : ∀ i, V i) := (onSum f).comp (D.symm : C(R, (Σ i, S i)))
+  have hpart (f : ∀ i, V i) (i : I) (x : S i) : assemble f (inc i x) = (f i).val x := by
+    change onSum f (D.symm (D ⟨i, x⟩)) = _
+    rw [D.symm_apply_apply]
+    rfl
+  let inv (f : ∀ i, V i) : M := ⟨assemble f, by
+    -- Choose one continuation per piece. At any center, the entire germ stays
+    -- in that piece, so the glued continuation inherits exactly the same order.
+    choose Z hreg hchart using fun i ↦ (f i).property
+    let glue (x : X) := Z (idx x) ⟨x, hidx x⟩
+    have hg (i : I) (x : U i) : glue x.val = Z i x := by
+      rcases x with ⟨x, hx⟩
+      obtain rfl : i = idx x := (hu x).unique hx (hidx x)
+      rfl
+    refine ⟨glue, fun x ↦ ?_, fun x ↦ ?_⟩
+    · let y : S (idx x.val) := ⟨⟨x.val, hidx x.val⟩, x.property⟩
+      exact (hg _ y.val).trans ((hreg _ y).trans (hpart f _ y).symm)
+    · let i := idx x
+      let y : U i := ⟨x, hidx x⟩
+      have he : (fun z ↦ glue (chart x z)) = fun z ↦ Z i ⟨chart x z, ht i y z⟩ :=
+        funext fun z ↦ hg i ⟨chart x z, ht i y z⟩
+      dsimp only
+      rw [he]
+      exact hchart i y⟩
+  refine ⟨{ toFun := res
+            invFun := inv
+            map_add' := fun _ _ ↦ rfl
+            map_smul' := fun _ _ ↦ rfl
+            left_inv := ?_
+            right_inv := ?_
+            continuous_toFun := ?_
+            continuous_invFun := ?_ }, fun _ _ _ ↦ rfl⟩
+  · intro f
+    apply Subtype.ext
+    apply ContinuousMap.ext
+    intro x
+    obtain ⟨⟨i, y⟩, rfl⟩ := bij.surjective x
+    exact hpart (res f) i y
+  · intro f
+    funext i
+    exact Subtype.ext (ContinuousMap.ext (hpart f i))
+  · exact continuous_pi fun i ↦ ((ContinuousMap.continuous_precomp (inc i)).comp
+      continuous_subtype_val).subtype_mk _
+  · have hsum : Continuous onSum := continuous_continuousMap_sigma_of_components _ fun i ↦
+      show Continuous (fun f : ∀ i, V i ↦ (f i).val) from
+        continuous_subtype_val.comp (continuous_apply i)
+    exact ((ContinuousMap.continuous_precomp _).comp hsum).subtype_mk _
+
+
 /-- Paper: (5.2.2.2), p. 232.
 Restriction to the norm-one components identifies the meromorphic space with the product
 of its component spaces, with their compact-convergence topologies.
@@ -55,7 +145,28 @@ theorem meromorphicWithPoleBound_equiv_components [IsTopologicalGroup G]
     (orderBound : QuasiCharacter G → WithTop ℤ) :
     ∃ e : ↥(meromorphicWithPoleBound (quasiCharacterNormTwist m hm) orderBound) ≃L[ℂ]
         (∀ χ : PontryaginDual m.ker, ↥(meromorphicNormOneComponent m hm χ orderBound)),
-      ∀ f χ c, (e f χ).val c = f.val ⟨c.val.val, c.property⟩ := by sorry
+      ∀ f χ c, (e f χ).val c = f.val ⟨c.val.val, c.property⟩ := by
+  let U (χ : PontryaginDual m.ker) : Set (QuasiCharacter G) :=
+    {c | ∀ g : m.ker, c g.val = (χ g : ℂ)}
+  apply meromorphicWithPoleBound_equiv_openPartition (quasiCharacterNormTwist m hm) orderBound U
+    _ _ (quasiCharacterNormTwist_mem_component m hm)
+  · intro χ
+    apply isOpen_iff_mem_nhds.mpr
+    intro c hc
+    obtain ⟨e, he, -, htwist⟩ := hasNormTwistCharts_of_proper m hproper hn c
+    filter_upwards [e.open_source.mem_nhds he] with d hd
+    intro g
+    have h := htwist (e d) (e.map_source hd) g.val
+    simp only [e.left_inv hd, show m g.val = 1 from g.property, Units.val_one, NNReal.coe_one,
+      Complex.ofReal_one, Complex.one_cpow, mul_one] at h
+    exact h.trans (hc g)
+  · intro c
+    obtain ⟨χ, hχ⟩ := (range_normOneRestriction m hproper hn ▸
+      (Set.mem_range_self c : normOneRestriction m c ∈ Set.range (normOneRestriction m)))
+    refine ⟨χ, fun g ↦ (DFunLike.congr_fun hχ g).symm, ?_⟩
+    intro ψ hψ
+    exact ContinuousMonoidHom.ext fun g ↦
+      Circle.ext ((hψ g).symm.trans (DFunLike.congr_fun hχ g).symm)
 
 end MeromorphicComponents
 
@@ -130,7 +241,28 @@ theorem sLocalNormOneCharacter_eq_sIdeleRestriction
     (ω : PontryaginDual C₁) (c : unramifiedOutside F S)
     (hc : ∀ x : C₁, c.val x.val = (ω x : ℂ)) (y : J₁(S)) :
     (sLocalNormOneCharacter (F := F) S ω ⟨c, hc⟩ y : ℂ) = sIdeleRestriction F S c y.val := by
-  sorry
+  obtain ⟨g, hg⟩ := QuotientGroup.mk_surjective y.val
+  -- Insert ones off S to lift this representative to both norm-one groups.
+  let a := sIdeleInsertion F S g
+  have ha : a ∈ Set.range (integralIdeleInsertion F S) := by
+    apply (mem_range_integralIdeleInsertion F S a).2
+    intro v hv
+    have hi : a⁻¹ = sIdeleInsertion F S g⁻¹ := (map_inv _ _).symm
+    change a.val.2 v ∈ _ ∧ (a⁻¹).val.2 v ∈ _
+    rw [hi, (sIdeleInsertion_apply F S g).2.2 v hv, (sIdeleInsertion_apply F S g⁻¹).2.2 v hv]
+    exact ⟨one_mem _, one_mem _⟩
+  obtain ⟨u, hu⟩ := ha
+  have hp : Units.map (adeleProjection F S).toMonoidHom a = g :=
+    Units.ext (Prod.ext (sIdeleInsertion_apply F S g).1
+      (funext (sIdeleInsertion_apply F S g).2.1))
+  have hn : ideleNorm F a = 1 := by
+    rw [ideleNorm_sIdeleInsertion, ← sIdeleQuotientNorm_mk, hg]
+    exact y.property
+  let x : C₁ := ⟨QuotientGroup.mk a, hn⟩
+  have hdesc := ((normOneCharacterUnramifiedOutside_iff (F := F) (S := S) ω).mp
+    ⟨c, hc⟩).exists.choose_spec u x y (by rw [hu]) (by rw [hu, hp, hg])
+  rw [← hg, sIdeleRestriction_mk]
+  exact (congrArg (fun t : Circle ↦ (t : ℂ)) hdesc).trans (hc x).symm
 
 /-- Paper: Theorem 5.2.3.1, p. 233.
 Unramifiedness outside S implies unramifiedness outside every larger set of places. -/
@@ -323,7 +455,15 @@ theorem globalHomogeneousThetaSpace_montel :
 /-- Paper: Theorem 5.2.3.1(2), p. 233.
 The S-local homogeneous quotient is Montel. -/
 theorem sLocalHomogeneousThetaSpace_montel (χ : PontryaginDual (J₁(S))) :
-    BarrelledSpace ℂ (Θₛω(S, χ)) ∧ MontelSpace ℂ (Θₛω(S, χ)) := by sorry
+    BarrelledSpace ℂ (Θₛω(S, χ)) ∧ MontelSpace ℂ (Θₛω(S, χ)) := by
+  have hN : IsNuclearTVS.{0} (Θₛω(S, χ)) := sLocalHomogeneousThetaSpace_nuclear (F := F) (S := S) χ
+  let : T2Space (Θₛω(S, χ)) := hN.1
+  let : PolynormableSpace ℂ (Θₛω(S, χ)) := hN.2.1
+  let : UniformSpace (Θₛω(S, χ)) := IsTopologicalAddGroup.rightUniformSpace _
+  let : IsUniformAddGroup (Θₛω(S, χ)) := isUniformAddGroup_of_addCommGroup
+  let : CompleteSpace (Θₛω(S, χ)) := sLocalHomogeneousThetaSpace_complete (F := F) (S := S) χ
+  refine ⟨IsLFSpace.barrelled (E := (Θₛω(S, χ))) (sLocalHomogeneousThetaSpace_lf (F := F) (S := S) χ), ⟨fun B hc hb ↦ ?_⟩⟩
+  simpa only [hc.closure_eq] using isCompact_closure_of_isNuclearTVS (Θₛω(S, χ)) hN hb
 
 /-- Paper: Theorem 5.2.3.1(2), p. 233.
 The strong dual of the global homogeneous quotient is complete. -/

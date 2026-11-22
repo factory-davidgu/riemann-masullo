@@ -135,13 +135,69 @@ def sLocalUncutCarving (s : ℝ) (ω : PontryaginDual C₁) (T : Finset V) :
     Submodule ℂ (W(s)) :=
   (Submodule.span ℂ (range (fun f : ℬ₀ ↦ θ(s, ω, P(T, f))))).topologicalClosure
 
+/-- Conjugating `map id P` by an equivalence gives the identity when `P` fixes every vector.
+Stated in the shape of `sAdelePrincipalValue`, so that it applies syntactically. -/
+private theorem sLocalUncutCarving_empty_conj_left {E G N : Type*} [AddCommGroup E]
+    [Module ℂ E] [TopologicalSpace E] [AddCommGroup G] [Module ℂ G] [TopologicalSpace G]
+    [AddCommGroup N] [Module ℂ N] [TopologicalSpace N]
+    (e : InductiveTensor E G ≃L[ℂ] N) (P : G →ₗ[ℂ] G) (hP : ∀ x, P x = x) :
+    e.toLinearMap.comp ((TensorProduct.map (LinearMap.id : E →ₗ[ℂ] E) P).comp
+      e.symm.toLinearMap) = LinearMap.id := by
+  have hP' : P = LinearMap.id := LinearMap.ext hP
+  subst hP'
+  refine LinearMap.ext fun x ↦ ?_
+  have h := LinearMap.congr_fun (TensorProduct.map_id (R := ℂ) (M := E) (N := G)) (e.symm x)
+  exact (congrArg e h).trans (e.apply_symm_apply x)
+
+/-- Conjugating `map P id` by an equivalence gives the identity when `P` fixes every vector.
+Stated in the shape of `adelePrincipalValue`, so that it applies syntactically. -/
+private theorem sLocalUncutCarving_empty_conj_right {E G N : Type*} [AddCommGroup E]
+    [Module ℂ E] [TopologicalSpace E] [AddCommGroup G] [Module ℂ G] [TopologicalSpace G]
+    [AddCommGroup N] [Module ℂ N] [TopologicalSpace N]
+    (e : InductiveTensor E G ≃L[ℂ] N) (P : E →ₗ[ℂ] E) (hP : ∀ x, P x = x) :
+    e.toLinearMap.comp ((TensorProduct.map P (LinearMap.id : G →ₗ[ℂ] G)).comp
+      e.symm.toLinearMap) = LinearMap.id := by
+  have hP' : P = LinearMap.id := LinearMap.ext hP
+  subst hP'
+  refine LinearMap.ext fun x ↦ ?_
+  have h := LinearMap.congr_fun (TensorProduct.map_id (R := ℂ) (M := E) (N := G)) (e.symm x)
+  exact (congrArg e h).trans (e.apply_symm_apply x)
+
+open scoped TensorProduct in
+/-- A tensor power of identity maps fixes every vector of the finest locally convex copy. -/
+private theorem sLocalUncutCarving_empty_piMap {ι : Type*} [Fintype ι] [DecidableEq ι]
+    {M : ι → Type*} [∀ i, AddCommGroup (M i)] [∀ i, Module ℂ (M i)]
+    (f : ∀ i, M i →ₗ[ℂ] M i) (hf : ∀ i, f i = LinearMap.id)
+    (x : FinestLocallyConvex (⨂[ℂ] i, M i)) :
+    (PiTensorProduct.map f : FinestLocallyConvex (⨂[ℂ] i, M i) →ₗ[ℂ]
+      FinestLocallyConvex (⨂[ℂ] i, M i)) x = x := by
+  have : f = fun _ ↦ LinearMap.id := funext hf
+  subst this
+  rw [PiTensorProduct.map_id]
+  rfl
+
+/-- With no selected places the S-local principal value is the identity. -/
+private theorem sLocalUncutCarving_empty_sPV (h : (∅ : Finset V) ⊆ ∅) :
+    sAdelePrincipalValue F h = LinearMap.id := by
+  unfold sAdelePrincipalValue
+  exact sLocalUncutCarving_empty_conj_left _ _
+    (sLocalUncutCarving_empty_piMap _ fun w ↦ absurd w.2 (Finset.notMem_empty _))
+
+/-- With no selected places the global principal value is the identity. -/
+private theorem sLocalUncutCarving_empty_PV : adelePrincipalValue F (∅ : Finset V) = LinearMap.id := by
+  unfold adelePrincipalValue
+  exact sLocalUncutCarving_empty_conj_right _ _ fun x ↦
+    LinearMap.congr_fun (sLocalUncutCarving_empty_sPV _) x
+
 /-- Paper: (11.1.2.5), p. 480. The empty stage is the closure of the unrestricted
 homogeneous polar-free theta image.
 Deviation: Sanity check for the uncut stage. -/
 theorem sLocalUncutCarving_empty (s : ℝ) (ω : PontryaginDual C₁) :
     sLocalUncutCarving s ω ∅ =
       (Submodule.span ℂ (range (fun f : ℬ₀ ↦ θ(s, ω, f)))).topologicalClosure := by
-  sorry
+  have hP : ∀ f : ℬ₀, adelePrincipalValue F ∅ f.val = f.val := fun f ↦
+    LinearMap.ext_iff.mp sLocalUncutCarving_empty_PV f.val
+  simp only [sLocalUncutCarving, hP]
 
 /-- Paper: (11.1.2.5), p. 480. Before any prime condition the uncut stage is the
 norm-one isotype of the global theta completion from Definition 10.1.1.1. -/
@@ -295,7 +351,10 @@ theorem sLocalCarvingLimit_le_cutoffIsotype {S : Finset V} (χ : PontryaginDual 
     (s : ℝ) (hs : DegreeBound(s)) (twoSided : Bool) (Λ : ℝ) (_hΛ : 0 < Λ) :
     let hs₀ : 0 ≤ s := (mul_nonneg zero_le_two (Nat.cast_nonneg _)).trans hs
     sLocalCarvingLimit s (ωOf(χ)) S (J(twoSided, Λ)) (hJ(twoSided, Λ)) ≤
-      (Wω(s, hs₀, ωOf(χ))).map (M(s, J(twoSided, Λ), hJ(twoSided, Λ))).toLinearMap := by sorry
+      (Wω(s, hs₀, ωOf(χ))).map (M(s, J(twoSided, Λ), hJ(twoSided, Λ))).toLinearMap := by
+  intro hs₀
+  exact (iInf_le _ (⟨∅, Finset.disjoint_empty_right S⟩ : SLocalCarvingIndex (F := F) S)).trans
+    (sLocalCutoffCarving_le_cutoffIsotype _ _ _ _ _ _)
 
 -- TODO(paper-gap): On p. 482 the basis conclusion of Theorem 11.2.0.2
 -- requires s ≥ 2 * card(i'), while (11.1.2.2) bounds the field degree.

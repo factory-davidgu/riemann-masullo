@@ -136,7 +136,12 @@ def sLocalTraceFourierKernel (ρ' : Aₛ → ℂ) (_hρ' : Integrable ρ' νₛ)
 symbol is its integral against additive Tamagawa measure. -/
 theorem sLocalTraceFourierKernel_diagonal (ρ' : Aₛ → ℂ) (hρ' : Integrable ρ' νₛ)
     (x : Aₛ) :
-    sLocalTraceFourierKernel ρ' hρ' x x = ∫ u, ρ' u ∂νₛ := by sorry
+    sLocalTraceFourierKernel ρ' hρ' x x = ∫ u, ρ' u ∂νₛ := by
+  have h0 : ψₛ 0 = 1 := by
+    have h1 : ∀ w : InfinitePlace F, (0 : Aₛ).1 w = 0 := fun _ ↦ rfl
+    simp [sAdeleStandardCharacter, adeleStandardCharacter_zero, finiteLocalStandardCharacter_zero,
+      h1, Pi.single_zero, Prod.mk_zero_zero]
+  simp [sLocalTraceFourierKernel, tamagawaFourier, h0]
 
 /-- Paper: Step II, p. 517. With an S-idele as output, integrate the
 dilation average of the Fourier phases against the frequency symbol and multiply
@@ -175,8 +180,8 @@ def sLocalTraceMeasureFactor (S : Finset V) : ℝ :=
 and the factor for one finite place is the corresponding Euler factor. -/
 theorem sLocalTraceMeasureFactor_empty_singleton (v : V) :
     sLocalTraceMeasureFactor (F := F) ∅ = 1 ∧
-      sLocalTraceMeasureFactor {v} = (v.asIdeal.absNorm : ℝ) / ((v.asIdeal.absNorm : ℝ) - 1) :=
-  by sorry
+      sLocalTraceMeasureFactor {v} = (v.asIdeal.absNorm : ℝ) / ((v.asIdeal.absNorm : ℝ) - 1) := by
+  constructor <;> simp [sLocalTraceMeasureFactor]
 
 /-- Paper: (12.4.1.17), p. 518. The pushforward of multiplicative Tamagawa
 measure to the invertible locus has density c_S divided by the product norm.
@@ -198,7 +203,21 @@ def sLocalTraceEta (f : BruhatCompactSupport Iₛ) (ξ : Hₛ) (z : Aₛ) : ℂ 
 /-- Paper: (12.4.1.20), p. 518. The translated test has value f(ξ) at the
 origin, and it is zero at minus one. -/
 theorem sLocalTraceEta_zero_neg_one (f : BruhatCompactSupport Iₛ) (ξ : Hₛ) :
-    sLocalTraceEta f ξ 0 = f.val ξ.val ∧ sLocalTraceEta f ξ (-1) = 0 := by sorry
+    sLocalTraceEta f ξ 0 = f.val ξ.val ∧ sLocalTraceEta f ξ (-1) = 0 := by
+  have h2 : sIdeleNorm F S ξ.val = 1 := by
+    obtain ⟨γ, hγ, hξ⟩ := Subgroup.mem_map.mp ξ.property
+    have h1 := ((sIdeleNorm_spec F S).2 hγ)
+    rw [← hξ]; exact h1
+  constructor
+  · unfold sLocalTraceEta
+    have h : (1 : Aₛ) + 0 = ((1 : Iₛ) : Aₛ) := by simp
+    rw [h, Units.val_injective.extend_apply]
+    simp [h2]
+  · unfold sLocalTraceEta
+    have h : (1 : Aₛ) + -1 = 0 := by simp
+    rw [h, Function.extend_apply']
+    rintro ⟨u, hu⟩
+    exact not_isUnit_zero (hu ▸ u.isUnit)
 
 /-- Paper: (12.4.1.12)–(12.4.1.22), pp. 517–518. The skew diagonal of the
 composed kernel is the integral of the Fourier transform of the translated test,
@@ -225,7 +244,15 @@ def sLocalTraceSharpMass (f : BruhatCompactSupport Iₛ) (ξ : Hₛ) (R : ℝ) :
 /-- Paper: (12.4.1.24), p. 518. The sharp orbital mass of the zero lift vanishes
 at every radius. -/
 theorem sLocalTraceSharpMass_zero (ξ : Hₛ) (R : ℝ) :
-    sLocalTraceSharpMass (0 : BruhatCompactSupport Iₛ) ξ R = 0 := by sorry
+    sLocalTraceSharpMass (0 : BruhatCompactSupport Iₛ) ξ R = 0 := by
+  have h0 : sLocalTraceEta (0 : BruhatCompactSupport Iₛ) ξ = 0 := by
+    funext z
+    have h : (0 : BruhatCompactSupport Iₛ).val = 0 := rfl
+    simp only [sLocalTraceEta, h]
+    simp
+  have h1 : fourierₛ (0 : Aₛ → ℂ) = 0 := by
+    funext w; simp [tamagawaFourier]
+  simp [sLocalTraceSharpMass, h0, h1]
 
 /-- Paper: (12.4.1.22)–(12.4.1.24), p. 518. With sharp upper cutoffs the orbital
 mass is the skew-diagonal integral on an S-unit fundamental domain. The change

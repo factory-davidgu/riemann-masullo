@@ -8,6 +8,7 @@ public import Mathlib.RingTheory.RamificationInertia.Inertia
 public import Mathlib.RingTheory.RamificationInertia.Ramification
 import Mathlib.Analysis.Complex.LocallyUniformLimit
 import RiemannMasullo.ForMathlib.Analysis.SpecialFunctions.Pow.Complex
+import RiemannMasullo.ForMathlib.NumberTheory.NumberField.Completion.FinitePlace
 
 /-!
 # §7.1.3–7.1.4 Polar multiplicities and spectral biorthogonal sequences
@@ -582,7 +583,68 @@ The pole order is bounded by the number of places in S, including all infinite p
 Deviation: Uses the proof's bound at every point of the component, which includes the
 archimedean points of abscissa zero and all the indicated finite-place poles. -/
 theorem sLocalRhoPoleOrder_le_card (s : ℂ) :
-    sLocalRhoPoleOrder (chartₛ(χ, hχ) s) ≤ archCount + S.card := by sorry
+    sLocalRhoPoleOrder (chartₛ(χ, hχ) s) ≤ archCount + S.card := by
+  classical
+  let c := sIdeleRestriction F S ⟨ideleClassNormTwist χ 0, hχ⟩
+  have hc (x : Jₛ) : ‖c x‖ = 1 := by
+    obtain ⟨g, rfl⟩ := QuotientGroup.mk_surjective x
+    rw [show c (QuotientGroup.mk g) = ideleClassNormTwist χ 0
+      (QuotientGroup.mk (sIdeleInsertion F S g)) from sIdeleRestriction_mk F S _ g]
+    change ‖(χ _ : ℂ) * _ ^ (0 : ℂ)‖ = 1
+    simp
+  let ψ : PontryaginDual Jₛ :=
+    { toFun := fun x ↦ ⟨c x, mem_sphere_zero_iff_norm.mpr (hc x)⟩
+      map_one' := Subtype.ext (map_one c)
+      map_mul' := fun x y ↦ Subtype.ext (map_mul c x y)
+      continuous_toFun := c.continuous.subtype_mk _ }
+  have hψ : (⟨Circle.coeHom, continuous_subtype_val⟩ : Circle →ₜ* ℂ).comp ψ = c := by
+    ext x
+    rfl
+  have hcomp : (fun z ↦ sLocalRhoFactor (F := F) (S := S)
+        (twistₛ (chartₛ(χ, hχ) s) z)) = rhoChart(χ, hχ) ∘ (· + s) := by
+    funext z
+    simp only [Function.comp]
+    congr 1
+    ext1 g
+    simp only [quasiCharacterNormTwist]
+    have hn : (((mₛ g : ℝ≥0ˣ) : ℝ≥0) : ℂ) ≠ 0 := by simp
+    change ((_ : ℂ) * _) * _ = (_ : ℂ) * _
+    rw [mul_assoc]
+    congr 1
+    change (((mₛ g : ℝ≥0ˣ) : ℝ≥0) : ℂ) ^ s * (((mₛ g : ℝ≥0ˣ) : ℝ≥0) : ℂ) ^ z = _
+    rw [← Complex.cpow_add _ _ hn, add_comm]
+    rfl
+  have key : sLocalIdelicOrderBound (chartₛ(χ, hχ) s) =
+      min 0 (meromorphicOrderAt rhoChart(χ, hχ) s) := by
+    unfold sLocalIdelicOrderBound
+    rw [hcomp, meromorphicOrderAt_comp_add_const_eq_meromorphicOrderAt, zero_add]
+  have hord := sLocalRhoFactor_orderAt_pole (F := F) (S := S) ψ s
+  dsimp only at hord
+  rw [hψ] at hord
+  change meromorphicOrderAt rhoChart(χ, hχ) s < 0 → _ at hord
+  have hbound : (-( (archCount + S.card : ℕ) : ℤ) : WithTop ℤ) ≤
+      meromorphicOrderAt rhoChart(χ, hχ) s := by
+    by_cases h : meromorphicOrderAt rhoChart(χ, hχ) s < 0
+    · rw [hord h]
+      have ha := Finset.card_filter_le (s := (Finset.univ : Finset (InfinitePlace F)))
+        (p := fun w ↦ meromorphicOrderAt (fun z ↦ infiniteLocalTateFactor w
+          (sLocalInfiniteRestriction w (twistₛ c z))) s < 0)
+      have hf := Finset.card_filter_le (s := (Finset.univ : Finset S))
+        (p := fun v ↦ meromorphicOrderAt (fun z ↦ finiteLocalTateFactor v.val
+          (sLocalFiniteRestriction v (twistₛ c z))) s < 0)
+      simp only [Finset.card_univ, Fintype.card_coe] at ha hf
+      exact_mod_cast (show -((archCount + S.card : ℕ) : ℤ) ≤
+        -(((_ + _ : ℕ)) : ℤ) by omega)
+    · exact le_trans (by exact_mod_cast (show -((archCount + S.card : ℕ) : ℤ) ≤ 0 by omega))
+        (le_of_not_gt h)
+  have hb : (-( (archCount + S.card : ℕ) : ℤ) : WithTop ℤ) ≤
+      sLocalIdelicOrderBound (chartₛ(χ, hχ) s) := by
+    rw [key]
+    exact le_min (by exact_mod_cast (show -((archCount + S.card : ℕ) : ℤ) ≤ 0 by omega)) hbound
+  rw [sLocalIdelicOrderBound_eq_neg_poleOrder] at hb
+  have : -((archCount + S.card : ℕ) : ℤ) ≤ -(sLocalRhoPoleOrder (chartₛ(χ, hχ) s) : ℤ) := by
+    exact_mod_cast hb
+  omega
 
 /-- Paper: Theorem 7.1.3.2(2), p. 324.
 In the open left half-plane the pole order is bounded by the number of infinite places.
@@ -1120,6 +1182,39 @@ theorem orbitalHeckeGenerator_empty :
   intro s
   simp [orbitalHeckeGenerator, reciprocalPartialHeckeEulerProduct]
 
+private theorem orbitalHeckeGenerator_order_at_canceled_pole_factor (χ : U𝔽) (b : ℂ)
+    (hχ : ∀ g : C𝔽, (χ g : ℂ) = (((ideleClassNorm F g : ℝ≥0) : ℝ) : ℂ) ^ b)
+    (v : Primes) (s : ℂ) :
+    (finiteHeckeEulerFactor χ v s)⁻¹ = 1 - (v.asIdeal.absNorm : ℂ) ^ (-(s + b)) := by
+  classical
+  have hval (u : (v.adicCompletion F)ˣ) :
+      (ideleClassNormTwist χ 0).restrict v u = (‖(u : v.adicCompletion F)‖ : ℂ) ^ b := by
+    rw [HeckeCharacter.restrict, MulChar.ofUnitHom_coe]
+    let g := IdeleClassGroup.ofAdicCompletion (𝓞 F) F v u
+    change (χ g : ℂ) * _ ^ (0 : ℂ) = _
+    rw [Complex.cpow_zero, mul_one, hχ,
+      show ideleClassNorm F g = _ from ideleClassNorm_ofAdicCompletion F v u]
+    rfl
+  have hu : (ideleClassNormTwist χ 0).IsUnramifiedAt v := by
+    apply HeckeCharacter.isUnramifiedAt_iff.mpr
+    intro x
+    let u := Units.map (v.adicCompletionIntegers F).subtype.toMonoidHom x
+    change (ideleClassNormTwist χ 0).restrict v u = 1
+    rw [hval, show ‖(u : v.adicCompletion F)‖ = 1 from ?_, Complex.ofReal_one, Complex.one_cpow]
+    apply Valued.toNormedField.norm_eq_one_iff.mpr
+    exact HeightOneSpectrum.adicCompletionIntegers.mem_units_iff_valued_eq_one.mp
+      (show u ∈ (v.adicCompletionIntegers F).units from ⟨x.val.property, x.inv.property⟩)
+  let val : Valuation (v.adicCompletion F) (WithZero (Multiplicative ℤ)) := Valued.v
+  obtain ⟨π, hπ⟩ := val.exists_isUniformizer_of_isCyclic_of_nontrivial
+  let u := Units.mk0 (π : v.adicCompletion F) hπ.ne_zero
+  have hn : ‖(u : v.adicCompletion F)‖ = (v.asIdeal.absNorm : ℝ)⁻¹ :=
+    norm_uniformizer_adicCompletion v _ hπ
+  have hq : (v.asIdeal.absNorm : ℂ) ≠ 0 := by
+    exact_mod_cast (zero_lt_one.trans (HeightOneSpectrum.one_lt_absNorm v)).ne'
+  rw [finiteHeckeEulerFactor, ite_eq_left hu, inv_inv, hu.localValue_eq u hπ, hval, hn,
+    Complex.ofReal_inv, Complex.inv_cpow_ofReal_nonneg (Nat.cast_nonneg _) b, ← Complex.cpow_neg,
+    Complex.ofReal_natCast, ← Complex.cpow_add _ _ hq, neg_add, add_comm (-b)]
+
 /-- Paper: Theorem 7.1.4.3(1), pp. 331–332. At the canceled pole on the
 imaginary axis of a pure norm power, every removed finite place adds one jet.
 Deviation: Records the total order at a point where indexing by the raw product loses a jet. -/
@@ -1127,7 +1222,52 @@ theorem orbitalHeckeGenerator_order_at_canceled_pole (S₀ : Finset Primes)
     (hχ : χ.toMonoidHom.comp (ideleClassNorm F).ker.subtype = 1) :
     let x := (existsUnique_ideleNormSection_character_phase χ τ hτ).exists.choose
     let g := orbitalHeckeGenerator χ τ hτ L hL hEq S₀
-    analyticOrderAt (g.val : ℂ → ℂ) (-((x : ℂ) * Complex.I)) = (S₀.card : ℕ∞) := by sorry
+    analyticOrderAt (g.val : ℂ → ℂ) (-((x : ℂ) * Complex.I)) = (S₀.card : ℕ∞) := by
+  classical
+  let x := (existsUnique_ideleNormSection_character_phase χ τ hτ).exists.choose
+  let b := (x : ℂ) * Complex.I
+  have hpower (g : C𝔽) : (χ g : ℂ) = (((ideleClassNorm F g : ℝ≥0) : ℝ) : ℂ) ^ b := by
+    let t := ideleClassNorm F g
+    let k : C𝔽 := QuotientGroup.mk (τ t)
+    have hk : ideleClassNorm F k = t := hτ t
+    have hg : g / k ∈ (ideleClassNorm F).ker := by simp [MonoidHom.mem_ker, hk, t]
+    have h1 : χ (g / k) = 1 := DFunLike.congr_fun hχ (⟨_, hg⟩ : (ideleClassNorm F).ker)
+    have he : χ g = χ k := div_eq_one.mp ((map_div χ g k).symm.trans h1)
+    rw [he]
+    exact (existsUnique_ideleNormSection_character_phase χ τ hτ).exists.choose_spec t
+  let G (T : Finset Primes) : ℂ → ℂ := (orbitalHeckeGenerator χ τ hτ L hL hEq T).val
+  change analyticOrderAt (G S₀) (-b) = _
+  induction S₀ using Finset.induction_on with
+  | empty =>
+    change analyticOrderAt ((orbitalHeckeGenerator χ τ hτ L hL hEq ∅).val : ℂ → ℂ) (-b) = 0
+    rw [orbitalHeckeGenerator_empty]
+    exact analyticOrderAt_eq_zero.mpr (.inr
+      (regularizedCompletedHeckeL_ne_zero_at_canceled_poles χ τ hτ L hL hEq hχ).1)
+  | @insert v T hv ih =>
+    let q : ℂ := v.asIdeal.absNorm
+    let f (s : ℂ) := 1 - q ^ (-(s + b))
+    have hq : q ≠ 0 := by
+      dsimp only [q]
+      exact_mod_cast (zero_lt_one.trans (HeightOneSpectrum.one_lt_absNorm v)).ne'
+    have hlog : Complex.log q ≠ 0 := by
+      dsimp only [q]
+      rw [← Complex.natCast_log]
+      exact_mod_cast (Real.log_pos (by exact_mod_cast HeightOneSpectrum.one_lt_absNorm v)).ne'
+    have hdiff : Differentiable ℂ f :=
+      (differentiable_const _).sub (((differentiable_id.add_const b).neg).const_cpow (.inl hq))
+    have hder : HasDerivAt f (Complex.log q) (-b) := by
+      simpa [f] using (hasDerivAt_const (-b) (1 : ℂ)).fun_sub
+        ((((hasDerivAt_id (-b)).add_const b).neg).const_cpow (.inl hq))
+    have ho := (hdiff.analyticAt (-b)).analyticOrderAt_eq_one_of_zero_deriv_ne_zero
+      (by simp [f]) (hder.deriv ▸ hlog)
+    have hmul : G (insert v T) = f * G T := by
+      funext s
+      change (∏ w ∈ insert v T, (finiteHeckeEulerFactor χ w s)⁻¹) * _ = f s * ((∏ w ∈ T, _) * _)
+      rw [Finset.prod_insert hv, mul_assoc,
+        orbitalHeckeGenerator_order_at_canceled_pole_factor χ b hpower]
+    have hG : Differentiable ℂ (G T) := (orbitalHeckeGenerator χ τ hτ L hL hEq T).property
+    rw [hmul, analyticOrderAt_mul (hdiff.analyticAt _) (hG.analyticAt _), ho, ih,
+      Finset.card_insert_of_notMem hv, Nat.cast_add_one, add_comm]
 
 open Classical in
 /-- Paper: Theorem 7.1.4.3(1), p. 331.

@@ -187,6 +187,40 @@ theorem finiteHeckeEulerFactor_inv_eq_phase (χ : U) (v : V)
 -- In Terminology 6.3.1.1 the descent is `sIdeleRestriction` from §3.1 and the
 -- product (6.3.1.5) is `sLocalHeckeL` from §3.3.
 
+private theorem sLocalHeckeL_poleOrder_eq_rightHalf {S : Finset V}
+    (χ : PontryaginDual (SIdeleQuotient F S)) {s : ℂ} (hs : 0 < s.re) :
+    AnalyticAt ℂ (fun z ↦ sLocalHeckeL (normChartₛ(χ) z)) s ∧
+      sLocalHeckeL (normChartₛ(χ) s) ≠ 0 := by
+  classical
+  obtain ⟨η, h, hχ, -⟩ := sLocal_character_extension χ
+  simp_rw [sLocalHeckeL_eq_partialEulerProduct χ η h hχ]
+  have hΓ := heckeGammaFactor_ne_zero_of_re_pos η hs
+  have haΓ : AnalyticAt ℂ (heckeGammaFactor η) s := by
+    simpa only [Pi.inv_def, inv_inv] using
+      (((differentiable_inv_heckeGammaFactor η).analyticAt s).inv (inv_ne_zero hΓ))
+  have hfinite (v : V) : AnalyticAt ℂ (finiteHeckeEulerFactor η v) s ∧
+      finiteHeckeEulerFactor η v s ≠ 0 := by
+    by_cases hv : χ₀(η).IsUnramifiedAt v
+    · have hq : 1 < (q(v) : ℝ) := by exact_mod_cast HeightOneSpectrum.one_lt_absNorm v
+      have hq' : (q(v) : ℂ) ≠ 0 := Nat.cast_ne_zero.mpr (HeightOneSpectrum.one_lt_absNorm v).ne_zero
+      have hlt : ‖χ₀(η).localValue v * (q(v) : ℂ) ^ (-s)‖ < 1 := by
+        rw [norm_mul, norm_ideleClassNormTwist_zero_localValue, one_mul,
+          ← Complex.ofReal_natCast, Complex.norm_cpow_eq_rpow_re_of_pos (zero_lt_one.trans hq)]
+        exact Real.rpow_lt_one_of_one_lt_of_neg hq (by simpa using hs)
+      have hn : 1 - χ₀(η).localValue v * (q(v) : ℂ) ^ (-s) ≠ 0 :=
+        sub_ne_zero.mpr fun he ↦ hlt.ne (he ▸ norm_one)
+      have hd : Differentiable ℂ (fun z : ℂ ↦ 1 - χ₀(η).localValue v * (q(v) : ℂ) ^ (-z)) :=
+        (differentiable_const _).sub ((differentiable_const _).mul
+          (differentiable_neg.const_cpow (Or.inl hq')))
+      change AnalyticAt ℂ (fun z ↦ finiteHeckeEulerFactor η v z) s ∧ _
+      simp only [finiteHeckeEulerFactor, ite_eq_left hv]
+      exact ⟨(hd.analyticAt s).inv hn, inv_ne_zero hn⟩
+    · change AnalyticAt ℂ (fun z ↦ finiteHeckeEulerFactor η v z) s ∧ _
+      simp only [finiteHeckeEulerFactor, ite_eq_right hv]
+      exact ⟨analyticAt_const, one_ne_zero⟩
+  exact ⟨haΓ.mul (Finset.univ.analyticAt_fun_prod fun (v : S) _ ↦ (hfinite v.val).1),
+    mul_ne_zero hΓ (Finset.prod_ne_zero_iff.mpr fun (v : S) _ ↦ (hfinite v.val).2)⟩
+
 /-- Paper: Terminology 6.3.1.1, p. 303.
 The S-local Hecke L-function and the local functional-equation factor have the
 same poles with the same orders.
@@ -195,7 +229,38 @@ theorem sLocalHeckeL_poleOrder_eq (S : Finset V) (χ : PontryaginDual (SIdeleQuo
     (s : ℂ) :
     min 0 (meromorphicOrderAt (fun z ↦ sLocalHeckeL (normChartₛ(χ) z)) s) =
       min 0 (meromorphicOrderAt (fun z ↦ sLocalRhoFactor (normChartₛ(χ) z)) s) := by
-  sorry
+  let L (η : PontryaginDual (SIdeleQuotient F S)) (z : ℂ) := sLocalHeckeL (normChartₛ(η) z)
+  by_cases hs : 0 < s.re
+  · have hρ := sLocalRhoFactor_iteratedDeriv_analyticOn χ 0 s hs
+    rw [iteratedDeriv_zero] at hρ
+    rw [min_eq_left (sLocalHeckeL_poleOrder_eq_rightHalf χ hs).1.meromorphicOrderAt_nonneg,
+      min_eq_left hρ.meromorphicOrderAt_nonneg]
+  · have hs' : 0 < (1 - s).re := by simp only [Complex.sub_re, Complex.one_re]; linarith
+    obtain ⟨ha, hn⟩ := sLocalHeckeL_poleOrder_eq_rightHalf χ⁻¹ hs'
+    let D (z : ℂ) := L χ⁻¹ (1 - z)
+    let ε (z : ℂ) := sLocalEpsilonFactor (normChartₛ(χ) z)
+    have hD : AnalyticAt ℂ D s := ha.comp (show AnalyticAt ℂ (fun z : ℂ ↦ 1 - z) s by fun_prop)
+    have hunit : AnalyticAt ℂ (ε / D) s := (sLocalEpsilonFactor_entire χ s trivial).div hD hn
+    have hne : (ε / D) s ≠ 0 := div_ne_zero (sLocalEpsilonFactor_ne_zero _) hn
+    have heq : (fun z ↦ sLocalRhoFactor (normChartₛ(χ) z)) =ᶠ[𝓝[≠] s] (ε / D) * L χ := by
+      filter_upwards [nhdsNE_le_codiscrete s (sLocalRhoFactor_eq_epsilon_mul χ)] with z hz
+      have hd : dualQuasiCharacter (sIdeleQuotientNorm F S)
+          (isProperMap_sIdeleQuotientNorm F S).continuous (normChartₛ(χ) z) =
+          normChartₛ(χ⁻¹) (1 - z) := by
+        ext1 g
+        let N : ℂ := (((sIdeleQuotientNorm F S g : ℝ≥0) : ℝ) : ℂ)
+        have hN : N ≠ 0 := Complex.ofReal_ne_zero.mpr
+          (NNReal.coe_ne_zero.mpr (sIdeleQuotientNorm F S g).ne_zero)
+        change N * normChartₛ(χ) z g⁻¹ = _
+        rw [map_inv]
+        change N * ((χ g : ℂ) * N ^ z)⁻¹ = (χ g : ℂ)⁻¹ * N ^ (1 - z)
+        rw [mul_inv_rev, Complex.cpow_sub 1 z hN, Complex.cpow_one, div_eq_mul_inv]
+        ac_rfl
+      dsimp only at hz
+      rw [hd] at hz
+      change sLocalRhoFactor (normChartₛ(χ) z) = ε z / D z * L χ z
+      exact hz.trans (by change ε z * (L χ z / D z) = _; ring)
+    rw [meromorphicOrderAt_congr heq, meromorphicOrderAt_mul_of_ne_zero hunit hne]
 
 /-- Paper: Terminology 6.3.1.1, p. 303.
 The completed Hecke L-function on the norm chart is the meromorphic continuation
@@ -249,6 +314,45 @@ local notation "regularizedL(" χ ", " t ")" =>
 local notation "zeroAdele" => Multiplicative.ofAdd (0 : 𝔸[F])
 local notation "mass" => ((normOneIdeleClassTamagawaMeasure F univ).toReal : ℂ)
 
+open scoped IsDedekindDomain.FiniteAdeleRing RestrictedProduct in
+/-- The rational adele ring is second countable, by its countable open cover. -/
+private theorem homogeneousTheta_classMellin_rat_countable : SecondCountableTopology (Multiplicative 𝔸[ℚ]) := by
+  let I := HeightOneSpectrum (𝓞 ℚ)
+  let K (v : I) := v.adicCompletion ℚ
+  let O (v : I) : Set (K v) := v.adicCompletionIntegers ℚ
+  let : Countable I := Rat.HeightOneSpectrum.primesEquiv.injective.countable
+  let (v : I) : SecondCountableTopology (K v) := by
+    let p := Rat.HeightOneSpectrum.primesEquiv v
+    let : Fact p.val.Prime := ⟨p.property⟩
+    let : TopologicalSpace.SeparableSpace ℚ_[p.val] :=
+      ⟨⟨range ((↑) : ℚ → ℚ_[p.val]), countable_range _, Padic.denseRange_ratCast _⟩⟩
+    exact (Rat.HeightOneSpectrum.adicCompletion.padicEquiv v).toHomeomorph.isEmbedding
+      |>.secondCountableTopology
+  let Vset := fun s : Finset I ↦ {a : FiniteAdeleRing (𝓞 ℚ) ℚ | ∀ v ∉ s, a v ∈ O v}
+  have hopen (v : I) : IsOpen (O v) := Valued.isOpen_integer (K v)
+  let (s : Finset I) : SecondCountableTopology (Vset s) := by
+    have hs : Filter.cofinite ≤ Filter.principal (s : Set I)ᶜ :=
+      Filter.le_principal_iff.mpr s.finite_toSet.compl_mem_cofinite
+    have he := RestrictedProduct.isOpenEmbedding_inclusion_principal (R := K) (A := O) hopen hs
+    let : SecondCountableTopology (Πʳ v : I, [K v, O v]_[Filter.principal (s : Set I)ᶜ]) :=
+      (RestrictedProduct.isEmbedding_coe_of_principal (R := K) (A := O)).secondCountableTopology
+    have hrange : range (RestrictedProduct.inclusion K O hs) = Vset s := by
+      rw [RestrictedProduct.range_inclusion]
+      rfl
+    exact hrange ▸ he.toIsEmbedding.toHomeomorph.symm.isEmbedding.secondCountableTopology
+  let : SecondCountableTopology (FiniteAdeleRing (𝓞 ℚ) ℚ) := by
+    refine TopologicalSpace.secondCountableTopology_of_countable_cover («U» := Vset)
+      (fun _ ↦ RestrictedProduct.isOpen_forall_imp_mem hopen) (eq_univ_of_forall fun a ↦ ?_)
+    have he := Filter.eventually_cofinite.mp a.2
+    exact mem_iUnion.mpr ⟨he.toFinset, fun v hv ↦ by
+      by_contra h
+      exact hv (he.mem_toFinset.mpr h)⟩
+  let (v : InfinitePlace ℚ) : SecondCountableTopology v.Completion :=
+    (InfinitePlace.Completion.isometry_extensionEmbedding v).isEmbedding.secondCountableTopology
+  change SecondCountableTopology (((v : InfinitePlace ℚ) → v.Completion) × FiniteAdeleRing (𝓞 ℚ) ℚ)
+  infer_instance
+
+
 /-- Paper: Theorem 6.3.2.1(2), p. 304, following equation (6.3.2.6).
 Integrating the homogeneous theta representative over the full class group
 multiplies its component Mellin transform by the norm-one class mass.
@@ -261,7 +365,70 @@ theorem homogeneousTheta_classMellin_eq_mass_mul (χ : U) (f : ℬ) (s : halfPla
     let integrand := fun g : C𝔽 ↦ homogeneousAdelicTheta χ₁(χ) f g * c g
     Integrable integrand (ideleClassTamagawaMeasure F) ∧
       (∫ g, integrand g ∂ideleClassTamagawaMeasure F) = mass * Z(f, χ, (s : ℂ)) := by
-  sorry
+  let : MeasurableSpace C𝔽 := borel _
+  let : BorelSpace C𝔽 := ⟨rfl⟩
+  let : T2Space C𝔽 := (ideleGroup_quotient.{_, 0} F).2.2.2.2.2.1
+  let : LocallyCompactSpace C𝔽 := (ideleGroup_quotient.{_, 0} F).2.2.2.2.2.2.1
+  let : SecondCountableTopology (Multiplicative 𝔸[ℚ]) := homogeneousTheta_classMellin_rat_countable
+  obtain ⟨u, _, _⟩ := exists_adeleTrace_dualCoordinates F
+  let : SecondCountableTopology 𝔸[F] := u.symm.toHomeomorph.isEmbedding.secondCountableTopology
+  let : SecondCountableTopology 𝔸[F]ᵐᵒᵖ := MulOpposite.opHomeomorph.symm.isEmbedding.secondCountableTopology
+  let : SecondCountableTopology (IdeleGroup (𝓞 F) F) := Units.isEmbedding_embedProduct.secondCountableTopology
+  let : SecondCountableTopology C𝔽 := inferInstanceAs (SecondCountableTopology (IdeleGroup (𝓞 F) F ⧸ IdeleGroup.principalSubgroup (𝓞 F) F))
+  let ν := normOneIdeleClassTamagawaMeasure F
+  let μ := ideleClassTamagawaMeasure F
+  let : CompactSpace C₁ := (ideleClassGroup_finiteness F).2.1
+  let : ν.IsHaarMeasure := (multiplicativeTamagawaMeasures_existsUnique F).exists.choose_spec.2.2.2.1
+  let : μ.IsHaarMeasure := (ideleClassTamagawaMeasure_isWeil F).1
+  let ω : PontryaginDual C₁ := χ.comp (⟨(ideleClassNorm F).ker.subtype, continuous_subtype_val⟩ : C₁ →ₜ* C𝔽)
+  let c := ideleClassNormTwist χ (s : ℂ)
+  let W (g : C𝔽) := adelicTheta f g * c g
+  let A (g : C𝔽) := homogeneousAdelicTheta ω f g * c g
+  let Φ (p : C𝔽 × C₁) := W (p.2.val * p.1)
+  have hc : c ∈ relativeRightHalfPlane (ideleClassNorm F) (isProperMap_ideleClassNorm F) (ideleClassNorm_ne_one (F := F)) 1 := by
+    change 1 < quasiCharacterAbscissa (ideleClassNorm F) (isProperMap_ideleClassNorm F) ideleClassNorm_ne_one c
+    rw [quasiCharacterAbscissa_ideleClassNormTwist]
+    exact s.property
+  have hi : Integrable W μ := globalThetaMellinIntegral_integrable f c hc
+  have hP : AEStronglyMeasurable Φ (μ.prod ν) := by
+    apply Continuous.aestronglyMeasurable
+    exact ((adelicTheta f).continuous.mul c.continuous).comp ((continuous_subtype_val.comp continuous_snd).mul continuous_fst)
+  have hp : Integrable Φ (μ.prod ν) := by
+    apply (integrable_prod_iff' hP).mpr
+    constructor
+    · filter_upwards with u
+      change Integrable (fun g ↦ W (u.val * g)) μ
+      have hm : Measure.map (fun g : C𝔽 ↦ u.val * g) μ = μ := map_mul_left_eq_self μ u.val
+      have hw : AEStronglyMeasurable W (Measure.map (fun g : C𝔽 ↦ u.val * g) μ) := by
+        rw [hm]; exact hi.aestronglyMeasurable
+      have hi' : Integrable W (Measure.map (fun g : C𝔽 ↦ u.val * g) μ) := by rw [hm]; exact hi
+      have h := (integrable_map_measure hw ((continuous_const.mul continuous_id).measurable.aemeasurable)).mp hi'
+      exact h
+    · have he : (fun u : C₁ ↦ ∫ g, ‖Φ (g,u)‖ ∂μ) = fun _ ↦ ∫ g, ‖W g‖ ∂μ := by
+        funext u
+        change (∫ g, ‖W (u.val * g)‖ ∂μ) = _
+        exact integral_mul_left_eq_self (fun g ↦ ‖W g‖) u.val
+      rw [he]
+      exact integrable_const _
+  have ha (g : C𝔽) : (∫ u, Φ (g,u) ∂ν) = A g := by
+    have hu (u : C₁) : c u.val = (ω u : ℂ) := by
+      change (χ u.val : ℂ) * (((ideleClassNorm F u.val : ℝ≥0) : ℝ) : ℂ) ^ (s : ℂ) = _
+      simp only [MonoidHom.mem_ker.mp u.property, Units.val_one, NNReal.coe_one, Complex.ofReal_one, Complex.one_cpow, mul_one]
+      rfl
+    change (∫ u, adelicTheta f (u.val * g) * c (u.val * g) ∂ν) = _
+    simp_rw [map_mul c, hu, ← mul_assoc, integral_mul_const]
+    rfl
+  have hI : Integrable A μ := hp.integral_prod_left.congr (Filter.Eventually.of_forall ha)
+  refine ⟨hI, ?_⟩
+  change (∫ g, A g ∂μ) = ((ν univ).toReal : ℂ) * globalIdelicZFunction f c
+  rw [← integral_congr_ae (Filter.Eventually.of_forall ha), ← integral_prod Φ hp, integral_prod_symm Φ hp]
+  have he (u : C₁) : (∫ g, Φ (g,u) ∂μ) = ∫ g, W g ∂μ := integral_mul_left_eq_self W u.val
+  simp_rw [he, integral_const]
+  rw [RCLike.real_smul_eq_coe_mul]
+  congr 1
+  have hh := globalThetaMellinIntegral_eq_idelic f hc
+  have hz := globalIdelicZFunction_eq_integral f hc
+  exact hh.trans hz.symm
 
 -- Equation (6.3.2.1) is `adelePolarSubspace`. Equation (6.3.2.2) is
 -- `globalThetaPolarValues_fst_translate` and `globalThetaPolarValues_snd_translate`.

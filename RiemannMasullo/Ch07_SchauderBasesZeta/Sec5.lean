@@ -349,13 +349,88 @@ theorem strongCoprimalityJetMatrix_det (S : Finset V)
   · intro i j hij
     simp [strongCoprimalityJetMatrix, not_le.mpr (show j < i from hij)]
 
+/-- The reciprocal finite Euler polynomial is entire and nonzero to the right
+of the imaginary axis. -/
+private theorem strongCoprimalityJetMatrix_det_ne_zero_euler
+    {F : Type*} [Field F] [NumberField F]
+    (χ : PontryaginDual (IdeleClassGroup (𝓞 F) F))
+    (S : Finset (HeightOneSpectrum (𝓞 F))) :
+    (∀ z : ℂ, AnalyticAt ℂ (reciprocalPartialHeckeEulerProduct χ S) z) ∧
+      ∀ z : ℂ, 0 < z.re → reciprocalPartialHeckeEulerProduct χ S z ≠ 0 := by
+  classical
+  have hfactor (v : HeightOneSpectrum (𝓞 F)) (z : ℂ) :
+      AnalyticAt ℂ (fun w ↦ (finiteHeckeEulerFactor χ v w)⁻¹) z ∧
+        (0 < z.re → (finiteHeckeEulerFactor χ v z)⁻¹ ≠ 0) := by
+    by_cases hv : (ideleClassNormTwist χ 0).IsUnramifiedAt v
+    · have hq : 1 < (v.asIdeal.absNorm : ℝ) := by
+        exact_mod_cast HeightOneSpectrum.one_lt_absNorm v
+      have hq0 : (v.asIdeal.absNorm : ℂ) ≠ 0 := by
+        exact_mod_cast (zero_lt_one.trans (HeightOneSpectrum.one_lt_absNorm v)).ne'
+      simp only [finiteHeckeEulerFactor, ite_eq_left hv, inv_inv]
+      constructor
+      · have hc : Differentiable ℂ (fun w : ℂ ↦ (v.asIdeal.absNorm : ℂ) ^ (-w)) :=
+          differentiable_id.neg.const_cpow (Or.inl hq0)
+        exact ((hc.const_mul ((ideleClassNormTwist χ 0).localValue v)).const_sub 1).analyticAt z
+      · intro hz hzero
+        have hlt : ‖(ideleClassNormTwist χ 0).localValue v *
+            (v.asIdeal.absNorm : ℂ) ^ (-z)‖ < 1 := by
+          rw [norm_mul, norm_ideleClassNormTwist_zero_localValue, one_mul,
+            ← Complex.ofReal_natCast,
+            Complex.norm_cpow_eq_rpow_re_of_pos (zero_lt_one.trans hq), Complex.neg_re]
+          exact Real.rpow_lt_one_of_one_lt_of_neg hq (by linarith)
+        have he := (sub_eq_zero.mp hzero).symm
+        exact hlt.ne (by rw [he, norm_one])
+    · simp only [finiteHeckeEulerFactor, ite_eq_right hv, inv_one]
+      exact ⟨analyticAt_const, fun _ ↦ one_ne_zero⟩
+  constructor
+  · intro z
+    exact S.analyticAt_fun_prod (fun v _ ↦ (hfactor v z).1)
+  · intro z hz
+    exact Finset.prod_ne_zero_iff.mpr (fun v _ ↦ (hfactor v z).2 hz)
+
+/-- The boundary line of absolute convergence lies in the existing zero-free region. -/
+private theorem strongCoprimalityJetMatrix_det_ne_zero_order
+    {F : Type*} [Field F] [NumberField F]
+    (χ : PontryaginDual (IdeleClassGroup (𝓞 F) F)) (L : ℂ → ℂ)
+    (hNF : MeromorphicNFOn L univ)
+    (hSeries : ∀ z : Complex.re ⁻¹' Ioi (1 : ℝ), L z = finiteHeckeL χ z)
+    (z : ℂ) (hz : z.re = 1) : meromorphicOrderAt L z ≤ 0 := by
+  obtain ⟨A, hA, hfield⟩ := finiteHeckeL_zeroFreeRegion
+  obtain ⟨scale, hB, hbound⟩ := hfield F χ
+  apply hbound L hNF hSeries z
+  have hlog : 0 ≤ Real.log (scale * (|z.im| + 3)) := by
+    apply Real.log_nonneg
+    have hBpos : 0 < scale := by linarith
+    nlinarith [mul_nonneg hBpos.le (abs_nonneg z.im)]
+  rw [hz]
+  exact sub_le_self _ (div_nonneg hA.le (mul_nonneg (by positivity) hlog))
+
 /-- Paper: Equation (7.5.0.13), p. 378.
 The regular block is invertible at a spectral point on the imaginary axis.
 Deviation: At the exceptional pole of a norm twist the regular-block hypothesis fails. -/
 theorem strongCoprimalityJetMatrix_det_ne_zero (S : Finset V)
     (hS : ideleClassNormTwist χ⁻¹ 0 ∈ unramifiedOutside F S) (s : ℂ) (_hs : s.re = 0)
     (hL : AnalyticAt ℂ (heckeEulerProductOutside S χ⁻¹ hS) (1 - s)) (N : ℕ) :
-    (strongCoprimalityJetMatrix χ S hS s hL N).det ≠ 0 := by sorry
+    (strongCoprimalityJetMatrix χ S hS s hL N).det ≠ 0 := by
+  rw [strongCoprimalityJetMatrix_det]
+  apply pow_ne_zero
+  let r : ℂ := 1 - s
+  have hr : r.re = 1 := by simp only [r, Complex.sub_re, Complex.one_re, _hs, sub_zero]
+  obtain ⟨L, hNF, hSeries⟩ := finiteHeckeL_exists_continuation χ⁻¹
+  obtain ⟨hP, hPne⟩ := strongCoprimalityJetMatrix_det_ne_zero_euler χ⁻¹ S
+  have hM : MeromorphicOn
+      (fun z ↦ reciprocalPartialHeckeEulerProduct χ⁻¹ S z * L z) univ :=
+    fun z hz ↦ (hP z).meromorphicAt.mul (hNF hz).meromorphicAt
+  have horder : meromorphicOrderAt (heckeEulerProductOutside S χ⁻¹ hS) r =
+      meromorphicOrderAt L r := by
+    rw [heckeEulerProductOutside_eq_finite S χ⁻¹ hS L hNF hSeries,
+      meromorphicOrderAt_toMeromorphicNFOn hM (mem_univ r)]
+    exact meromorphicOrderAt_mul_of_ne_zero (hP r) (hPne r (by rw [hr]; norm_num))
+  apply (hL.meromorphicNFAt.meromorphicOrderAt_eq_zero_iff).mp
+  apply le_antisymm _ hL.meromorphicOrderAt_nonneg
+  change meromorphicOrderAt (heckeEulerProductOutside S χ⁻¹ hS) r ≤ 0
+  rw [horder]
+  exact strongCoprimalityJetMatrix_det_ne_zero_order χ⁻¹ L hNF hSeries r hr
 
 local notation "Vℚ" => HeightOneSpectrum (𝓞 ℚ)
 
