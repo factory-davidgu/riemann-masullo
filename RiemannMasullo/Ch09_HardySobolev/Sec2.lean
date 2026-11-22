@@ -632,6 +632,99 @@ private theorem iteratedDeriv_exp_moment {h : ℝ → ℂ} {α β : ℝ}
     (hderiv 0 w hw).differentiableAt.differentiableWithinAt) (hS.mem_nhds hz),
     hFi k z hz, hiter k z hz⟩
 
+/-- The line density dominates its exponential factor. -/
+private theorem exp_le_lineSobolevDensity (b : ℝ) (N : ℕ) (x : ℝ) :
+    Real.exp (2 * b * x) ≤ lineSobolevDensity b N x := by
+  unfold lineSobolevDensity
+  refine le_mul_of_one_le_right (Real.exp_pos _).le ?_
+  calc (1 : ℝ) = x ^ (2 * 0) := by rw [mul_zero, pow_zero]
+    _ ≤ ∑ k ∈ Finset.range (N + 1), x ^ (2 * k) :=
+      Finset.single_le_sum (f := fun k ↦ x ^ (2 * k))
+        (fun k _ ↦ (even_two_mul k).pow_nonneg x) (Finset.mem_range.2 N.succ_pos)
+
+/-- The line density is continuous. -/
+private theorem continuous_lineSobolevDensity (b : ℝ) (N : ℕ) :
+    Continuous (lineSobolevDensity b N) := by
+  show Continuous fun x : ℝ ↦ Real.exp (2 * b * x) * ∑ k ∈ Finset.range (N + 1), x ^ (2 * k)
+  exact (Real.continuous_exp.comp (continuous_const.mul continuous_id)).mul
+    (continuous_finsetSum _ fun k _ ↦ continuous_id.pow (2 * k))
+
+/-- To the left of the line, every moment kernel cut off above a point gives a continuous
+functional on the line space. -/
+private theorem lineSobolev_cutoff_moment_functional (a b : ℝ) (ha : 1 < a) (N k : ℕ)
+    (z : ℂ) (hz : z.re < b) :
+    ∃ Λ : Lp ℂ 2 (volume.withDensity fun x ↦
+        ENNReal.ofReal (lineSobolevDensity b N x)) →L[ℂ] ℂ,
+      ∀ f : Lp ℂ 2 (volume.withDensity fun x ↦ ENNReal.ofReal (lineSobolevDensity b N x)),
+        Integrable (fun x : ℝ ↦ (Ici (-Real.log a)).indicator (⇑f) x *
+          (x : ℂ) ^ k * Complex.exp (z * (x : ℂ))) volume ∧
+        Λ f = ∫ x : ℝ, (Ici (-Real.log a)).indicator (⇑f) x *
+          (x : ℂ) ^ k * Complex.exp (z * (x : ℂ)) := by
+  have hlogA : 0 < Real.log a := Real.log_pos ha
+  have hbz : 0 < b - z.re := sub_pos.2 hz
+  obtain ⟨Λ, hΛ⟩ := weightedL2_moment_functional (continuous_lineSobolevDensity b N)
+    (fun x ↦ (Real.exp_pos _).trans_le (exp_le_lineSobolevDensity b N x)) z k
+    (measurableSet_Ici (a := -Real.log a)) (δ := 2 * (b - z.re))
+    (K := Real.exp (4 * (b - z.re) * Real.log a)) (mul_pos two_pos hbz) (Real.exp_pos _).le
+    fun x hx ↦ by
+      have hx' : -Real.log a ≤ x := hx
+      have hle : 2 * z.re * x + 2 * (b - z.re) * |x| ≤
+          4 * (b - z.re) * Real.log a + 2 * b * x := by
+        rcases le_total 0 x with h0 | h0
+        · rw [abs_of_nonneg h0]
+          nlinarith [mul_pos hbz hlogA]
+        · rw [abs_of_nonpos h0]
+          nlinarith [mul_nonneg hbz.le (by linarith : 0 ≤ Real.log a + x)]
+      calc Real.exp (2 * z.re * x + 2 * (b - z.re) * |x|)
+          ≤ Real.exp (4 * (b - z.re) * Real.log a + 2 * b * x) := Real.exp_le_exp.2 hle
+        _ = Real.exp (4 * (b - z.re) * Real.log a) * Real.exp (2 * b * x) := Real.exp_add _ _
+        _ ≤ Real.exp (4 * (b - z.re) * Real.log a) * lineSobolevDensity b N x :=
+          mul_le_mul_of_nonneg_left (exp_le_lineSobolevDensity b N x) (Real.exp_pos _).le
+  refine ⟨Λ, fun f ↦ ?_⟩
+  have hfun : (fun x : ℝ ↦ (Ici (-Real.log a)).indicator (⇑f) x *
+      (x : ℂ) ^ k * Complex.exp (z * (x : ℂ))) = fun x : ℝ ↦ f x *
+      (Ici (-Real.log a)).indicator (fun x : ℝ ↦ (x : ℂ) ^ k * Complex.exp (z * (x : ℂ))) x := by
+    funext x
+    by_cases hx : x ∈ Ici (-Real.log a)
+    · rw [Set.indicator_of_mem hx, Set.indicator_of_mem hx, mul_assoc]
+    · rw [Set.indicator_of_notMem hx, Set.indicator_of_notMem hx, zero_mul, zero_mul, mul_zero]
+  rw [hfun]
+  exact hΛ f
+
+/-- The Mellin transform of a profile in the logarithmic coordinate is its two-sided
+exponential integral. -/
+private theorem mellin_comp_log_eq (h : ℝ → ℂ) (s : ℂ) :
+    mellin (fun t ↦ h (Real.log t)) s = ∫ x : ℝ, h x * Complex.exp (s * (x : ℂ)) := by
+  rw [mellin, ← integral_comp_exp]
+  refine integral_congr_ae (ae_of_all _ fun y ↦ ?_)
+  show Real.exp y • (((Real.exp y : ℝ) : ℂ) ^ (s - 1) • h (Real.log (Real.exp y))) =
+    h y * Complex.exp (s * (y : ℂ))
+  have hexp : (y : ℂ) + (y : ℂ) * (s - 1) = s * (y : ℂ) := by ring
+  rw [Real.log_exp, Complex.real_smul, smul_eq_mul,
+    Complex.cpow_def_of_ne_zero (Complex.ofReal_ne_zero.2 (Real.exp_pos y).ne'),
+    ← Complex.ofReal_log (Real.exp_pos y).le, Real.log_exp, Complex.ofReal_exp, ← mul_assoc,
+    ← Complex.exp_add, hexp]
+  exact mul_comm _ _
+
+/-- Every exponential moment of an exponential-decay profile is integrable. -/
+private theorem integrable_logExponentialDecay_moment (f : logExponentialDecaySubmodule univ)
+    (σ : ℝ) (n : ℕ) :
+    Integrable (fun x : ℝ ↦ f.val x * (x : ℂ) ^ n * Complex.exp ((σ : ℂ) * (x : ℂ))) volume := by
+  have hfun : (fun x : ℝ ↦ f.val x * (x : ℂ) ^ n * Complex.exp ((σ : ℂ) * (x : ℂ))) =
+      fun x : ℝ ↦ (x : ℂ) ^ n * logExponentialDecayTwist univ ⟨σ, mem_univ σ⟩ f x := by
+    funext x
+    rw [logExponentialDecayTwist_apply]
+    show f.val x * (x : ℂ) ^ n * Complex.exp ((σ : ℂ) * (x : ℂ)) =
+      (x : ℂ) ^ n * (((Real.exp (σ * x) : ℝ) : ℂ) * f.val x)
+    rw [Complex.ofReal_exp, Complex.ofReal_mul]
+    ring
+  rw [hfun]
+  refine (SchwartzMap.integrable_pow_mul volume
+    (logExponentialDecayTwist univ ⟨σ, mem_univ σ⟩ f) n).mono'
+    ((Complex.continuous_ofReal.pow n).mul (SchwartzMap.continuous _)).aestronglyMeasurable
+    (ae_of_all _ fun x ↦ le_of_eq ?_)
+  rw [norm_mul, norm_pow, Complex.norm_real]
+
 /-- Paper: Corollary 9.2.1.4, p. 407. In the left half-plane each indicated derivative
 evaluation is bounded on the part supported above the cutoff and is given by the moment integral.
 Deviation: State the continuous functional on the supported source, where it extends the
@@ -645,7 +738,23 @@ theorem scalarLineSobolev_cutoff_eval (a b : ℝ) (_ha : 1 < a)
           (x : ℂ) ^ k * Complex.exp (z * (x : ℂ))) ∧
       ∀ (f : PositiveRealExponentialDecay univ) (u : ScalarLineSobolev b N),
         tsupport f.val ⊆ Ioi (-Real.log a) → (u : ℝ → ℂ) =ᵐ[volume] f.val →
-        Λ u = iteratedDeriv k (mellin (fun t ↦ f.val (Real.log t))) z := by sorry
+        Λ u = iteratedDeriv k (mellin (fun t ↦ f.val (Real.log t))) z := by
+  obtain ⟨Λ, hΛ⟩ := lineSobolev_cutoff_moment_functional a b _ha N k z _hz
+  refine ⟨Λ, hΛ, fun f u hsupp hu ↦ ?_⟩
+  have hint : ∀ σ ∈ Ioo (z.re - 1) (z.re + 1), ∀ n : ℕ, Integrable
+      (fun x : ℝ ↦ f.val x * (x : ℂ) ^ n * Complex.exp ((σ : ℂ) * (x : ℂ))) volume :=
+    fun σ _ n ↦ integrable_logExponentialDecay_moment f σ n
+  have hmel : mellin (fun t ↦ f.val (Real.log t)) =
+      fun w : ℂ ↦ ∫ x : ℝ, f.val x * Complex.exp (w * (x : ℂ)) :=
+    funext fun w ↦ mellin_comp_log_eq f.val w
+  rw [hmel, (iteratedDeriv_exp_moment hint k ⟨by linarith, by linarith⟩).2.2]
+  refine (hΛ u).2.trans (integral_congr_ae ?_)
+  filter_upwards [hu] with x hx
+  by_cases hmem : x ∈ Ici (-Real.log a)
+  · rw [Set.indicator_of_mem hmem, hx]
+  · have h0 : f.val x = 0 :=
+      image_eq_zero_of_notMem_tsupport fun h ↦ hmem (Ioi_subset_Ici_self (hsupp h))
+    rw [Set.indicator_of_notMem hmem, h0]
 
 /-- Paper: Corollary 9.2.1.4, p. 407. The cutoff Mellin integral is holomorphic to
 the left of the line and has the stated derivatives for every completed source class.
@@ -655,7 +764,13 @@ theorem scalarLineSobolev_cutoff_iteratedDeriv_mellin (a b : ℝ) (_ha : 1 < a)
     let u := (Ici (-Real.log a)).indicator (f : ℝ → ℂ)
     let M := fun w : ℂ ↦ ∫ x : ℝ, u x * Complex.exp (w * (x : ℂ))
     AnalyticAt ℂ M z ∧ iteratedDeriv k M z =
-      ∫ x : ℝ, u x * (x : ℂ) ^ k * Complex.exp (z * (x : ℂ)) := by sorry
+      ∫ x : ℝ, u x * (x : ℂ) ^ k * Complex.exp (z * (x : ℂ)) := by
+  intro u M
+  have h := iteratedDeriv_exp_moment (h := u) (α := z.re - 1) (β := b) (fun σ hσ n ↦ by
+    obtain ⟨_, hΛ⟩ := lineSobolev_cutoff_moment_functional a b _ha N n (σ : ℂ)
+      (by rw [Complex.ofReal_re]; exact hσ.2)
+    exact (hΛ f).1) k ⟨by linarith, _hz⟩
+  exact ⟨h.1, h.2.2⟩
 
 section ModulatedLine
 
