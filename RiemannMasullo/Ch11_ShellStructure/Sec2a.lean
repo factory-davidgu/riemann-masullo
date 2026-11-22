@@ -395,12 +395,175 @@ theorem OrbitalJetIndex.isZero {χ : PontryaginDual C𝔽} {S : Finset V} {s : �
   OrbitalJetIndex.isZero_of_order_pos (OrbitalJetIndex.isZero_analyticAt χ S _)
     (Nat.zero_lt_of_lt (lt_of_lt_of_le j.property (min_le_left _ _)))
 
+private theorem orbitalJet_logNorm_continuous :
+    Continuous (fun g : C𝔽 ↦ logNorm g) :=
+  Real.continuousOn_log.comp_continuous
+    (NNReal.continuous_coe.comp (Units.continuous_val.comp (m𝔽).continuous))
+    fun _ ↦ (NNReal.coe_pos.mpr (Units.zero_lt _)).ne'
+
+private theorem orbitalJet_log_positiveRealHaar :
+    Measure.map (fun t : ℝ≥0ˣ ↦ Real.log ((t.val : ℝ≥0) : ℝ)) positiveRealHaar = volume := by
+  let : BorelSpace ℝ≥0ˣ := borelSpace_units_of_continuousInv₀ ℝ≥0
+  have hlogt : Measurable (fun t : ℝ≥0ˣ ↦ Real.log ((t.val : ℝ≥0) : ℝ)) :=
+    (Real.continuousOn_log.comp_continuous (NNReal.continuous_coe.comp Units.continuous_val)
+      fun _ ↦ (NNReal.coe_pos.mpr (Units.zero_lt _)).ne').measurable
+  unfold positiveRealHaar
+  have hexp : Measurable (fun x : ℝ ↦
+      Units.mk0 (Real.exp x).toNNReal
+        (Real.toNNReal_eq_zero.not.mpr (not_le_of_gt (Real.exp_pos x)))) :=
+    measurable_comap_iff.mpr (continuous_real_toNNReal.comp Real.continuous_exp).measurable
+  rw [Measure.map_map hlogt hexp]
+  have hid : ((fun t : ℝ≥0ˣ ↦ Real.log ((t.val : ℝ≥0) : ℝ)) ∘ fun x : ℝ ↦
+      Units.mk0 (Real.exp x).toNNReal
+        (Real.toNNReal_eq_zero.not.mpr (not_le_of_gt (Real.exp_pos x)))) = id := by
+    funext x
+    change Real.log ((Real.exp x).toNNReal : ℝ) = x
+    rw [Real.coe_toNNReal _ (Real.exp_pos x).le, Real.log_exp]
+  rw [hid, Measure.map_id]
+
+private theorem orbitalJet_logNorm_measurePreserving :
+    MeasurePreserving (fun g : C𝔽 ↦ logNorm g)
+      (canonicalModulatedHaar m𝔽
+        (⟨isProperMap_ideleClassNorm F, ideleClassNorm_ne_one (F := F)⟩ : IsModulation m𝔽))
+      volume := by
+  have hm : IsModulation m𝔽 := ⟨isProperMap_ideleClassNorm F, ideleClassNorm_ne_one (F := F)⟩
+  obtain ⟨τ, hτc, hτ⟩ := (ideleGroup_quotient.{_, 0} F).2.2.2.2.2.2.2.2.2.2.1
+  let τ' : ℝ≥0ˣ →ₜ* C𝔽 := ⟨τ, hτc⟩
+  let : CompactSpace (m𝔽).toMonoidHom.ker :=
+    isCompact_iff_compactSpace.mp (IsModulation.isCompact_ker hm)
+  let μ₁ : Measure (m𝔽).toMonoidHom.ker := Measure.haarMeasure ⊤
+  let : IsProbabilityMeasure μ₁ := ⟨Measure.haarMeasure_self⟩
+  let : BorelSpace ℝ≥0ˣ := borelSpace_units_of_continuousInv₀ ℝ≥0
+  let : SecondCountableTopology ℝ≥0ˣ := Units.isEmbedding_val₀.secondCountableTopology
+  let : SFinite positiveRealHaar := by unfold positiveRealHaar; infer_instance
+  refine ⟨orbitalJet_logNorm_continuous.measurable, ?_⟩
+  rw [canonicalModulatedHaar_eq_map_prod m𝔽 hm τ' hτ μ₁ Measure.haarMeasure_self]
+  have hsplit_meas : Measurable (fun z : (m𝔽).toMonoidHom.ker × ℝ≥0ˣ ↦ (z.1 : C𝔽) * τ' z.2) :=
+    ((continuous_subtype_val.comp continuous_fst).mul (τ'.continuous.comp continuous_snd)).measurable
+  rw [Measure.map_map orbitalJet_logNorm_continuous.measurable hsplit_meas]
+  have hcomp : ((fun g : C𝔽 ↦ logNorm g) ∘ fun z : (m𝔽).toMonoidHom.ker × ℝ≥0ˣ ↦ (z.1 : C𝔽) * τ' z.2) =
+      (fun t : ℝ≥0ˣ ↦ Real.log ((t.val : ℝ≥0) : ℝ)) ∘ Prod.snd := by
+    funext ⟨k, t⟩
+    change Real.log ((ideleClassNorm F ((k : C𝔽) * τ t)).val : ℝ) = Real.log ((t.val : ℝ≥0) : ℝ)
+    have hk : ideleClassNorm F (k : C𝔽) = 1 := k.property
+    rw [map_mul, hk, one_mul, hτ t]
+  have hlogt : Measurable (fun t : ℝ≥0ˣ ↦ Real.log ((t.val : ℝ≥0) : ℝ)) :=
+    (Real.continuousOn_log.comp_continuous (NNReal.continuous_coe.comp Units.continuous_val)
+      fun _ ↦ (NNReal.coe_pos.mpr (Units.zero_lt _)).ne').measurable
+  rw [hcomp, ← Measure.map_map hlogt measurable_snd,
+    (measurePreserving_snd (μ := μ₁) (ν := positiveRealHaar)).map_eq]
+  exact orbitalJet_log_positiveRealHaar
+
+private theorem orbitalJet_pow_mul_rpow_inv_continuous (k : ℕ) (s : ℝ) :
+    Continuous (fun x : ℝ ↦ x ^ (2 * k) * ((1 + x ^ 2) ^ (s / 2))⁻¹) :=
+  (continuous_id.pow (2 * k)).mul
+    (((continuous_const.add (continuous_id.pow 2)).rpow_const fun x ↦
+        Or.inl (by change (1 : ℝ) + x ^ 2 ≠ 0; positivity)).inv₀ fun x ↦
+      (Real.rpow_pos_of_pos (by change (0 : ℝ) < 1 + x ^ 2; positivity) _).ne')
+
+private theorem orbitalJet_integrable_pow_mul_rpow_inv {k : ℕ} {s : ℝ}
+    (h : 2 * (k : ℝ) + 1 < s) :
+    Integrable (fun x : ℝ ↦ x ^ (2 * k) * ((1 + x ^ 2) ^ (s / 2))⁻¹) volume := by
+  have hr : ((Module.finrank ℝ ℝ : ℕ) : ℝ) < s - 2 * k := by
+    rw [Module.finrank_self]
+    push_cast
+    linarith
+  refine (integrable_rpow_neg_one_add_norm_sq (E := ℝ) (μ := volume) hr).mono'
+    (orbitalJet_pow_mul_rpow_inv_continuous k s).aestronglyMeasurable (ae_of_all _ fun x ↦ ?_)
+  have hy : 0 < 1 + x ^ 2 := by positivity
+  have h1 : x ^ (2 * k) ≤ (1 + x ^ 2) ^ k := by
+    rw [pow_mul]
+    exact pow_le_pow_left₀ (sq_nonneg x) (by linarith) k
+  have h2 : (1 + x ^ 2) ^ (-(s - 2 * k) / 2) = (1 + x ^ 2) ^ k * ((1 + x ^ 2) ^ (s / 2))⁻¹ := by
+    rw [← Real.rpow_natCast (1 + x ^ 2) k, ← Real.rpow_neg hy.le, ← Real.rpow_add hy]
+    congr 1
+    ring
+  rw [Real.norm_of_nonneg (mul_nonneg (Even.pow_nonneg (even_two_mul k) x)
+    (inv_nonneg.2 (Real.rpow_nonneg hy.le _))), Real.norm_eq_abs, sq_abs, h2]
+  exact mul_le_mul_of_nonneg_right h1 (inv_nonneg.2 (Real.rpow_nonneg hy.le _))
+
+private theorem orbitalJet_continuous (χ : PontryaginDual C𝔽) (t : ℝ) (k : ℕ) :
+    Continuous (jet(χ, t, k)) :=
+  (ideleClassNormTwist χ ((0 : ℂ) + (t : ℂ) * Complex.I)).continuous.mul
+    ((Complex.continuous_ofReal.comp orbitalJet_logNorm_continuous).pow k)
+
+private theorem orbitalJet_norm_sq (χ : PontryaginDual C𝔽) (t : ℝ) (k : ℕ) (g : C𝔽) :
+    ‖jet(χ, t, k) g‖ ^ 2 = (logNorm g) ^ (2 * k) := by
+  have htwist : ‖ideleClassNormTwist χ ((0 : ℂ) + (t : ℂ) * Complex.I) g‖ = 1 := by
+    change ‖(χ g : ℂ) *
+      (((ideleClassNorm F g).val : ℝ) : ℂ) ^ ((0 : ℂ) + (t : ℂ) * Complex.I)‖ = 1
+    rw [norm_mul, Circle.norm_coe, one_mul,
+      Complex.norm_cpow_eq_rpow_re_of_pos
+        (NNReal.coe_pos.mpr (Units.zero_lt (ideleClassNorm F g)))]
+    simp
+  change ‖ideleClassNormTwist χ ((0 : ℂ) + (t : ℂ) * Complex.I) g *
+    (logNorm g : ℂ) ^ k‖ ^ 2 = _
+  rw [norm_mul, htwist, one_mul, norm_pow, Complex.norm_real, Real.norm_eq_abs]
+  calc
+    (|logNorm g| ^ k) ^ 2 = (|logNorm g| ^ 2) ^ k := by
+      rw [← pow_mul, ← pow_mul, Nat.mul_comm k 2]
+    _ = ((logNorm g) ^ 2) ^ k := congrArg (fun y : ℝ ↦ y ^ k) (sq_abs (logNorm g))
+    _ = (logNorm g) ^ (2 * k) := (pow_mul _ _ _).symm
+
+private theorem orbitalJet_density_eq (s : ℝ) (g : C𝔽) :
+    (intervalSobolevDensity 0 0 s (logNorm g))⁻¹ =
+      ((1 + (logNorm g) ^ 2) ^ (s / 2))⁻¹ := by
+  simp only [intervalSobolevDensity, mul_zero, zero_mul, Real.exp_zero, max_self, one_mul]
+
+private theorem orbitalJet_density_pos (s : ℝ) (g : C𝔽) :
+    0 < (intervalSobolevDensity 0 0 s (logNorm g))⁻¹ := by
+  rw [orbitalJet_density_eq]
+  exact inv_pos.mpr (Real.rpow_pos_of_pos (by positivity) _)
+
+private theorem orbitalJet_density_continuous (s : ℝ) :
+    Continuous (fun g : C𝔽 ↦ (intervalSobolevDensity 0 0 s (logNorm g))⁻¹) := by
+  have hρ : Continuous (fun g : C𝔽 ↦ (1 + (logNorm g) ^ 2) ^ (s / 2)) :=
+    ((continuous_const : Continuous (fun _ : C𝔽 ↦ (1 : ℝ))).add
+      (orbitalJet_logNorm_continuous.pow 2)).rpow_const fun g ↦ Or.inl (by
+        change (1 : ℝ) + (logNorm g) ^ 2 ≠ 0
+        positivity)
+  have heq : (fun g : C𝔽 ↦ (intervalSobolevDensity 0 0 s (logNorm g))⁻¹) =
+      fun g : C𝔽 ↦ ((1 + (logNorm g) ^ 2) ^ (s / 2))⁻¹ :=
+    funext (orbitalJet_density_eq s)
+  rw [heq]
+  exact hρ.inv₀ fun g ↦ (Real.rpow_pos_of_pos (by positivity) _).ne'
+
+private theorem orbitalJet_ae_of_ae_withDensity {s : ℝ} {p : C𝔽 → Prop}
+    (h : ∀ᵐ g ∂(μ'(s)), p g) : ∀ᵐ g ∂μ𝔽, p g := by
+  have h' := (ae_withDensity_iff
+    ((orbitalJet_density_continuous s).measurable.ennreal_ofReal)).mp h
+  filter_upwards [h'] with g hg
+  exact hg (ENNReal.ofReal_pos.mpr (orbitalJet_density_pos s g)).ne'
+
 /-- Paper: Theorem 11.2.0.2 and (11.2.0.5), p. 485. Each admitted jet gives a
 reciprocal-weight Sobolev vector.
 Deviation: The cutoff excludes the divergent endpoint. -/
 theorem orbitalJet_memLp (χ : PontryaginDual C𝔽) (S : Finset V) {s : ℝ} (_hs : 0 ≤ s)
     (j : OrbitalJetIndex χ S s) :
-    MemLp (jet(χ, j.val.1, j.val.2)) 2 (μ'(s)) := by sorry
+    MemLp (jet(χ, j.val.1, j.val.2)) 2 (μ'(s)) := by
+  have horder : (j.val.2 : ℝ) < (s - 1) / 2 :=
+    ((lt_spectralBoundaryMultiplicity s _ _).mp j.property).2
+  have hk : 2 * (j.val.2 : ℝ) + 1 < s := by linarith
+  have hm : IsModulation m𝔽 := ⟨isProperMap_ideleClassNorm F, ideleClassNorm_ne_one (F := F)⟩
+  let ν : Measure C𝔽 := canonicalModulatedHaar m𝔽 hm
+  let : ν.IsHaarMeasure := (existsUnique_canonicalModulatedHaar m𝔽 hm).exists.choose_spec.1
+  have hν : Integrable (fun g : C𝔽 ↦ (logNorm g) ^ (2 * j.val.2) *
+      ((1 + (logNorm g) ^ 2) ^ (s / 2))⁻¹) ν :=
+    orbitalJet_logNorm_measurePreserving.integrable_comp_of_integrable
+      (orbitalJet_integrable_pow_mul_rpow_inv hk)
+  have hμ : Integrable (fun g : C𝔽 ↦ (logNorm g) ^ (2 * j.val.2) *
+      ((1 + (logNorm g) ^ 2) ^ (s / 2))⁻¹) μ𝔽 := by
+    rw [Measure.isMulLeftInvariant_eq_smul μ𝔽 ν]
+    exact hν.smul_measure_nnreal
+  apply (memLp_two_iff_integrable_sq_norm
+    (orbitalJet_continuous χ j.val.1 j.val.2).aestronglyMeasurable).2
+  apply (integrable_withDensity_iff
+    ((orbitalJet_density_continuous s).measurable.ennreal_ofReal)
+    (ae_of_all μ𝔽 fun _ ↦ ENNReal.ofReal_lt_top)).2
+  refine hμ.congr (ae_of_all μ𝔽 fun g ↦ ?_)
+  dsimp only
+  rw [orbitalJet_norm_sq, orbitalJet_density_eq,
+    ENNReal.toReal_ofReal (inv_nonneg.mpr (Real.rpow_pos_of_pos (by positivity) _).le)]
 
 local notation "jetLp(" χ ", " S ", " hs ", " j ")" =>
   (orbitalJet_memLp χ S hs j).toLp (jet(χ, (j).val.1, (j).val.2))
@@ -410,7 +573,34 @@ lies in the conjugate isotype in the negative space. -/
 theorem orbitalJet_isotype (χ : PontryaginDual C𝔽) (S : Finset V) {s : ℝ} (hs : 0 ≤ s)
     (j : OrbitalJetIndex χ S s) (k : C₁) :
     (fun g ↦ jetLp(χ, S, hs, j) (k.val⁻¹ * g)) =ᵐ[μ𝔽]
-      fun g ↦ (χ⁻¹ k.val : ℂ) * jetLp(χ, S, hs, j) g := by sorry
+      fun g ↦ (χ⁻¹ k.val : ℂ) * jetLp(χ, S, hs, j) g := by
+  have hae : (jetLp(χ, S, hs, j) : C𝔽 → ℂ) =ᵐ[μ𝔽] jet(χ, j.val.1, j.val.2) :=
+    orbitalJet_ae_of_ae_withDensity (MemLp.coeFn_toLp _)
+  have hae_tr : (fun g ↦ jetLp(χ, S, hs, j) (k.val⁻¹ * g)) =ᵐ[μ𝔽]
+      fun g ↦ jet(χ, j.val.1, j.val.2) (k.val⁻¹ * g) :=
+    (measurePreserving_mul_left μ𝔽 k.val⁻¹).quasiMeasurePreserving.ae_eq_comp hae
+  have hpt : ∀ g : C𝔽, jet(χ, j.val.1, j.val.2) (k.val⁻¹ * g) =
+      (χ⁻¹ k.val : ℂ) * jet(χ, j.val.1, j.val.2) g := by
+    intro g
+    have hk : ideleClassNorm F k.val = 1 := k.property
+    have hnorm : ideleClassNorm F (k.val⁻¹ * g) = ideleClassNorm F g := by
+      rw [map_mul, map_inv, hk, inv_one, one_mul]
+    have hlog : logNorm (k.val⁻¹ * g) = logNorm g := by
+      dsimp only
+      rw [hnorm]
+    change (χ (k.val⁻¹ * g) : ℂ) *
+        (((ideleClassNorm F (k.val⁻¹ * g)).val : ℝ) : ℂ) ^ ((0 : ℂ) + (j.val.1 : ℂ) * Complex.I) *
+        (logNorm (k.val⁻¹ * g) : ℂ) ^ j.val.2 =
+      (χ⁻¹ k.val : ℂ) *
+        ((χ g : ℂ) *
+          (((ideleClassNorm F g).val : ℝ) : ℂ) ^ ((0 : ℂ) + (j.val.1 : ℂ) * Complex.I) *
+          (logNorm g : ℂ) ^ j.val.2)
+    rw [hnorm, hlog, map_mul, Circle.coe_mul, map_inv]
+    have hχinv : (χ k.val)⁻¹ = χ⁻¹ k.val := rfl
+    rw [hχinv]
+    ring
+  filter_upwards [hae_tr, hae] with g hg₁ hg₂
+  rw [hg₁, hg₂, hpt g]
 
 variable (F) in
 /-- Paper: Theorem 11.2.0.2 and Remark 11.2.0.3, p. 485. Inside the chosen
@@ -551,6 +741,71 @@ theorem orbitalSobolevPairing_pullback (S : Finset V) (a : ℝ) {s : ℝ} (hs : 
 -- TODO(paper-gap): Proposition 11.2.0.4 prints the full multiplicity and
 -- claims noncontainment in an open ball even when S₀ is empty.
 
+private theorem orbitalJet_lp_norm_sq {s : ℝ} (u : Lp ℂ 2 (μ'(s))) :
+    ‖u‖ ^ 2 = ∫ g : C𝔽, ‖u g‖ ^ 2 ∂(μ'(s)) := by
+  have hre : (inner ℂ u u).re = ‖u‖ ^ 2 := inner_self_eq_norm_sq (𝕜 := ℂ) u
+  rw [← hre, L2.inner_def]
+  have hre_int : (∫ g : C𝔽, inner ℂ (u g) (u g) ∂(μ'(s))).re =
+      ∫ g : C𝔽, (inner ℂ (u g) (u g)).re ∂(μ'(s)) :=
+    (Complex.reCLM.integral_comp_comm (L2.integrable_inner u u)).symm
+  rw [hre_int]
+  refine integral_congr_ae (ae_of_all _ fun g ↦ ?_)
+  exact inner_self_eq_norm_sq (𝕜 := ℂ) (u g)
+
+private theorem orbitalJet_integral_pos {s : ℝ} (hs : 1 < s) {k : ℕ}
+    (hkN : k < Nat.ceil ((s - 1) / 2)) :
+    0 < ∫ g : C𝔽, (logNorm g) ^ (2 * k) * ((1 + (logNorm g) ^ 2) ^ (s / 2))⁻¹ ∂μ𝔽 := by
+  have hk' : (k : ℝ) < (s - 1) / 2 := Nat.lt_ceil.mp hkN
+  have hk : 2 * (k : ℝ) + 1 < s := by linarith
+  let ν : Measure C𝔽 := canonicalModulatedHaar m𝔽 hm𝔽
+  let : ν.IsHaarMeasure := (existsUnique_canonicalModulatedHaar m𝔽 hm𝔽).exists.choose_spec.1
+  let fk : ℝ → ℝ := fun x ↦ x ^ (2 * k) * ((1 + x ^ 2) ^ (s / 2))⁻¹
+  have hfk_int : Integrable fk volume := orbitalJet_integrable_pow_mul_rpow_inv hk
+  have hν_eq : ∫ g : C𝔽, fk (logNorm g) ∂ν = ∫ x : ℝ, fk x ∂volume := by
+    rw [← (orbitalJet_logNorm_measurePreserving (F := F)).map_eq,
+      integral_map (orbitalJet_logNorm_continuous (F := F)).measurable.aemeasurable
+        (orbitalJet_pow_mul_rpow_inv_continuous k s).aestronglyMeasurable]
+  have hvol_pos : 0 < ∫ x : ℝ, fk x ∂volume := by
+    let c : ℝ := ((5 : ℝ) ^ (s / 2))⁻¹
+    have hc : 0 < c := inv_pos.mpr (Real.rpow_pos_of_pos (by norm_num) _)
+    have hind_int : Integrable ((Icc (1 : ℝ) 2).indicator fun _ ↦ c) volume :=
+      (integrableOn_const (by simp)).integrable_indicator measurableSet_Icc
+    have hle : ∀ x : ℝ, (Icc (1 : ℝ) 2).indicator (fun _ ↦ c) x ≤ fk x := by
+      intro x
+      by_cases hx : x ∈ Icc (1 : ℝ) 2
+      · rw [indicator_of_mem hx]
+        have hx1 : 1 ≤ x := hx.1
+        have hx2 : x ≤ 2 := hx.2
+        have hpow : (1 : ℝ) ≤ x ^ (2 * k) := one_le_pow₀ hx1
+        have hbase : 1 + x ^ 2 ≤ 5 := by nlinarith
+        have hrpow : (1 + x ^ 2) ^ (s / 2) ≤ (5 : ℝ) ^ (s / 2) :=
+          Real.rpow_le_rpow (by positivity) hbase (by linarith)
+        have hinv : c ≤ ((1 + x ^ 2) ^ (s / 2))⁻¹ :=
+          inv_anti₀ (Real.rpow_pos_of_pos (by positivity) _) hrpow
+        calc
+          c = 1 * c := (one_mul c).symm
+          _ ≤ x ^ (2 * k) * ((1 + x ^ 2) ^ (s / 2))⁻¹ :=
+            mul_le_mul hpow hinv hc.le (by positivity)
+      · rw [indicator_of_notMem hx]
+        exact mul_nonneg (Even.pow_nonneg (even_two_mul k) x)
+          (inv_nonneg.mpr (Real.rpow_pos_of_pos (by positivity) _).le)
+    have hint_le : ∫ x : ℝ, (Icc (1 : ℝ) 2).indicator (fun _ ↦ c) x ∂volume ≤
+        ∫ x : ℝ, fk x ∂volume :=
+      integral_mono hind_int hfk_int hle
+    have hind_val : ∫ x : ℝ, (Icc (1 : ℝ) 2).indicator (fun _ ↦ c) x ∂volume = c := by
+      rw [integral_indicator measurableSet_Icc, setIntegral_const, Real.volume_real_Icc]
+      norm_num
+    linarith
+  have hμ_eq : (∫ g : C𝔽, fk (logNorm g) ∂μ𝔽) =
+      (Measure.haarScalarFactor μ𝔽 ν : ℝ) * ∫ x : ℝ, fk x ∂volume := by
+    conv_lhs => rw [Measure.isMulLeftInvariant_eq_smul μ𝔽 ν]
+    rw [integral_smul_nnreal_measure, NNReal.smul_def, smul_eq_mul, hν_eq]
+  change 0 < ∫ g : C𝔽, fk (logNorm g) ∂μ𝔽
+  rw [hμ_eq]
+  have hfac_pos : 0 < (Measure.haarScalarFactor μ𝔽 ν : ℝ) := by
+    exact_mod_cast (Measure.haarScalarFactor_pos_of_isHaarMeasure μ𝔽 ν)
+  exact mul_pos hfac_pos hvol_pos
+
 /-- Paper: Proposition 11.2.0.4 and (11.2.0.8)–(11.2.0.9), p. 486. One
 annulus bounds the norms of all admitted jets above and away from zero.
 Deviation: Use the truncated multiplicity cited in (11.2.0.6) and the
@@ -560,7 +815,55 @@ theorem orbitalJet_norm_annulus (χ : PontryaginDual C𝔽) (S : Finset V) {s : 
     (hs : 1 < s) (_hχ : ∀ v ∈ S, (ideleClassNormTwist χ 0).IsUnramifiedAt v) :
     ∃ C : ℝ, 0 < C ∧ ∀ j : OrbitalJetIndex χ S s,
       let u := jetLp(χ, S, (zero_lt_one.trans hs).le, j)
-      C⁻¹ ≤ ‖u‖ ∧ ‖u‖ ≤ C := by sorry
+      C⁻¹ ≤ ‖u‖ ∧ ‖u‖ ≤ C := by
+  let hs₀ : 0 ≤ s := (zero_lt_one.trans hs).le
+  let N : ℕ := Nat.ceil ((s - 1) / 2)
+  let I : ℕ → ℝ := fun k ↦
+    ∫ g : C𝔽, (logNorm g) ^ (2 * k) * ((1 + (logNorm g) ^ 2) ^ (s / 2))⁻¹ ∂μ𝔽
+  let r : ℕ → ℝ := fun k ↦ Real.sqrt (I k)
+  have hnorm_sq : ∀ j : OrbitalJetIndex χ S s,
+      ‖jetLp(χ, S, hs₀, j)‖ ^ 2 = I j.val.2 := by
+    intro j
+    let u := jetLp(χ, S, hs₀, j)
+    have h1 : ‖u‖ ^ 2 = ∫ g : C𝔽, ‖u g‖ ^ 2 ∂(μ'(s)) := orbitalJet_lp_norm_sq u
+    have h2 : ∫ g : C𝔽, ‖u g‖ ^ 2 ∂(μ'(s)) = ∫ g : C𝔽, (logNorm g) ^ (2 * j.val.2) ∂(μ'(s)) := by
+      refine integral_congr_ae ?_
+      filter_upwards [MemLp.coeFn_toLp (orbitalJet_memLp χ S hs₀ j)] with g hg
+      rw [hg, orbitalJet_norm_sq]
+    have h3 : ∫ g : C𝔽, (logNorm g) ^ (2 * j.val.2) ∂(μ'(s)) = I j.val.2 := by
+      rw [integral_withDensity_eq_integral_toReal_smul
+        ((orbitalJet_density_continuous s).measurable.ennreal_ofReal)
+        (ae_of_all μ𝔽 fun _ ↦ ENNReal.ofReal_lt_top)]
+      refine integral_congr_ae (ae_of_all μ𝔽 fun g ↦ ?_)
+      dsimp only
+      rw [smul_eq_mul, orbitalJet_density_eq,
+        ENNReal.toReal_ofReal (inv_nonneg.mpr (Real.rpow_pos_of_pos (by positivity) _).le),
+        mul_comm]
+    exact h1.trans (h2.trans h3)
+  let C : ℝ := 1 + ∑ k ∈ Finset.range N, (r k + (r k)⁻¹)
+  have hC_pos : 0 < C := by
+    have hsum_nonneg : 0 ≤ ∑ k ∈ Finset.range N, (r k + (r k)⁻¹) :=
+      Finset.sum_nonneg fun k _ ↦ add_nonneg (Real.sqrt_nonneg _) (inv_nonneg.mpr (Real.sqrt_nonneg _))
+    linarith
+  refine ⟨C, hC_pos, fun j ↦ ?_⟩
+  have hjN : j.val.2 ∈ Finset.range N :=
+    Finset.mem_range.mpr (lt_of_lt_of_le j.property (min_le_right _ _))
+  have hr_pos : 0 < r j.val.2 :=
+    Real.sqrt_pos.mpr (orbitalJet_integral_pos hs (Finset.mem_range.mp hjN))
+  have hnorm_eq : ‖jetLp(χ, S, hs₀, j)‖ = r j.val.2 := by
+    rw [← Real.sqrt_sq (norm_nonneg _), hnorm_sq j]
+  have hterm_le : r j.val.2 + (r j.val.2)⁻¹ ≤ C := by
+    have h1 : r j.val.2 + (r j.val.2)⁻¹ ≤ ∑ k ∈ Finset.range N, (r k + (r k)⁻¹) :=
+      Finset.single_le_sum
+        (fun k _ ↦ add_nonneg (Real.sqrt_nonneg _) (inv_nonneg.mpr (Real.sqrt_nonneg _))) hjN
+    linarith
+  dsimp only
+  rw [hnorm_eq]
+  refine ⟨?_, by linarith [inv_pos.mpr hr_pos]⟩
+  have hinv_le : (r j.val.2)⁻¹ ≤ C := by linarith
+  calc
+    C⁻¹ ≤ ((r j.val.2)⁻¹)⁻¹ := inv_anti₀ (inv_pos.mpr hr_pos) hinv_le
+    _ = r j.val.2 := inv_inv _
 
 /-- Paper: Corollary 11.2.0.5 and (11.2.0.10), pp. 486–487. The orbital
 Markushevich basis is normalized in the strong-dual norm.
