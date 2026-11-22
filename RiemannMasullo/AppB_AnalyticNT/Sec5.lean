@@ -28,7 +28,8 @@ variable {N : ℕ}
 /-- Paper: Definition B.5.1.1(1), p. 626.
 The product torus, represented by Mathlib's `UnitAddTorus (Fin N)`, is compact Hausdorff. -/
 theorem unitAddTorus_compactHausdorff (N : ℕ) :
-    CompactSpace (UnitAddTorus (Fin N)) ∧ T2Space (UnitAddTorus (Fin N)) := by sorry
+    CompactSpace (UnitAddTorus (Fin N)) ∧ T2Space (UnitAddTorus (Fin N)) :=
+  ⟨inferInstance, inferInstance⟩
 
 /-- Paper: Definition B.5.1.1(2), p. 626.
 The torus quotient reduces each real coordinate modulo one. -/
@@ -41,7 +42,12 @@ def torusQuotient (N : ℕ) : (Fin N → ℝ) →ₜ+ UnitAddTorus (Fin N) where
 /-- Two real vectors have the same image in the torus precisely when their coordinate
 differences are integers. -/
 theorem torusQuotient_eq_iff (x y : Fin N → ℝ) :
-    torusQuotient N x = torusQuotient N y ↔ ∀ i, ∃ m : ℤ, x i - y i = (m : ℝ) := by sorry
+    torusQuotient N x = torusQuotient N y ↔ ∀ i, ∃ m : ℤ, x i - y i = (m : ℝ) := by
+  rw [funext_iff]
+  refine forall_congr' fun i ↦ ?_
+  change ((x i : ℝ) : AddCircle (1 : ℝ)) = (y i : AddCircle (1 : ℝ)) ↔ _
+  rw [QuotientAddGroup.eq_iff_sub_mem, AddSubgroup.mem_zmultiples_iff]
+  exact exists_congr fun k ↦ by rw [zsmul_eq_mul, mul_one, eq_comm]
 
 /-- Paper: Definition B.5.1.1(2), p. 626.
 The hitting times are the times in the given interval when the projected curve belongs
@@ -51,7 +57,10 @@ def torusHittingTimes (γ : ℝ → Fin N → ℝ) (J : Set ℝ) (U : Set (Fin N
 
 /-- The constant zero curve hits a singleton integer vector modulo one at every time. -/
 theorem torusHittingTimes_zero_singleton_int (J : Set ℝ) (m : Fin N → ℤ) :
-    torusHittingTimes (fun _ ↦ 0) J {fun i ↦ (m i : ℝ)} = J := by sorry
+    torusHittingTimes (fun _ ↦ 0) J {fun i ↦ (m i : ℝ)} = J := by
+  have h : torusQuotient N (fun i ↦ (m i : ℝ)) = torusQuotient N 0 :=
+    (torusQuotient_eq_iff _ _).mpr fun i ↦ ⟨m i, sub_zero _⟩
+  exact inter_eq_left.mpr fun t _ ↦ ⟨_, rfl, h⟩
 
 /-- Paper: §B.5.1, p. 627.
 The one-parameter torus subgroup of a frequency vector is the projection of its real line. -/
@@ -59,7 +68,9 @@ def torusFlow (τ : Fin N → ℝ) : ℝ →ₜ+ UnitAddTorus (Fin N) :=
   (torusQuotient N).comp (↑((ContinuousLinearMap.id ℝ ℝ).smulRight τ))
 
 /-- At time one the flow has the phase given by the frequency vector modulo one. -/
-theorem torusFlow_one (τ : Fin N → ℝ) : torusFlow τ 1 = torusQuotient N τ := by sorry
+theorem torusFlow_one (τ : Fin N → ℝ) : torusFlow τ 1 = torusQuotient N τ := by
+  change torusQuotient N ((1 : ℝ) • τ) = torusQuotient N τ
+  rw [one_smul]
 
 -- TODO(paper-gap): The sentence before §B.5.2 claims injectivity also in dimension one.
 -- For N = 1 and τ₁ = 1, times zero and one have the same image.
@@ -81,7 +92,15 @@ def torusFlowClosure (τ : Fin N → ℝ) : AddSubgroup (UnitAddTorus (Fin N)) :
   (torusFlow τ).toAddMonoidHom.range.topologicalClosure
 
 /-- The zero frequency vector has the trivial orbit closure. -/
-theorem torusFlowClosure_zero : torusFlowClosure (0 : Fin N → ℝ) = ⊥ := by sorry
+theorem torusFlowClosure_zero : torusFlowClosure (0 : Fin N → ℝ) = ⊥ := by
+  have hrange : (torusFlow (0 : Fin N → ℝ)).toAddMonoidHom.range = ⊥ := by
+    rw [AddMonoidHom.range_eq_bot_iff]
+    refine AddMonoidHom.ext fun t ↦ ?_
+    change torusQuotient N (t • (0 : Fin N → ℝ)) = 0
+    rw [smul_zero, map_zero]
+  refine SetLike.coe_injective ?_
+  rw [torusFlowClosure, hrange, AddSubgroup.topologicalClosure_coe, AddSubgroup.coe_bot,
+    closure_singleton]
 
 /-- Paper: Theorem B.5.2.1(2), p. 627.
 The torus flow takes values in its orbit closure when used in time averages. -/
@@ -91,7 +110,8 @@ def torusFlowInClosure (τ : Fin N → ℝ) (t : ℝ) : torusFlowClosure τ :=
 
 /-- In the ambient torus the restricted flow at time one gives the original phases. -/
 theorem coe_torusFlowInClosure_one (τ : Fin N → ℝ) :
-    (torusFlowInClosure τ 1 : UnitAddTorus (Fin N)) = torusQuotient N τ := by sorry
+    (torusFlowInClosure τ 1 : UnitAddTorus (Fin N)) = torusQuotient N τ :=
+  torusFlow_one τ
 
 /-- Paper: §B.5.2.1, p. 627.
 The fundamental domain for the torus quotient is the product of the half-open unit intervals. -/
@@ -100,7 +120,8 @@ def unitHalfOpenCube (N : ℕ) : Set (Fin N → ℝ) :=
 
 /-- The one-dimensional cube includes the lower endpoint and excludes the upper endpoint. -/
 theorem mem_unitHalfOpenCube_one (x : Fin 1 → ℝ) :
-    x ∈ unitHalfOpenCube 1 ↔ 0 ≤ x 0 ∧ x 0 < 1 := by sorry
+    x ∈ unitHalfOpenCube 1 ↔ 0 ≤ x 0 ∧ x 0 < 1 :=
+  Fin.forall_fin_one
 
 /-- Paper: §B.5.2.1, p. 627.
 The torus volume is the pushforward of Lebesgue measure on the half-open unit cube. -/
@@ -246,7 +267,26 @@ def upperDensity (X : Set ℝ) : ℝ :=
   limsup (fun T : ℝ ↦ volume.real (Icc (-T) T ∩ X) / (2 * T)) atTop
 
 /-- Every right half-line has symmetric upper density one half. -/
-theorem upperDensity_Ici (a : ℝ) : upperDensity (Ici a) = 1 / 2 := by sorry
+theorem upperDensity_Ici (a : ℝ) : upperDensity (Ici a) = 1 / 2 := by
+  have hev : (fun T : ℝ ↦ 1 / 2 - a / 2 * T⁻¹) =ᶠ[atTop]
+      fun T ↦ volume.real (Icc (-T) T ∩ Ici a) / (2 * T) := by
+    filter_upwards [eventually_ge_atTop (max |a| 1)] with T hT
+    have hT0 : T ≠ 0 := (zero_lt_one.trans_le ((le_max_right _ _).trans hT)).ne'
+    have haT : |a| ≤ T := (le_max_left _ _).trans hT
+    have hset : Icc (-T) T ∩ Ici a = Icc a T := by
+      ext x
+      simp only [mem_inter_iff, mem_Icc, mem_Ici]
+      exact ⟨fun h ↦ ⟨h.2, h.1.2⟩,
+        fun h ↦ ⟨⟨(neg_le.mp ((neg_le_abs a).trans haT)).trans h.1, h.2⟩, h.1⟩⟩
+    rw [hset, Real.volume_real_Icc_of_le ((le_abs_self a).trans haT),
+      eq_div_iff (mul_ne_zero two_ne_zero hT0)]
+    have h : (1 / 2 - a / 2 * T⁻¹) * (2 * T) = T - a * (T⁻¹ * T) := by ring
+    rw [h, inv_mul_cancel₀ hT0, mul_one]
+  have hlim : Tendsto (fun T : ℝ ↦ 1 / 2 - a / 2 * T⁻¹) atTop (𝓝 (1 / 2)) := by
+    have h := (tendsto_const_nhds (x := (1 / 2 : ℝ))).sub
+      ((tendsto_inv_atTop_zero (𝕜 := ℝ)).const_mul (a / 2))
+    rwa [mul_zero, sub_zero] at h
+  exact (hlim.congr' hev).limsup_eq
 
 /-- Paper: Definition B.5.3.1(2), p. 632.
 The vertical return times are the shifts whose uniform approximation error on the specified set
@@ -257,7 +297,18 @@ def verticalReturnTimes (f : ℂ → ℂ) (K : Set ℂ) (ε : ℝ) : Set ℝ :=
 /-- The return times of the identity on a singleton are the shifts of absolute value
 less than the tolerance. -/
 theorem verticalReturnTimes_id_singleton (z : ℂ) {ε : ℝ} (hε : 0 < ε) :
-    verticalReturnTimes id {z} ε = Ioo (-ε) ε := by sorry
+    verticalReturnTimes id {z} ε = Ioo (-ε) ε := by
+  ext t
+  have : Nonempty ({z} : Set ℂ) := ⟨⟨z, rfl⟩⟩
+  have hconst (w : ({z} : Set ℂ)) :
+      (‖id ((w : ℂ) + (t : ℂ) * Complex.I) - id (w : ℂ)‖₊ : ℝ≥0∞) =
+        (‖(t : ℂ) * Complex.I‖₊ : ℝ≥0∞) := by
+    simp only [id_eq, add_sub_cancel_left]
+  change (⨆ w : ({z} : Set ℂ),
+    (‖id ((w : ℂ) + (t : ℂ) * Complex.I) - id (w : ℂ)‖₊ : ℝ≥0∞)) < ENNReal.ofReal ε ↔ _
+  rw [iSup_congr hconst, iSup_const, ← ENNReal.ofReal_coe_nnreal,
+    ENNReal.ofReal_lt_ofReal_iff hε, coe_nnNorm, norm_mul, Complex.norm_I, mul_one,
+    Complex.norm_real, Real.norm_eq_abs, abs_lt, mem_Ioo]
 
 /-- Paper: Definition B.5.3.1(2), p. 632.
 Strong recurrence means positive upper density of vertical return times for every positive
@@ -336,13 +387,37 @@ theorem reciprocalPartialHeckeEulerProduct_upperDensity_nonpos
 -- intrinsically on that closure. To apply the area estimate, integrate on an open
 -- neighbourhood of the target compact set.
 
+/-- Upper density is monotone in the set. -/
+private theorem upperDensity_mono {X Y : Set ℝ} (h : X ⊆ Y) :
+    upperDensity X ≤ upperDensity Y := by
+  have hfin (T : ℝ) (Z : Set ℝ) : volume (Icc (-T) T ∩ Z) ≠ ∞ :=
+    ((measure_mono inter_subset_left).trans_lt measure_Icc_lt_top).ne
+  have hle (Z : Set ℝ) : ∀ᶠ T : ℝ in atTop, volume.real (Icc (-T) T ∩ Z) / (2 * T) ≤ 1 := by
+    filter_upwards [eventually_gt_atTop 0] with T hT
+    rw [div_le_one (by positivity)]
+    refine (measureReal_mono inter_subset_left measure_Icc_lt_top.ne).trans ?_
+    rw [Real.volume_real_Icc_of_le (by linarith)]
+    linarith
+  have hge (Z : Set ℝ) : ∀ᶠ T : ℝ in atTop, 0 ≤ volume.real (Icc (-T) T ∩ Z) / (2 * T) := by
+    filter_upwards [eventually_ge_atTop 0] with T hT
+    exact div_nonneg measureReal_nonneg (by positivity)
+  refine limsup_le_limsup ?_ (isCoboundedUnder_le_of_eventually_le _ (hge X))
+    (isBoundedUnder_of_eventually_le (hle Y))
+  filter_upwards [eventually_ge_atTop 0] with T hT
+  exact div_le_div_of_nonneg_right
+    (measureReal_mono (inter_subset_inter_right _ h) (hfin T Y)) (by positivity)
+
 /-- Paper: Lemma B.5.3.4(1), p. 633.
 For a holomorphic function on a bounded open strip, strong recurrence on a compact subset
 descends to every compact subset of that subset. -/
 theorem stronglyRecurrentOn_of_subset {a b : ℝ} (hab : a < b) {f : ℂ → ℂ}
     (hf : DifferentiableOn ℂ f (verticalStrip a b)) {K K' : Set ℂ}
     (hK : IsCompact K) (hKI : K ⊆ verticalStrip a b) (hK' : IsCompact K') (hsub : K' ⊆ K)
-    (hrec : StronglyRecurrentOn f K) : StronglyRecurrentOn f K' := by sorry
+    (hrec : StronglyRecurrentOn f K) : StronglyRecurrentOn f K' := by
+  intro ε hε
+  refine (hrec ε hε).trans_le (upperDensity_mono fun t ht ↦ ?_)
+  exact lt_of_le_of_lt (iSup_le fun z : K' ↦ le_iSup
+    (fun w : K ↦ (‖f ((w : ℂ) + (t : ℂ) * Complex.I) - f w‖₊ : ℝ≥0∞)) ⟨z.1, hsub z.2⟩) ht
 
 -- TODO(paper-gap): Lemma B.5.3.4(2) fails. A compact vertical segment need not fit inside
 -- any disc contained in the strip, and disc-by-disc recurrence need not give simultaneous return

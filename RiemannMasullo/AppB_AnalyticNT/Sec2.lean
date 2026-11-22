@@ -2371,6 +2371,112 @@ theorem mellin_heightBound_of_exponentialDecay (a b : ℝ) (hab : a < b) (N : �
   rw [← hshift]
   exact hbound (σ - c) ⟨sub_le_sub_right hσ.1 c, sub_le_sub_right hσ.2 c⟩ y hy
 
+omit hf in
+/-- A function on the line with a uniform bound and an inverse-power bound away from zero
+satisfies the vertical `Lᵖ` bound of (B.2.1.28): the uniform bound is used where
+`|y| < 1 / 2`, a set of measure one, and the inverse-power bound on the rest. -/
+private theorem eLpNorm_le_of_bound_of_heightBound {g : ℝ → ℂ}
+    (hg : AEStronglyMeasurable g volume) {p : ℝ} (hp : 1 ≤ p) {N : ℕ} (hN : 1 < N)
+    {S C : ℝ} (hS : 0 ≤ S) (hC : 0 ≤ C) (hsup : ∀ y, ‖g y‖ ≤ S)
+    (hdecay : ∀ y, y ≠ 0 → ‖g y‖ ≤ C / |y| ^ N) :
+    eLpNorm g (ENNReal.ofReal p) volume ≤
+      ENNReal.ofReal ((S ^ p + C ^ p * lpTail p N) ^ (1 / p)) := by
+  have hp0 : 0 < p := zero_lt_one.trans_le hp
+  obtain ⟨e, he⟩ : ∃ e : ℝ, e = p * (N : ℝ) := ⟨_, rfl⟩
+  have he2 : 2 ≤ e := by
+    have hN2 : (2 : ℝ) ≤ N := by exact_mod_cast hN
+    rw [he]
+    nlinarith
+  have hT : MeasurableSet {y : ℝ | 1 / 2 ≤ |y|} :=
+    measurableSet_le measurable_const continuous_abs.measurable
+  -- The tail is integrable: it is dominated by a multiple of `(1 + y ^ 2)⁻¹`.
+  have htail : Integrable ({y : ℝ | 1 / 2 ≤ |y|}.indicator fun y : ℝ ↦ 1 / |y| ^ e) := by
+    refine (integrable_inv_one_add_sq.const_mul ((2 : ℝ) ^ (e + 1))).mono'
+      ((measurable_const.div (continuous_abs.measurable.pow_const e)).indicator
+        hT).aestronglyMeasurable (Eventually.of_forall fun y ↦ ?_)
+    have hy2 : (0 : ℝ) < 1 + y ^ 2 := by positivity
+    by_cases hy : 1 / 2 ≤ |y|
+    · have hypos : 0 < |y| := lt_of_lt_of_le (by norm_num) hy
+      have hpow : 0 < |y| ^ e := Real.rpow_pos_of_pos hypos e
+      have hkey : 1 + y ^ 2 ≤ (2 : ℝ) ^ (e + 1) * |y| ^ e := by
+        have h1 : (2 * |y|) ^ (2 : ℝ) ≤ (2 * |y|) ^ e :=
+          Real.rpow_le_rpow_of_exponent_le (by linarith) he2
+        rw [Real.rpow_two, Real.mul_rpow (by norm_num) (abs_nonneg y)] at h1
+        rw [Real.rpow_add (by norm_num), Real.rpow_one, ← sq_abs y]
+        nlinarith [mul_le_mul hy hy (by norm_num) (abs_nonneg y)]
+      rw [indicator_of_mem (show y ∈ {y : ℝ | 1 / 2 ≤ |y|} from hy),
+        Real.norm_of_nonneg (one_div_nonneg.mpr hpow.le), ← div_eq_mul_inv,
+        div_le_div_iff₀ hpow hy2, one_mul]
+      exact hkey
+    · rw [indicator_of_notMem (show y ∉ {y : ℝ | 1 / 2 ≤ |y|} from hy), norm_zero]
+      exact mul_nonneg (Real.rpow_nonneg (by norm_num) _) (inv_nonneg.mpr hy2.le)
+  have hu : IntegrableOn (fun y : ℝ ↦ 1 / |y| ^ e) {y : ℝ | 1 / 2 ≤ |y|} :=
+    (integrable_indicator_iff hT).mp htail
+  have hvol : volume {y : ℝ | 1 / 2 ≤ |y|}ᶜ = 1 := by
+    have hset : {y : ℝ | 1 / 2 ≤ |y|}ᶜ = Ioo (-(1 / 2)) (1 / 2) := by
+      ext y
+      simp only [mem_compl_iff, mem_ofPred_eq, not_le, mem_Ioo, abs_lt]
+    rw [hset, Real.volume_Ioo]
+    norm_num
+  have hpt_in (y : ℝ) (hy : y ∈ {y : ℝ | 1 / 2 ≤ |y|}) :
+      ‖g y‖ₑ ^ p ≤ ENNReal.ofReal (C ^ p * (1 / |y| ^ e)) := by
+    have hypos : 0 < |y| := lt_of_lt_of_le (by norm_num) hy
+    have hy0 : y ≠ 0 := abs_pos.mp hypos
+    rw [← ofReal_norm, ENNReal.ofReal_rpow_of_nonneg (norm_nonneg _) hp0.le]
+    refine ENNReal.ofReal_le_ofReal ?_
+    calc ‖g y‖ ^ p ≤ (C / |y| ^ N) ^ p :=
+          Real.rpow_le_rpow (norm_nonneg _) (hdecay y hy0) hp0.le
+      _ = C ^ p * (1 / |y| ^ e) := by
+          rw [Real.div_rpow hC (pow_nonneg hypos.le _), he, mul_comm p,
+            Real.rpow_natCast_mul hypos.le, mul_one_div]
+  have hpt_out (y : ℝ) : ‖g y‖ₑ ^ p ≤ ENNReal.ofReal (S ^ p) := by
+    rw [← ofReal_norm, ENNReal.ofReal_rpow_of_nonneg (norm_nonneg _) hp0.le]
+    exact ENNReal.ofReal_le_ofReal (Real.rpow_le_rpow (norm_nonneg _) (hsup y) hp0.le)
+  have hSp : 0 ≤ S ^ p := Real.rpow_nonneg hS p
+  have hCt : 0 ≤ C ^ p * lpTail p N :=
+    mul_nonneg (Real.rpow_nonneg hC p) (integral_nonneg fun y ↦
+      one_div_nonneg.mpr (Real.rpow_nonneg (abs_nonneg y) _))
+  have hlin : ∫⁻ y, ‖g y‖ₑ ^ p ≤ ENNReal.ofReal (S ^ p + C ^ p * lpTail p N) := by
+    have h1 : ∫⁻ y in {y : ℝ | 1 / 2 ≤ |y|}, ‖g y‖ₑ ^ p ≤
+        ENNReal.ofReal (C ^ p * lpTail p N) := by
+      refine (setLIntegral_mono' hT hpt_in).trans_eq ?_
+      rw [← ofReal_integral_eq_lintegral_ofReal (Integrable.const_mul hu _)
+        (Eventually.of_forall fun y ↦ mul_nonneg (Real.rpow_nonneg hC p)
+          (one_div_nonneg.mpr (Real.rpow_nonneg (abs_nonneg y) _))),
+        integral_const_mul, he]
+    have h2 : ∫⁻ y in {y : ℝ | 1 / 2 ≤ |y|}ᶜ, ‖g y‖ₑ ^ p ≤ ENNReal.ofReal (S ^ p) := by
+      refine (setLIntegral_mono' hT.compl fun y _ ↦ hpt_out y).trans_eq ?_
+      rw [setLIntegral_const, hvol, mul_one]
+    rw [← lintegral_add_compl _ hT, add_comm (S ^ p), ENNReal.ofReal_add hCt hSp]
+    exact add_le_add h1 h2
+  rw [eLpNorm_eq_lintegral_rpow_eNorm_toReal (ENNReal.ofReal_pos.mpr hp0).ne'
+    ENNReal.ofReal_ne_top hg, ENNReal.toReal_ofReal hp0.le,
+    ← ENNReal.ofReal_rpow_of_nonneg (add_nonneg hSp hCt) (one_div_nonneg.mpr hp0.le)]
+  exact ENNReal.rpow_le_rpow hlin (one_div_nonneg.mpr hp0.le)
+
+omit hf in
+/-- Two-sided exponential decay makes every symmetric exponential weight integrable. -/
+private theorem integrable_exp_mul_abs_mul_norm_of_exponentialDecay (g : 𝓢(ℝ, ℂ))
+    (hg : ExponentialDecay g) (c : ℝ) :
+    Integrable fun x : ℝ ↦ Real.exp (c * |x|) * ‖g x‖ := by
+  obtain ⟨G₁, hG₁⟩ := exponentialDecay_weighted_schwartz g hg c
+  obtain ⟨G₂, hG₂⟩ := exponentialDecay_weighted_schwartz g hg (-c)
+  refine ((G₁.integrable (μ := volume)).norm.add (G₂.integrable (μ := volume)).norm).mono'
+    ((Real.continuous_exp.comp (continuous_const.mul continuous_abs)).mul
+      g.continuous.norm).aestronglyMeasurable (Eventually.of_forall fun x ↦ ?_)
+  have e1 : ‖G₁ x‖ = Real.exp (c * x) * ‖g x‖ := by
+    rw [hG₁, norm_mul, Complex.norm_of_nonneg (Real.exp_pos _).le]
+  have e2 : ‖G₂ x‖ = Real.exp (-c * x) * ‖g x‖ := by
+    rw [hG₂, norm_mul, Complex.norm_of_nonneg (Real.exp_pos _).le]
+  change ‖Real.exp (c * |x|) * ‖g x‖‖ ≤ ‖G₁ x‖ + ‖G₂ x‖
+  rw [e1, e2, Real.norm_of_nonneg (mul_nonneg (Real.exp_pos _).le (norm_nonneg _)), ← add_mul]
+  refine mul_le_mul_of_nonneg_right ?_ (norm_nonneg _)
+  rcases abs_cases x with ⟨hx, _⟩ | ⟨hx, _⟩
+  · rw [hx]
+    linarith [Real.exp_pos (-c * x)]
+  · rw [hx, mul_neg, ← neg_mul]
+    linarith [Real.exp_pos (c * x)]
+
 /-- Paper: Proposition B.2.1.9(3), p. 599. On a closed strip, the vertical
 Lᵖ norms satisfy the bound with the exponentially weighted L¹ term.
 Deviation: The L¹ term uses the logarithmic coordinate, and the constant from
@@ -2382,7 +2488,42 @@ theorem mellin_verticalLp_of_exponentialDecay
       eLpNorm (verticalTrace (mellin (fromLog f)) σ) (ENNReal.ofReal p) volume ≤
         ENNReal.ofReal
           (((∫ x : ℝ, Real.exp ((max |a| |b| + (N : ℝ)) * |x|) * ‖f x‖) ^ p +
-            C ^ p * lpTail p N) ^ (1 / p)) := by sorry
+            C ^ p * lpTail p N) ^ (1 / p)) := by
+  intro σ hσ
+  have hC0 : 0 ≤ C := by
+    have h := hC σ hσ 1 one_ne_zero
+    rw [abs_one, one_pow, div_one] at h
+    exact (norm_nonneg _).trans h
+  obtain ⟨c, hc⟩ : ∃ c : ℝ, c = max |a| |b| + (N : ℝ) := ⟨_, rfl⟩
+  have hInt : Integrable (fun x : ℝ ↦ Real.exp (c * |x|) * ‖f x‖) :=
+    integrable_exp_mul_abs_mul_norm_of_exponentialDecay f hf c
+  -- The Mellin integral is bounded by the weighted `L¹` norm at every height.
+  have hsup (y : ℝ) : ‖mellin (fromLog f) ((σ : ℂ) + (y : ℂ) * Complex.I)‖ ≤
+      ∫ x : ℝ, Real.exp (c * |x|) * ‖f x‖ := by
+    rw [mellin_fromLog_eq_integral_exp]
+    refine (norm_integral_le_integral_norm _).trans (integral_mono_of_nonneg
+      (Eventually.of_forall fun x ↦ norm_nonneg _) hInt (Eventually.of_forall fun x ↦ ?_))
+    change ‖Complex.exp (((σ : ℂ) + (y : ℂ) * Complex.I) * (x : ℂ)) * f x‖ ≤
+      Real.exp (c * |x|) * ‖f x‖
+    have h1 : (((σ : ℂ) + (y : ℂ) * Complex.I) * (x : ℂ)).re = σ * x := by simp
+    rw [norm_mul, Complex.norm_exp, h1]
+    refine mul_le_mul_of_nonneg_right (Real.exp_le_exp.mpr ?_) (norm_nonneg _)
+    have hσM : |σ| ≤ max |a| |b| := abs_le_max_abs_abs hσ.1 hσ.2
+    have hN0 : (0 : ℝ) ≤ N := Nat.cast_nonneg N
+    calc σ * x ≤ |σ * x| := le_abs_self _
+      _ = |σ| * |x| := abs_mul σ x
+      _ ≤ c * |x| := by
+          rw [hc]
+          exact mul_le_mul_of_nonneg_right (by linarith) (abs_nonneg x)
+  have hline : Continuous (fun y : ℝ ↦ (σ : ℂ) + (y : ℂ) * Complex.I) := by fun_prop
+  have hres := eLpNorm_le_of_bound_of_heightBound
+    (g := fun y : ℝ ↦ mellin (fromLog f) ((σ : ℂ) + (y : ℂ) * Complex.I))
+    ((differentiable_mellin_of_exponentialDecay f hf).continuous.comp
+      hline).aestronglyMeasurable hp hN
+    (integral_nonneg fun x ↦ mul_nonneg (Real.exp_pos _).le (norm_nonneg _)) hC0 hsup
+    (hC σ hσ)
+  rw [hc] at hres
+  exact hres
 
 omit hf in
 /-- The exponential twist of an exponentially decaying profile is integrable at every
@@ -2657,6 +2798,30 @@ theorem bddAbove_norm_shiftedMellin_of_exponentialDecay (a b : ℝ) (hab : a < b
     rw [pow_one] at h
     exact (h.trans (div_le_self hC.le him'.le)).trans (le_max_left _ _)
 
+omit hδ hf in
+/-- Two-sided exponential decay makes every tilted symmetric exponential weight integrable. -/
+private theorem integrable_exp_add_mul_abs_mul_norm_of_exponentialDecay (g : 𝓢(ℝ, ℂ))
+    (hg : ExponentialDecay g) (d c : ℝ) :
+    Integrable fun x : ℝ ↦ Real.exp (d * x + c * |x|) * ‖g x‖ := by
+  obtain ⟨G₁, hG₁⟩ := exponentialDecay_weighted_schwartz g hg (d + c)
+  obtain ⟨G₂, hG₂⟩ := exponentialDecay_weighted_schwartz g hg (d - c)
+  refine ((G₁.integrable (μ := volume)).norm.add (G₂.integrable (μ := volume)).norm).mono'
+    ((Real.continuous_exp.comp ((continuous_const.mul continuous_id).add
+      (continuous_const.mul continuous_abs))).mul g.continuous.norm).aestronglyMeasurable
+    (Eventually.of_forall fun x ↦ ?_)
+  have e1 : ‖G₁ x‖ = Real.exp ((d + c) * x) * ‖g x‖ := by
+    rw [hG₁, norm_mul, Complex.norm_of_nonneg (Real.exp_pos _).le]
+  have e2 : ‖G₂ x‖ = Real.exp ((d - c) * x) * ‖g x‖ := by
+    rw [hG₂, norm_mul, Complex.norm_of_nonneg (Real.exp_pos _).le]
+  change ‖Real.exp (d * x + c * |x|) * ‖g x‖‖ ≤ ‖G₁ x‖ + ‖G₂ x‖
+  rw [e1, e2, Real.norm_of_nonneg (mul_nonneg (Real.exp_pos _).le (norm_nonneg _)), ← add_mul]
+  refine mul_le_mul_of_nonneg_right ?_ (norm_nonneg _)
+  rcases abs_cases x with ⟨hx, _⟩ | ⟨hx, _⟩
+  · rw [hx, show d * x + c * x = (d + c) * x by ring]
+    linarith [Real.exp_pos ((d - c) * x)]
+  · rw [hx, show d * x + c * -x = (d - c) * x by ring]
+    linarith [Real.exp_pos ((d + c) * x)]
+
 /-- Paper: Corollary B.2.1.10(1), p. 600. The inequality (B.2.1.28)
 applies to both shifts with the weighted, possibly reflected input.
 Deviation: The sign encodes both shifts. The L¹ term uses the logarithmic
@@ -2668,7 +2833,84 @@ theorem shiftedMellin_verticalLp_of_exponentialDecay
         eLpNorm (verticalTrace (shiftedMellin n δ) σ) (ENNReal.ofReal p) volume ≤
           ENNReal.ofReal
             (((∫ x : ℝ, Real.exp (((n : ℝ) * δ) * x + (max |a| |b| + (N : ℝ)) * |x|) *
-                  ‖f (δ * x)‖) ^ p + C ^ p * lpTail p N) ^ (1 / p)) := by sorry
+                  ‖f (δ * x)‖) ^ p + C ^ p * lpTail p N) ^ (1 / p)) := by
+  obtain ⟨M, hM⟩ : ∃ M : ℝ, M = max |a| |b| := ⟨_, rfl⟩
+  have hM0 : 0 < M := by
+    rw [hM, lt_max_iff, abs_pos, abs_pos]
+    by_contra h
+    rw [not_or, not_not, not_not] at h
+    rw [h.1, h.2] at hab
+    exact lt_irrefl _ hab
+  obtain ⟨C, hC, hBound⟩ := mellin_heightBound_of_exponentialDecay f hf
+    ((n : ℝ) - M) ((n : ℝ) + M) (by linarith) N (by omega)
+  have hpt (σ y : ℝ) : (n : ℂ) + (δ : ℂ) * ((σ : ℂ) + (y : ℂ) * Complex.I) =
+      (((n : ℝ) + δ * σ : ℝ) : ℂ) + ((δ * y : ℝ) : ℂ) * Complex.I := by
+    push_cast
+    ring
+  have hδσ (σ : ℝ) (hσ : σ ∈ Icc a b) : |δ * σ| ≤ M := by
+    have h : |σ| ≤ M := by
+      rw [hM]
+      exact abs_le_max_abs_abs hσ.1 hσ.2
+    rcases hδ with rfl | rfl <;> simpa using h
+  have hmem (σ : ℝ) (hσ : σ ∈ Icc a b) :
+      (n : ℝ) + δ * σ ∈ Icc ((n : ℝ) - M) ((n : ℝ) + M) := by
+    have h := abs_le.mp (hδσ σ hσ)
+    constructor <;> linarith
+  -- The height of `n + δ s` is `δ y`, of the same absolute value as the height of `s`.
+  have hheight : ∀ σ ∈ Icc a b, ∀ y : ℝ, y ≠ 0 →
+      ‖mellin (fromLog f) ((n : ℂ) + (δ : ℂ) * ((σ : ℂ) + (y : ℂ) * Complex.I))‖ ≤
+        C / |y| ^ N := by
+    intro σ hσ y hy
+    have hδy : δ * y ≠ 0 := mul_ne_zero (by rcases hδ with rfl | rfl <;> norm_num) hy
+    have habs : |δ * y| = |y| := by rcases hδ with rfl | rfl <;> simp
+    rw [hpt, ← habs]
+    exact hBound _ (hmem σ hσ) (δ * y) hδy
+  refine ⟨C, hC, hheight, fun p hp σ hσ ↦ ?_⟩
+  obtain ⟨c, hc⟩ : ∃ c : ℝ, c = M + (N : ℝ) := ⟨_, rfl⟩
+  have hH : Integrable (fun u : ℝ ↦ Real.exp ((n : ℝ) * u + c * |u|) * ‖f u‖) :=
+    integrable_exp_add_mul_abs_mul_norm_of_exponentialDecay f hf n c
+  -- The weighted `L¹` term of the statement is the integral of this majorant.
+  have hS : (∫ x : ℝ, Real.exp (((n : ℝ) * δ) * x + c * |x|) * ‖f (δ * x)‖) =
+      ∫ u : ℝ, Real.exp ((n : ℝ) * u + c * |u|) * ‖f u‖ := by
+    rcases hδ with rfl | rfl
+    · simp only [mul_one, one_mul]
+    · rw [← integral_neg_eq_self (fun u : ℝ ↦ Real.exp ((n : ℝ) * u + c * |u|) * ‖f u‖)]
+      refine integral_congr_ae (Eventually.of_forall fun x ↦ ?_)
+      simp only [mul_neg, mul_one, neg_mul, one_mul, abs_neg]
+  have hsup (y : ℝ) :
+      ‖mellin (fromLog f) ((n : ℂ) + (δ : ℂ) * ((σ : ℂ) + (y : ℂ) * Complex.I))‖ ≤
+        ∫ u : ℝ, Real.exp ((n : ℝ) * u + c * |u|) * ‖f u‖ := by
+    rw [mellin_fromLog_eq_integral_exp]
+    refine (norm_integral_le_integral_norm _).trans (integral_mono_of_nonneg
+      (Eventually.of_forall fun x ↦ norm_nonneg _) hH (Eventually.of_forall fun x ↦ ?_))
+    change ‖Complex.exp (((n : ℂ) + (δ : ℂ) * ((σ : ℂ) + (y : ℂ) * Complex.I)) * (x : ℂ)) *
+      f x‖ ≤ Real.exp ((n : ℝ) * x + c * |x|) * ‖f x‖
+    have h1 : (((n : ℂ) + (δ : ℂ) * ((σ : ℂ) + (y : ℂ) * Complex.I)) * (x : ℂ)).re =
+        ((n : ℝ) + δ * σ) * x := by
+      rw [hpt]
+      simp
+    rw [norm_mul, Complex.norm_exp, h1]
+    refine mul_le_mul_of_nonneg_right (Real.exp_le_exp.mpr ?_) (norm_nonneg _)
+    have hN0 : (0 : ℝ) ≤ N := Nat.cast_nonneg N
+    have h2 : δ * σ * x ≤ c * |x| :=
+      calc δ * σ * x ≤ |δ * σ * x| := le_abs_self _
+        _ = |δ * σ| * |x| := abs_mul _ _
+        _ ≤ c * |x| := by
+            rw [hc]
+            exact mul_le_mul_of_nonneg_right (by linarith [hδσ σ hσ]) (abs_nonneg x)
+    rw [add_mul]
+    linarith
+  have hline : Continuous (fun y : ℝ ↦
+      (n : ℂ) + (δ : ℂ) * ((σ : ℂ) + (y : ℂ) * Complex.I)) := by fun_prop
+  have hres := eLpNorm_le_of_bound_of_heightBound
+    (g := fun y : ℝ ↦ mellin (fromLog f)
+      ((n : ℂ) + (δ : ℂ) * ((σ : ℂ) + (y : ℂ) * Complex.I)))
+    ((differentiable_mellin_of_exponentialDecay f hf).continuous.comp
+      hline).aestronglyMeasurable hp hN
+    (integral_nonneg fun x ↦ mul_nonneg (Real.exp_pos _).le (norm_nonneg _)) hC.le hsup
+    (hheight σ hσ)
+  rw [← hS, hc, hM] at hres
+  exact hres
 
 /-- Paper: Corollary B.2.1.10(2), p. 600. Multiplying either shifted Mellin
 transform by a meromorphic function of polynomial growth gives rapid vertical decay.

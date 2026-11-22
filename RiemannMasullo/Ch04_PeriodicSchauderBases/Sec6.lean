@@ -107,7 +107,22 @@ translation by each norm-one element acts by its character value. -/
 theorem mem_modulatedDecayIsotype_iff (I : Set ℝ) (h0 : 0 ∈ I)
     (f : ModulatedExponentialDecay m I) :
     f ∈ (modulatedDecayIsotype m I h0 ω) ↔ ∀ (u : K) (x : G),
-      f.val (u.val⁻¹ * x) = (ω u : ℂ) * f.val x := by sorry
+      f.val (u.val⁻¹ * x) = (ω u : ℂ) * f.val x := by
+  let z := modulatedExponentialDecayTwist m I ⟨0, h0⟩ f
+  have hz (x : G) : z x = f.val x :=
+    (modulatedExponentialDecayTwist_apply m I ⟨0, h0⟩ f x).trans (by simp)
+  let ρ := (schwartzBruhatTranslationAction (G := G)).comp m.toMonoidHom.ker.subtype
+  refine (mem_actionIsotype ρ ω z).trans ?_
+  have hl (u : K) (x : G) :
+      schwartzBruhatTranslationAction (G := G) u.val z x = f.val (u.val⁻¹ * x) :=
+    (schwartzBruhatTranslationAction_apply u.val x z).trans (hz _)
+  have hr (u : K) (x : G) : ((ω u : ℂ) • z) x = (ω u : ℂ) * f.val x :=
+    congrArg ((ω u : ℂ) * ·) (hz x)
+  constructor
+  · intro h u x
+    exact (hl u x).symm.trans ((congrArg (fun g : SchwartzBruhat G ↦ g x) (h u)).trans (hr u x))
+  · intro h u
+    exact Subtype.ext (funext fun x ↦ (hl u x).trans ((h u x).trans (hr u x).symm))
 
 /-- Paper: Lemma 4.6.1.3(1), p. 210. The difference product preserves each
 norm-one isotype. The same restriction is used for intervals containing zero
