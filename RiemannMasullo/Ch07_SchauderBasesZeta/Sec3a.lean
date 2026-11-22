@@ -396,7 +396,11 @@ theorem existsUnique_sLocalOrbitalPhase (χ : PontryaginDual Jₛ) (v : S)
     obtain ⟨k, hk⟩ := Complex.exp_eq_exp_iff_exists_int.mp hexp
     have him : t * Real.log (v.val.asIdeal.absNorm : ℝ) = θ + (k : ℝ) * (2 * Real.pi) := by
       have h := congrArg Complex.im hk
-      simpa [Complex.add_im, Complex.mul_im, Complex.mul_re] using h
+      simp only [Complex.add_im, Complex.mul_im, Complex.mul_re, Complex.ofReal_re,
+        Complex.ofReal_im, Complex.intCast_re, Complex.intCast_im, Complex.I_re, Complex.I_im,
+        Complex.re_ofNat, Complex.im_ofNat, mul_zero, zero_mul, add_zero, sub_zero,
+        mul_one] at h
+      exact h
     have ht_lo : 0 ≤ t * Real.log (v.val.asIdeal.absNorm : ℝ) := mul_nonneg ht_mem.1 hlog.le
     have ht_hi : t * Real.log (v.val.asIdeal.absNorm : ℝ) < 2 * Real.pi :=
       (lt_div_iff₀ hlog).mp ht_mem.2
