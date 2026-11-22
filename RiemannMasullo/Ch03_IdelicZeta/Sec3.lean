@@ -1278,7 +1278,10 @@ holomorphic on each positive norm-twist half-plane. -/
 theorem sLocalRadialMellinIntegral_analyticOn
     (τ : ℝ≥0ˣ →ₜ* Iₛ) (hτ : RightInverse τ (sIdeleNorm F S))
     (f : ℬ(Aₛ)) (χ : PontryaginDual Jₛ) :
-    AnalyticOnNhd ℂ (sLocalRadialMellinIntegral (F := F) (S := S) τ f χ) rightHalf := by sorry
+    AnalyticOnNhd ℂ (sLocalRadialMellinIntegral (F := F) (S := S) τ f χ) rightHalf := by
+  exact AnalyticOnNhd.congr (isOpen_Ioi.preimage Complex.continuous_re)
+    (sLocalThetaMellinIntegral_analyticOn f χ)
+    (fun s hs ↦ (sLocalRadialMellinIntegral_eq_theta τ hτ f χ s hs).symm)
 
 end Homogeneous
 

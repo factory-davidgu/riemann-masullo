@@ -1717,7 +1717,26 @@ integral is the global Z-function and is entire on every nontrivial norm-one com
 Deviation: Entireness concerns the continuation of the integral from its region of convergence. -/
 theorem globalIdelicZFunction_entire_of_nontrivial (f : ℬ[F]) (χ : U[F])
     (hχ : χ.toMonoidHom.comp (ideleClassNorm F).ker.subtype ≠ 1) :
-    Differentiable ℂ (fun s ↦ globalIdelicZFunction f (ideleClassNormTwist χ s)) := by sorry
+    Differentiable ℂ (fun s ↦ globalIdelicZFunction f (ideleClassNormTwist χ s)) := by
+  have hrestrict (s w : ℂ)
+      (he : ideleClassNormTwist χ s = ideleClassNormTwist (1 : U[F]) w) :
+      χ.toMonoidHom.comp (ideleClassNorm F).ker.subtype = 1 := by
+    ext g
+    have hg := DFunLike.congr_fun he g.val
+    change (χ g.val : ℂ) * (classNormℝ g.val : ℂ) ^ s =
+      1 * (classNormℝ g.val : ℂ) ^ w at hg
+    have hn : classNormℝ g.val = 1 := by
+      change (((ideleClassNorm F g.val).val : ℝ≥0) : ℝ) = 1
+      rw [MonoidHom.mem_ker.mp g.property]
+      rfl
+    change (χ g.val : ℂ) = 1
+    simpa [hn] using hg
+  intro s
+  apply ((globalIdelicZFunction_poles f χ).1 s ?_).differentiableAt
+  refine ⟨fun he ↦ hχ (hrestrict s 0 (he.trans ?_)), fun he ↦ hχ (hrestrict s 1 he)⟩
+  ext1 g
+  change (1 : ℂ) = 1 * (classNormℝ g : ℂ) ^ (0 : ℂ)
+  simp
 
 set_option maxHeartbeats 1000000 in
 /-- Paper: §3.4.3.1, p. 152. On the half-plane of absolute convergence, the idelic
@@ -2201,7 +2220,10 @@ theorem homogeneousThetaMellinIntegral_meromorphicContinuation
 Z-function is entire in the norm-twist coordinate of every component. -/
 theorem globalIdelicZFunction_entire_of_vanishing
     (h : f ∈ adelePolarSubspace F) (χ : U[F]) :
-    Differentiable ℂ (fun s ↦ globalIdelicZFunction f (ideleClassNormTwist χ s)) := by sorry
+    Differentiable ℂ (fun s ↦ globalIdelicZFunction f (ideleClassNormTwist χ s)) := by
+  obtain ⟨hf, hFourier⟩ := (mem_adelePolarSubspace f).mp h
+  rw [← globalThetaMellinIntegral_eq_continuation_of_vanishing f hf hFourier]
+  exact globalThetaMellinIntegral_entire_of_vanishing f hf hFourier χ
 
 end HomogeneousMellin
 

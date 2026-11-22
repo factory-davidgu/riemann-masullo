@@ -84,7 +84,40 @@ theorem torusFlow_denseRange_of_linearIndependent [NeZero N] {τ : Fin N → ℝ
 distinct times give distinct phases.
 Deviation: Adds the dimension hypothesis used in the proof on p. 628. -/
 theorem torusFlow_injective_of_linearIndependent (hN : 2 ≤ N) {τ : Fin N → ℝ}
-    (hτ : LinearIndependent ℚ τ) : Injective (torusFlow τ) := by sorry
+    (hτ : LinearIndependent ℚ τ) : Injective (torusFlow τ) := by
+  rw [injective_iff_map_eq_zero]
+  intro t ht
+  have hint (i : Fin N) : ∃ m : ℤ, t * τ i = (m : ℝ) := by
+    have h : torusQuotient N (t • τ) = torusQuotient N 0 := by
+      rw [map_zero]
+      exact ht
+    obtain ⟨m, hm⟩ := (torusQuotient_eq_iff _ _).mp h i
+    exact ⟨m, by simpa using hm⟩
+  by_contra ht0
+  let i₀ : Fin N := ⟨0, by omega⟩
+  let i₁ : Fin N := ⟨1, by omega⟩
+  have hne : i₀ ≠ i₁ := by
+    intro h
+    exact absurd (congrArg Fin.val h) (by simp [i₀, i₁])
+  obtain ⟨m₀, h₀⟩ := hint i₀
+  obtain ⟨m₁, h₁⟩ := hint i₁
+  have hrel : (m₁ : ℚ) • τ i₀ + (-(m₀ : ℚ)) • τ i₁ = 0 := by
+    have hmul : t * ((m₁ : ℝ) * τ i₀ - (m₀ : ℝ) * τ i₁) = 0 := by
+      have h : t * ((m₁ : ℝ) * τ i₀ - (m₀ : ℝ) * τ i₁) =
+          (m₁ : ℝ) * (t * τ i₀) - (m₀ : ℝ) * (t * τ i₁) := by ring
+      rw [h, h₀, h₁]
+      ring
+    have hzero := (mul_eq_zero.mp hmul).resolve_left ht0
+    rw [Rat.smul_def, Rat.smul_def]
+    push_cast
+    linarith
+  have hm₁ : (m₁ : ℚ) = 0 :=
+    ((LinearIndepOn.pair_iff τ hne).mp (hτ.comp _ Subtype.val_injective) _ _ hrel).1
+  have hτ₁ : τ i₁ = 0 := by
+    have hm₁' : (m₁ : ℝ) = 0 := by exact_mod_cast hm₁
+    have h : t * τ i₁ = 0 := by rw [h₁, hm₁']
+    exact (mul_eq_zero.mp h).resolve_left ht0
+  exact hτ.ne_zero i₁ hτ₁
 
 /-- Paper: Theorem B.5.2.1(1), p. 627.
 The orbit closure is the closed additive subgroup obtained by closing the range of the flow. -/
@@ -201,7 +234,59 @@ theorem exists_continuous_sandwich_indicator {X : Type*} [TopologicalSpace X] [T
     ∃ lower upper : C(X, Icc (0 : ℝ) 1),
       (∀ x, (lower x : ℝ) ≤ U.indicator (fun _ ↦ (1 : ℝ)) x ∧
         U.indicator (fun _ ↦ (1 : ℝ)) x ≤ (upper x : ℝ)) ∧
-      (∫ x, ((upper x : ℝ) - (lower x : ℝ)) ∂μ) < ε := by sorry
+      (∫ x, ((upper x : ℝ) - (lower x : ℝ)) ∂μ) < ε := by
+  have : IsFiniteMeasure μ := ⟨isCompact_univ.measure_lt_top⟩
+  have hδ : ENNReal.ofReal (ε / 2) ≠ 0 := (ENNReal.ofReal_pos.mpr (half_pos hε)).ne'
+  -- A compact set inside `U` and an open set around its closure, both of nearly the same mass.
+  obtain ⟨K, hKU, hK, hKμ⟩ := hU.measurableSet.exists_isCompact_lt_add (measure_ne_top μ U) hδ
+  obtain ⟨V, hV, hVo, hVμ⟩ := (closure U).exists_isOpen_lt_add (measure_ne_top μ _) hδ
+  have hcl : μ (closure U) ≤ μ U := by
+    rw [closure_eq_self_union_frontier]
+    exact (measure_union_le _ _).trans (by rw [hfront, add_zero])
+  obtain ⟨f, hf0, hf1, hf01⟩ := exists_continuous_zero_one_of_isClosed hU.isClosed_compl
+    hK.isClosed (disjoint_compl_left_iff_subset.mpr hKU)
+  obtain ⟨g, hg0, hg1, hg01⟩ := exists_continuous_zero_one_of_isClosed hVo.isClosed_compl
+    isClosed_closure (disjoint_compl_left_iff_subset.mpr hV)
+  refine ⟨⟨fun x ↦ ⟨f x, hf01 x⟩, f.continuous.subtype_mk _⟩,
+    ⟨fun x ↦ ⟨g x, hg01 x⟩, g.continuous.subtype_mk _⟩, fun x ↦ ?_, ?_⟩
+  · change f x ≤ U.indicator (fun _ ↦ (1 : ℝ)) x ∧ U.indicator (fun _ ↦ (1 : ℝ)) x ≤ g x
+    by_cases hx : x ∈ U
+    · have hgx : g x = 1 := hg1 (subset_closure hx)
+      rw [indicator_of_mem hx, hgx]
+      exact ⟨(hf01 x).2, le_rfl⟩
+    · have hfx : f x = 0 := hf0 hx
+      rw [indicator_of_notMem hx, hfx]
+      exact ⟨le_rfl, (hg01 x).1⟩
+  · change (∫ x, (g x - f x) ∂μ) < ε
+    have hKV : K ⊆ V := hKU.trans (subset_closure.trans hV)
+    have hmeas : MeasurableSet (V \ K) := hVo.measurableSet.diff hK.measurableSet
+    have hpt (x : X) : g x - f x ≤ (V \ K).indicator (fun _ ↦ (1 : ℝ)) x := by
+      by_cases hxK : x ∈ K
+      · have hfx : f x = 1 := hf1 hxK
+        rw [indicator_of_notMem (show x ∉ V \ K from fun h ↦ h.2 hxK), hfx]
+        linarith [(hg01 x).2]
+      · by_cases hxV : x ∈ V
+        · rw [indicator_of_mem (show x ∈ V \ K from ⟨hxV, hxK⟩)]
+          linarith [(hg01 x).2, (hf01 x).1]
+        · have hgx : g x = 0 := hg0 hxV
+          have hfx : f x = 0 := hf0 fun h ↦ hxV (hV (subset_closure h))
+          rw [indicator_of_notMem (show x ∉ V \ K from fun h ↦ hxV h.1), hgx, hfx, sub_zero]
+    have hint : Integrable (fun x ↦ g x - f x) μ :=
+      (g.continuous.sub f.continuous).integrable_of_hasCompactSupport
+        (HasCompactSupport.of_compactSpace _)
+    have hmass : μ (V \ K) < ENNReal.ofReal ε := by
+      rw [measure_sdiff hKV hK.measurableSet.nullMeasurableSet (measure_ne_top μ K)]
+      refine ENNReal.sub_lt_of_lt_add (measure_mono hKV) ?_
+      calc μ V < μ (closure U) + ENNReal.ofReal (ε / 2) := hVμ
+        _ ≤ μ K + ENNReal.ofReal (ε / 2) + ENNReal.ofReal (ε / 2) :=
+          add_le_add (hcl.trans hKμ.le) le_rfl
+        _ = ENNReal.ofReal ε + μ K := by
+          rw [add_assoc, ← ENNReal.ofReal_add (half_pos hε).le (half_pos hε).le, add_halves,
+            add_comm]
+    calc ∫ x, (g x - f x) ∂μ ≤ ∫ x, (V \ K).indicator (fun _ ↦ (1 : ℝ)) x ∂μ :=
+          integral_mono hint ((integrable_const 1).indicator hmeas) hpt
+      _ = μ.real (V \ K) := by rw [integral_indicator_const _ hmeas, smul_eq_mul, mul_one]
+      _ < ε := ENNReal.toReal_lt_of_lt_ofReal hmass
 
 -- TODO(paper-gap): Neither inclusion in the asserted frontier identity holds in general.
 -- Away from the coordinate seams the cube projection is a local homeomorphism, so the
