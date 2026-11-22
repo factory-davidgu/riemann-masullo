@@ -214,7 +214,19 @@ theorem weilModifiedZeta_integerRings (fArch : ℬ(AArch))
     (hK : ∀ v : V, K v = v.adicCompletionIntegers F) (c : X)
     (hc : ∀ v, c.IsUnramifiedAt v) :
     weilModifiedZeta fArch K uniformizer c = weilArchimedeanIntegral fArch c *
-      ∏ᶠ v : V, (((μv v) (v.adicCompletionIntegers F).units).toReal : ℂ) := by sorry
+      ∏ᶠ v : V, (((μv v) (v.adicCompletionIntegers F).units).toReal : ℂ) := by
+  have hfactor (v : V) :
+      weilModifiedFiniteIntegral v (uniformizer v) ((K v).indicator (fun _ ↦ 1)) c =
+        (((μv v) (v.adicCompletionIntegers F).units).toReal : ℂ) := by
+    rw [hK v]
+    exact weilModifiedFiniteIntegral_integerRing v _ (hπ v) c (hc v)
+  unfold weilModifiedZeta
+  rw [tprod_congr hfactor]
+  congr 1
+  refine tprod_eq_finprod ((finiteLocalTamagawaMass_finite (F := F)).subset fun v hv h ↦ hv ?_)
+  change ((((μv v) (v.adicCompletionIntegers F).units).toReal : ℝ) : ℂ) = 1
+  rw [finiteLocalMultiplicativeTamagawaMeasure_integerUnits, h, ENNReal.toReal_one,
+    Complex.ofReal_one]
 
 /-- Paper: Theorem 3.4.1.1, p. 143. The finite-place factors of the modified
 zeta product differ from one by an absolutely summable family. -/
@@ -409,7 +421,11 @@ theorem thetaPolarCutoff_polarTerm (ω : PontryaginDual C₁) (f : ℬ(𝔸[F]))
         (thetaPolarCutoff ω g *
           ((normℝ g)⁻¹ • adeleSchwartzFourier f (Multiplicative.ofAdd (0 : 𝔸[F])) -
             f (Multiplicative.ofAdd (0 : 𝔸[F])))) =
-      homogeneousAdelicTheta_polarTerm ω f g := by sorry
+      homogeneousAdelicTheta_polarTerm ω f g := by
+  unfold thetaPolarCutoff homogeneousAdelicTheta_polarTerm
+  by_cases hω : ω = 1
+  · rw [ite_eq_left ⟨hω, hg⟩, ite_eq_left hω, one_mul]
+  · rw [ite_eq_right fun h ↦ hω h.1, ite_eq_right hω, zero_mul, smul_zero]
 
 -- TODO(paper-gap): Equation (3.4.2.7) counts each modified finite factor
 -- twice. The line below it also divides by the local Euler denominator,
@@ -734,7 +750,11 @@ is the global zeta integral of the Gaussian. -/
 theorem gaussianCompletedHeckeL_eq_integral (χ : PontryaginDual C_F) (s : ℂ)
     (hs : 1 < s.re) :
     gaussianCompletedHeckeL χ s =
-      globalIdelicZetaIntegral (adelicStandardGaussian χ) (ideleClassNormTwist χ s) := by sorry
+      globalIdelicZetaIntegral (adelicStandardGaussian χ) (ideleClassNormTwist χ s) := by
+  refine globalIdelicZFunction_eq_integral (adelicStandardGaussian χ) ?_
+  change 1 < quasiCharacterAbscissa (ideleClassNorm F) (isProperMap_ideleClassNorm F)
+    (ideleClassNorm_ne_one (F := F)) (ideleClassNormTwist χ s)
+  rwa [quasiCharacterAbscissa_ideleClassNormTwist]
 
 /-- Paper: Paragraph after Equation (3.4.3.9), p. 152. In the half-plane of
 absolute convergence the Gaussian zeta function gives the completed Euler product of §3.2

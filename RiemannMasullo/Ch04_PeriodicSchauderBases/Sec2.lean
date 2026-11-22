@@ -901,7 +901,25 @@ theorem cyclicExponential_regular :
 /-- Paper: Remark 4.2.1.8, p. 170. The exponential system is unbounded
 in the smooth topology. -/
 theorem cyclicExponential_not_bounded :
-    ¬ IsVonNBounded ℂ (range cyclicExponential) := by sorry
+    ¬ IsVonNBounded ℂ (range cyclicExponential) := by
+  -- The first-derivative seminorm of the monomial of frequency m is at least 2π|m|.
+  intro hb
+  let i : ElementarySchwartzIndex 0 1 0 := (0, 0, fun _ ↦ 1, 0)
+  obtain ⟨r, -, hr⟩ :=
+    (elementarySchwartz_withSeminorms.isVonNBounded_iff_seminorm_bounded).mp hb i
+  let m : ℤ := ⌈r⌉₊
+  have h := norm_fourierCoeffOn_iteratedDeriv_cyclic (cyclicExponential m) m 1
+  rw [fourierCoeffOn_iteratedDeriv_cyclic, cyclicFourierCoeff_exponential, ite_eq_left rfl,
+    mul_one, pow_one] at h
+  have hnorm : ‖cyclicFrequency m‖ = 2 * Real.pi * ⌈r⌉₊ := by
+    simp [cyclicFrequency, m, abs_of_pos Real.pi_pos]
+  have hm : r ≤ ‖cyclicFrequency m‖ := by
+    rw [hnorm]
+    have h1 : r ≤ (⌈r⌉₊ : ℝ) := Nat.le_ceil r
+    have h2 : (⌈r⌉₊ : ℝ) ≤ 2 * Real.pi * ⌈r⌉₊ :=
+      le_mul_of_one_le_left (Nat.cast_nonneg _) (by linarith [Real.pi_gt_three])
+    exact h1.trans h2
+  exact (hm.trans h).not_gt (hr _ ⟨m, rfl⟩)
 
 section CompactSupport
 
