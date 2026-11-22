@@ -150,7 +150,21 @@ theorem sLocalEigendistribution_descends (c : QuasiCharacter Jₛ) (T : D(ℬ(A�
 /-- Paper: Equation (5.5.1.12), p. 279.
 The normalized S-local eigendistribution annihilates the theta kernel. -/
 theorem sLocalThetaKernel_le_eigendistribution (c : QuasiCharacter Jₛ) :
-    Kₛ ≤ (sLocalNormalizedEigendistribution c).ker := by sorry
+    Kₛ ≤ (sLocalNormalizedEigendistribution c).ker := by
+  have annihilates {M : Type _} [AddCommGroup M] [Module ℂ M] [TopologicalSpace M]
+      (K : Submodule ℂ M) (W : Submodule ℂ (StrongDual ℂ M)) (T : StrongDual ℂ M)
+      (hW : W = Submodule.span ℂ {T})
+      (hd : ∀ D ∈ W, ∃! U : StrongDual ℂ (M ⧸ K), pull(K) U = D) : K ≤ T.ker := by
+    have hT : T ∈ W := hW ▸ Submodule.subset_span (Set.mem_singleton T)
+    obtain ⟨U, rfl⟩ := (hd T hT).exists
+    intro f hf
+    change U (Submodule.Quotient.mk f) = 0
+    exact (congrArg U ((Submodule.Quotient.mk_eq_zero K).mpr hf)).trans (map_zero U)
+  with_reducible_and_instances
+    exact annihilates (M := ℬ(Aₛ)) (Kₛ) (sLocalEigendistributions (F := F) (S := S) c)
+      (sLocalNormalizedEigendistribution (F := F) (S := S) c)
+      (sLocalEigendistributions_eq_span (F := F) (S := S) c)
+      (sLocalEigendistribution_descends (F := F) (S := S) c)
 
 /-- Paper: Theorem 5.5.1.2(2), p. 278.
 The generator on the S-local theta quotient is the continuous descent of the
@@ -203,7 +217,29 @@ theorem adelicNormalizedEigendistribution_gaussian (χ : PontryaginDual C𝔽) (
 /-- Paper: Theorem 5.5.1.3(1), p. 279.
 The normalized global distribution spans the eigenspace of its weight. -/
 theorem adelicEigendistributions_eq_span (c : QuasiCharacter C𝔽) :
-    adelicEigendistributions c = Submodule.span ℂ {adelicNormalizedEigendistribution c} := by sorry
+    adelicEigendistributions c = Submodule.span ℂ {adelicNormalizedEigendistribution c} := by
+  have spans {V : Type _} {I : Type _} [AddCommGroup V] [Module ℂ V]
+      (E : Submodule ℂ V) (T : V) (test : I → V → ℂ) (hzero : ∀ i, test i 0 = 0)
+      (hr : Module.finrank ℂ E = 1) (hT : T ∈ E) (hn : ∀ i, test i T = 1)
+      (unique : ∀ U ∈ E, (∀ i, test i U = 1) → U = T) : E = Submodule.span ℂ {T} := by
+    apply eq_span_singleton_of_mem_of_finrank_eq_one hr hT
+    intro hz
+    -- If zero were normalized, there could be no tests, so every vector would qualify.
+    have noTest (i : I) : False :=
+      zero_ne_one (((hzero i).symm.trans (congrArg (test i) hz).symm).trans (hn i))
+    have : Nontrivial E := Module.nontrivial_of_finrank_eq_succ hr
+    obtain ⟨U, hU⟩ := exists_ne (0 : E)
+    exact hU (Subtype.ext ((unique U U.property (fun i ↦ (noTest i).elim)).trans hz))
+  let Charts := {p : PontryaginDual C𝔽 × ℂ // ideleClassNormTwist p.1 p.2 = c}
+  have hT := (existsUnique_adelicNormalizedEigendistribution (F := F) c).exists.choose_spec
+  refine spans (V := D(ℬ(𝔸[F]))) (I := Charts) (adelicEigendistributions (F := F) c)
+    (adelicNormalizedEigendistribution (F := F) c)
+    (fun (p : Charts) (U : D(ℬ(𝔸[F]))) ↦ U (adelicStandardGaussian (F := F) p.val.1)) (fun _ ↦ rfl)
+    (Module.rank_eq_one_iff_finrank_eq_one.mp (adelicEigendistributions_rank (F := F) c)) hT.1
+    (fun p ↦ hT.2 p.val.1 p.val.2 p.property) ?_
+  intro U hU hn
+  exact (existsUnique_adelicNormalizedEigendistribution (F := F) c).unique
+    ⟨hU, fun χ s hc ↦ hn ⟨(χ, s), hc⟩⟩ hT
 
 /-- Paper: Theorem 5.5.1.3(1), p. 279.
 The normalized global distributions form a holomorphic family on each norm chart. -/
@@ -228,7 +264,17 @@ theorem adelicEigendistribution_descends (c : QuasiCharacter C𝔽) (T : D(ℬ(�
 The normalized adelic eigendistribution annihilates the global theta kernel,
 so its descent is a continuous linear quotient lift. -/
 theorem globalThetaKernel_le_eigendistribution (c : QuasiCharacter C𝔽) :
-    K𝔽 ≤ (adelicNormalizedEigendistribution c).ker := by sorry
+    K𝔽 ≤ (adelicNormalizedEigendistribution c).ker := by
+  have annihilates {M : Type _} [AddCommGroup M] [Module ℂ M] [TopologicalSpace M]
+      (K : Submodule ℂ M) (T : StrongDual ℂ M)
+      (h : ∃ U : StrongDual ℂ (M ⧸ K), pull(K) U = T) : K ≤ T.ker := by
+    obtain ⟨U, rfl⟩ := h
+    intro f hf
+    change U (Submodule.Quotient.mk f) = 0
+    exact (congrArg U ((Submodule.Quotient.mk_eq_zero K).mpr hf)).trans (map_zero U)
+  exact annihilates (M := ℬ(𝔸[F])) (K𝔽) (adelicNormalizedEigendistribution (F := F) c)
+    (adelicEigendistribution_descends (F := F) c _
+      (existsUnique_adelicNormalizedEigendistribution (F := F) c).exists.choose_spec.1).exists
 
 /-- Paper: Theorem 5.5.1.3(2), p. 279.
 The generator on the global theta quotient is the continuous descent of the
@@ -247,7 +293,27 @@ The eigenspace in the global theta dual is the line through the descended genera
 with the weight condition tested on the pullback. -/
 theorem globalThetaEigendistributions_eq_span (c : QuasiCharacter C𝔽) :
     (adelicEigendistributions c).comap (pull(K𝔽)).toLinearMap =
-      Submodule.span ℂ {globalThetaEigendistribution c} := by sorry
+      Submodule.span ℂ {globalThetaEigendistribution c} := by
+  have quotientLine {M : Type _} [AddCommGroup M] [Module ℂ M] [TopologicalSpace M]
+      (K : Submodule ℂ M) (W : Submodule ℂ (StrongDual ℂ M))
+      (T : StrongDual ℂ M) (U : StrongDual ℂ (M ⧸ K)) (hW : W = Submodule.span ℂ {T})
+      (hU : ∀ f, U (K.mkQL f) = T f) :
+      W.comap (pull(K)).toLinearMap = Submodule.span ℂ {U} := by
+    let L := (pull(K)).toLinearMap
+    have hinj : Injective L := by
+      intro a b h
+      apply ContinuousLinearMap.ext
+      intro x
+      obtain ⟨f, rfl⟩ := K.mkQ_surjective x
+      exact congrArg (fun t : StrongDual ℂ M ↦ t f) h
+    have he : L U = T := ContinuousLinearMap.ext hU
+    have hm : (Submodule.span ℂ {U}).map L = W := by
+      rw [Submodule.map_span, Set.image_singleton, he, hW]
+    exact (congrArg (fun p : Submodule ℂ (StrongDual ℂ M) ↦ p.comap L) hm.symm).trans
+      (Submodule.comap_map_eq_of_injective hinj _)
+  exact quotientLine (M := ℬ(𝔸[F])) (K𝔽) (adelicEigendistributions (F := F) c)
+    (adelicNormalizedEigendistribution (F := F) c) (globalThetaEigendistribution (F := F) c)
+    (adelicEigendistributions_eq_span (F := F) c) (globalThetaEigendistribution_mk (F := F) c)
 
 /-- Paper: Theorem 5.5.1.3(2), p. 279.
 The normalized global family in the strong dual of the theta quotient is holomorphic. -/

@@ -119,7 +119,9 @@ theorem sLocalZetaPair_mk (χ : PontryaginDual Jₛ) (f : ℬₛ) :
     EqOn (sLocalZetaPair (F := F) (S := S) χ (Submodule.Quotient.mk f)).1.val
       (fun s ↦ Zₛ f (normChart(χ) s)) rightHalf ∧
     EqOn (sLocalZetaPair (F := F) (S := S) χ (Submodule.Quotient.mk f)).2.val
-      (fun s ↦ Zₛ (Fourierₛ f) (normChart(χ⁻¹) (1 - s))) leftHalf := by sorry
+      (fun s ↦ Zₛ (Fourierₛ f) (normChart(χ⁻¹) (1 - s))) leftHalf := by
+  have h := (existsUnique_sLocalZetaPair (F := F) (S := S) χ).exists.choose_spec f
+  exact h
 
 /-- Paper: (5.4.1.3), p. 266.
 Subtracting the corrected second component from the first on the overlap is a
@@ -221,7 +223,9 @@ homogeneous theta functions coincide. -/
 theorem sLocalPolarFreeThetaSpace_mk_eq_iff (r : RealModels) (c : ComplexModels)
     (ω : PontryaginDual J₁) (f g : polarTests(r, c)) :
     (polarKernel(polarTests(r, c), ω)).mkQ f = (polarKernel(polarTests(r, c), ω)).mkQ g ↔
-      φω(ω) f.val = φω(ω) g.val := by sorry
+      φω(ω) f.val = φω(ω) g.val := by
+  simp only [Submodule.mkQ_apply, Submodule.Quotient.eq, LinearMap.mem_ker, LinearMap.comp_apply,
+    Submodule.subtype_apply, Submodule.coe_sub, map_sub, sub_eq_zero]
 
 local notation "polarInclusion(" P ", " ω ")" =>
   (polarKernel(P, ω)).mapQ (LinearMap.ker (φω(ω))) (P).subtype
@@ -333,9 +337,24 @@ local notation "completionMap" => (show Θₛ →ₗ[ℂ] SLocalThetaL2 F S from
     (LinearMap.range (weightedTheta).toLinearMap).topologicalClosure
     (fun x ↦ Submodule.le_topologicalClosure _ (LinearMap.mem_range_self _ x)))
 
+section DenseHelper
+variable {M N : Type*} [AddCommGroup M] [Module ℂ M] [AddCommGroup N] [Module ℂ N]
+  [TopologicalSpace N] [ContinuousAdd N] [ContinuousConstSMul ℂ N]
+
+private theorem denseRange_codRestrict_topologicalClosure (f : M →ₗ[ℂ] N)
+    (h : ∀ x, f x ∈ (LinearMap.range f).topologicalClosure) :
+    DenseRange (f.codRestrict (LinearMap.range f).topologicalClosure h) := by
+  rw [DenseRange, Topology.IsInducing.subtypeVal.dense_iff]
+  intro x
+  rw [← Set.range_comp]
+  exact x.2
+
+end DenseHelper
+
 /-- Paper: (5.4.2.2), p. 274.
 The test-function image is dense in the chosen model of the completion. -/
-theorem sLocalThetaL2_dense : DenseRange completionMap := by sorry
+theorem sLocalThetaL2_dense : DenseRange completionMap :=
+  denseRange_codRestrict_topologicalClosure _ _
 
 /-- Paper: (5.4.2.1)–(5.4.2.2), p. 274.
 S-local Fourier transform has a unique unitary extension to the weighted completion,

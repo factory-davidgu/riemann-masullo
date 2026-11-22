@@ -788,10 +788,50 @@ theorem exists_sLocalIdelicZFunction_principalValue_attaining_poles (χ : Pontry
         (sAdelePrincipalValue F (Finset.Subset.refl S) f) (chartₛ(χ) z)) s =
         (↑(-(sLocalArchimedeanPoleMultiplicity χ s : ℤ)) : WithTop ℤ) := by sorry
 
+private theorem continuous_schwartzBruhat_pointEval {G : Type*} [CommGroup G]
+    [TopologicalSpace G] (x : G) : Continuous (fun f : SchwartzBruhat G ↦ f x) := by
+  classical
+  let L : SchwartzBruhat G →ₗ[ℂ] ℂ :=
+    (LinearMap.proj x).comp (schwartzBruhatSubmodule G).subtype
+  let p := (normSeminorm ℂ ℂ).comp L
+  have hstage (a : BruhatStructuralPair G) (e : ElementaryLCAPresentation a.quotient) :
+      Continuous (p ∘ schwartzBruhatStageInclusion a e) := by
+    let _ := e.finiteGroup
+    let q : Seminorm ℂ (SchwartzBruhatStage e) := elementarySchwartzSeminorm (0, 0, 0, 0)
+    have hq : Continuous q := elementarySchwartz_withSeminorms.continuous_seminorm (0, 0, 0, 0)
+    change Continuous (p.comp (schwartzBruhatStageInclusion a e))
+    refine Seminorm.continuous_of_le hq ?_
+    intro f
+    change ‖schwartzBruhatStageRealization a e f x‖ ≤ q f
+    rw [schwartzBruhatStageRealization_apply]
+    split_ifs with hx
+    · let y := Multiplicative.toAdd (e.equiv (QuotientGroup.mk ⟨x, hx⟩))
+      change (↑‖f y‖₊ : ENNReal).toReal ≤ (elementarySchwartzBound f.val (0, 0, 0, 0)).toReal
+      refine ENNReal.toReal_mono (f.property.2 (0, 0, 0, 0)).ne ?_
+      rw [elementarySchwartzBound_zero]
+      exact le_iSup (fun z ↦ (↑‖f z‖₊ : ENNReal)) y
+    · simpa only [norm_zero] using apply_nonneg q f
+  exact (norm_withSeminorms ℂ ℂ).continuous_of_continuous_comp L fun _ ↦
+    (withGeneratingSeminorms_spec _ Subtype.val).continuous_seminorm ⟨p, hstage⟩
+
 /-- Paper: Proposition 5.3.4.5(3), p. 264.
 The subspace cut out by the selected finite zero-coordinate conditions is closed. -/
 theorem sAdeleFiniteZeroSchwartz_isClosed (T : Finset V) :
-    IsClosed (↑(sAdeleFiniteZeroSchwartz S T) : Set ℬₛ) := by sorry
+    IsClosed (↑(sAdeleFiniteZeroSchwartz S T) : Set ℬₛ) := by
+  let X := {x : SAdeleRing F S // ∃ v : S, v.val ∈ T ∧ x.2 v = 0}
+  have h : IsClosed (⋂ x : X, {f : ℬₛ | f (Multiplicative.ofAdd x.val) = 0}) :=
+    isClosed_iInter fun x : X ↦
+      isClosed_eq (continuous_schwartzBruhat_pointEval (Multiplicative.ofAdd x.val)) continuous_const
+  have heq : (⋂ x : X, {f : ℬₛ | f (Multiplicative.ofAdd x.val) = 0}) =
+      (↑(sAdeleFiniteZeroSchwartz S T) : Set ℬₛ) :=
+    Set.ext fun f ↦ by
+      refine Set.mem_iInter.trans ?_
+      let K (x : X) : Submodule ℂ ℬₛ :=
+        LinearMap.ker ((LinearMap.proj (Multiplicative.ofAdd x.val)).comp
+          (schwartzBruhatSubmodule (Multiplicative (SAdeleRing F S))).subtype)
+      change (∀ x : X, f ∈ K x) ↔ f ∈ ⨅ x : X, K x
+      exact (Submodule.mem_iInf K).symm
+  exact (congrArg (fun s : Set ℬₛ ↦ IsClosed s) heq).mp h
 
 local notation "thetaQuotient(" χ ")" => (LinearMap.ker (thetaAt(χ))).mkQ
 
