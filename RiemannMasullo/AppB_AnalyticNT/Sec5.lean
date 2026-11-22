@@ -497,7 +497,8 @@ theorem volume_interior_torusQuotient_image [NeZero N] (U : Set (unitHalfOpenCub
 The interior of the torus image of a Jordan-measurable set has null frontier. -/
 theorem volume_frontier_interior_torusQuotient_image [NeZero N] (U : Set (unitHalfOpenCube N))
     (hU : volume (Subtype.val '' frontier U) = 0) :
-    volume (frontier (interior (torusQuotient N '' (Subtype.val '' U)))) = 0 := by sorry
+    volume (frontier (interior (torusQuotient N '' (Subtype.val '' U)))) = 0 :=
+  measure_mono_null frontier_interior_subset (volume_frontier_torusQuotient_image U hU)
 
 /-- Paper: Corollary B.5.2.4, p. 631.
 For a relatively open subset of the unit cube, the symmetric frequency of visits converges

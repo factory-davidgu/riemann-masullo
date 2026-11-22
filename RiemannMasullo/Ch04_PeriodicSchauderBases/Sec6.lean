@@ -347,6 +347,21 @@ local notation "freq[" k "," n "]" =>
       G →ₜ* (G ⧸ Subgroup.zpowers (γs k)))
     (modulatedCyclicCharacter m (γs k) (hγs k) χ (t₀ k) (ht₀ k) (ω, n)))⁻¹)
 
+/-- Every unitary character of the positive reals is `t ↦ exp(i s log t)` for some real `s`. -/
+private theorem exists_circleExp_freq (ψ : PontryaginDual ℝ≥0ˣ) :
+    ∃ s : ℝ, ∀ t, ψ t = Circle.exp (s * Real.log ((t : ℝ≥0) : ℝ)) := by
+  let c : ℝ≥0ˣ →ₜ* ℂ := (⟨Circle.coeHom, continuous_subtype_val⟩ : Circle →ₜ* ℂ).comp ψ
+  obtain ⟨z, ⟨hz0, hz⟩, -⟩ := existsUnique_unitaryComplexPower c (fun t ↦ Circle.norm_coe (ψ t))
+  have hz' : (z.im : ℂ) * Complex.I = z := by apply Complex.ext <;> simp [hz0]
+  refine ⟨z.im, fun t ↦ Circle.ext ((hz t).trans ?_)⟩
+  have hpos : 0 < ((t : ℝ≥0) : ℝ) := NNReal.coe_pos.mpr (Units.zero_lt t)
+  rw [Circle.coe_exp, Complex.cpow_def_of_ne_zero (Complex.ofReal_ne_zero.mpr hpos.ne'),
+    ← Complex.ofReal_log hpos.le]
+  conv_lhs => rw [← hz']
+  congr 1
+  push_cast
+  ring
+
 include hm hms hχ in
 /-- Paper: Situation 4.6.1.1(5) and Theorem 4.6.1.5, pp. 209, 212.
 The integer frequency parametrizes each cyclic fiber bijectively.
@@ -354,7 +369,74 @@ Deviation: Frequencies have denominator log |γₖ| and use the normalized phase
 The character is the inverse of the pulled-back basis character of §4.4. -/
 theorem modulatedPeriodicFrequency_bijective (k : Fin N) :
     Injective (fun n : ℤ ↦ freq[k, n]) ∧
-      range (fun n : ℤ ↦ freq[k, n]) = modulatedCyclicAnnihilatorFiber m ω (γs k) := by sorry
+      range (fun n : ℤ ↦ freq[k, n]) = modulatedCyclicAnnihilatorFiber m ω (γs k) := by
+  have hpos (x : G) : 0 < ((m x).val : ℝ) := NNReal.coe_pos.mpr (Units.zero_lt _)
+  have hL : 0 < Real.log ((m (γs k)).val : ℝ) := Real.log_pos (by exact_mod_cast hγs k)
+  have hlog (l : ℝ) : ∃ x : G, Real.log ((m x).val : ℝ) = l := by
+    obtain ⟨x, hx⟩ := hms (Units.mk0 ⟨Real.exp l, (Real.exp_pos l).le⟩
+      fun h ↦ (Real.exp_pos l).ne' (congrArg Subtype.val h))
+    exact ⟨x, by rw [hx]; exact Real.log_exp l⟩
+  have hfreq (n : ℤ) (x : G) : freq[k, n] x = χ ω x * Circle.exp
+      (-((t₀ k ω - 2 * Real.pi * (n : ℝ) / Real.log ((m (γs k)).val : ℝ)) *
+        Real.log ((m x).val : ℝ))) := by
+    change (modulatedCyclicCharacter m (γs k) (hγs k) χ (t₀ k) (ht₀ k) (ω, n)
+      (QuotientGroup.mk x))⁻¹ = _
+    rw [modulatedCyclicCharacter_mk, Circle.exp_neg, mul_inv, inv_inv]
+  refine ⟨fun n₁ n₂ h ↦ ?_, ?_⟩
+  · by_contra hne
+    have hd : ((n₁ : ℝ) - n₂) ≠ 0 := sub_ne_zero.mpr (by exact_mod_cast hne)
+    obtain ⟨x, hx⟩ := hlog (Real.log ((m (γs k)).val : ℝ) / (2 * ((n₁ : ℝ) - n₂)))
+    have hx' := DFunLike.congr_fun h x
+    simp only [hfreq, hx] at hx'
+    have key (a b : ℝ) (hab : Circle.exp a = Circle.exp b) (hπ : a - b = Real.pi) : False :=
+      Circle.exp_pi_ne_one (by rw [← hπ, Circle.exp_sub, hab, div_self'])
+    refine key _ _ (mul_left_cancel hx') ?_
+    field_simp
+    ring
+  · ext ξ
+    rw [mem_modulatedCyclicAnnihilatorFiber_iff]
+    constructor
+    · rintro ⟨n, rfl⟩
+      refine ⟨?_, fun u ↦ ?_⟩
+      · rw [hfreq, ← (ht₀ k ω).2, ← Circle.exp_add]
+        convert Circle.exp_two_pi_mul_int n using 2
+        field_simp
+        ring
+      · rw [hfreq, show m u.val = 1 from u.2, hχ]
+        simp
+    · rintro ⟨hγ, hK⟩
+      obtain ⟨τ₀, hτ₀⟩ := hm.exists_section
+      let τ : ℝ≥0ˣ →ₜ* G := τ₀.comp
+        ⟨(MonoidHom.id ℝ≥0ˣ).codRestrict _ fun t ↦ MonoidHom.mem_range.mpr (hms t),
+          continuous_id.subtype_mk _⟩
+      have hτ (t : ℝ≥0ˣ) : m (τ t) = t := hτ₀ _
+      let φ : PontryaginDual G := ξ * (χ ω)⁻¹
+      have hφ (x : G) : φ x = ξ x * (χ ω x)⁻¹ := rfl
+      obtain ⟨s, hs⟩ := exists_circleExp_freq (φ.comp τ)
+      have hξx (x : G) : ξ x = χ ω x * Circle.exp (s * Real.log ((m x).val : ℝ)) := by
+        have hmem : x * (τ (m x))⁻¹ ∈ K := by
+          rw [MonoidHom.mem_ker, map_mul, map_inv]
+          change m x * (m (τ (m x)))⁻¹ = 1
+          rw [hτ, mul_inv_cancel]
+        have h1 : φ (x * (τ (m x))⁻¹) = 1 := by
+          rw [hφ]
+          exact mul_inv_eq_one.mpr ((hK ⟨_, hmem⟩).trans (hχ ω ⟨_, hmem⟩).symm)
+        rw [map_mul, map_inv, mul_inv_eq_one] at h1
+        have h2 : φ (τ (m x)) = Circle.exp (s * Real.log ((m x).val : ℝ)) := hs (m x)
+        rw [← h2, ← h1, hφ, mul_comm, inv_mul_cancel_right]
+      have h3 := hξx (γs k)
+      rw [hγ, ← (ht₀ k ω).2, ← Circle.exp_add, eq_comm, Circle.exp_eq_one] at h3
+      obtain ⟨n, hn⟩ := h3
+      refine ⟨n, DFunLike.ext _ _ fun x ↦ ?_⟩
+      rw [hfreq, hξx]
+      have hs' : s = (n * (2 * Real.pi) - t₀ k ω * Real.log ((m (γs k)).val : ℝ)) /
+          Real.log ((m (γs k)).val : ℝ) := by
+        rw [eq_div_iff hL.ne']
+        linarith
+      congr 2
+      rw [hs']
+      field_simp
+      ring
 
 variable [MeasurableSpace G] [BorelSpace G]
 variable (μ : Measure G) [hμHaar : μ.IsHaarMeasure]
