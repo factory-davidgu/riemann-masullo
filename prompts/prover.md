@@ -18,7 +18,7 @@ where to find your issue, and how to hand in.
    step may be wrong or missing, and a different proof is fine. What counts is the statement on
    `main`, exactly as written.
 
-## Three acceptable results
+## Acceptable results
 
 **Proved.** The `sorry` is gone and `#print axioms` on the declaration shows only `propext`,
 `Classical.choice` and `Quot.sound`. If it also shows `sorryAx` only because the statement or
@@ -32,10 +32,30 @@ both something you believe is true and clearly easier than what you started with
 `sorry` becomes its own issue, so write the lemma and docstring for a reader who has not seen
 your reasoning.
 
-**Blocked.** If the statement is false, vacuous, missing a hypothesis, or rests on a definition
-that does not mean what the paper means, do not change it. Write `.agent/REPORT.md` with the
-exact problem, a counterexample if you have one, and the corrected statement you would propose.
-This is a real result: it tells us something about the formalization or about the paper.
+**A problem found.** If the statement is false, vacuous, missing a hypothesis, does not say what
+the paper says, or rests on a definition that does not mean what the paper means, do not change
+it, and do not prove something else in its place. Report it: `.agent/REPORT.md`, or a comment on
+the issue if you work by hand. Give the paper item and page, say exactly what fails, and say
+which of these it is:
+
+- the Lean statement is false;
+- the Lean does not say what the paper says;
+- a step of the printed proof fails, while the statement may still be true. Then a different
+  proof is the answer, and the failing step is worth a line in your pull request.
+
+The evidence must be concrete: a counterexample with explicit objects, or the exact step. Best
+of all is a Lean proof. In `RiemannMasullo/<Chapter>/Sec<N>_Printed.lean` (create it on the
+model of `AppA_AlgebraicNT/Sec1_Printed.lean` if the section has none), state the claim as
+`def Printed.<name> : Prop`, copying the statement with its variables bound by `∀`, and prove
+`theorem Printed.<name>_false : ¬ Printed.<name>`. You need not propose a repair, though a
+corrected statement is welcome. Finding and documenting a problem is a successful contribution
+in its own right. The integrator checks it against the page and decides what becomes of the
+statement (`AGENTS.md`, "False statements and gaps").
+
+**Stuck.** If you can neither prove nor refute the statement, take your attempt out, leave the
+`sorry` exactly as it was, and write a short note in the same place: what you tried, how far the
+reduction got, and where it stopped. The next person starts from it. "I could not prove it" is a
+note, not a finding: do not report a statement as false because it is hard.
 
 ## Where code goes
 
@@ -58,7 +78,9 @@ Build as little as possible. While you work, build only your module
 (`lake build RiemannMasullo.<Chapter>.<File>`), or check a scratch copy with
 `lake lean .agent/Scratch.lean`. Never use `lake env lean`: it ignores the options in
 `lakefile.toml`, and without them some files take half an hour instead of half a minute. Run
-the full `lake build` once, at the end.
+one check at a time and wait for it; if it has not finished after ten minutes, stop it and make
+the scratch file smaller. Do not leave checks running in the background. Run the full
+`lake build` once, at the end.
 
 If you were given several declarations of one file, prove them one at a time and leave the file
 building after each, so that what is finished can be handed in whatever happens to the rest.

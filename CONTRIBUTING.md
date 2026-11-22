@@ -17,12 +17,20 @@ Paste this into Codex, Claude Code or any agent that can run shell commands:
 > `AGENTS.md`, `prompts/prover.md` and the section "Working efficiently" of `CONTRIBUTING.md`.
 > Pick one library file that has open issues labelled `proof` with no `claimed` or `stuck`
 > label, and take several of them, or all of them, from that one file. Comment `Claiming` on
-> each. Replace each `sorry` with a proof without changing any statement. Put helper lemmas
-> directly above the declaration they serve, as `private theorem`, and edit no other file. While
-> you work, build only that file (`lake build RiemannMasullo.<Chapter>.<File>`), after every
-> proof. At the end run `lake build` and `scripts/lint.sh`, then open one pull request against
-> `main` whose description has one `Closes #<issue>` line per statement you proved. Comment
-> `Releasing` on every claimed issue you did not finish, and say what blocked you.
+> each. Try to prove each statement as written. A different proof from the paper's is welcome,
+> and a proof that is too large can be split into smaller, precise lemmas as the prover guide
+> says. Never change a statement. If you find a counterexample, a mismatch between the Lean and
+> the manuscript, or a specific gap in the printed argument, report it on the issue instead:
+> give the paper item and page and say exactly what fails, with a concrete counterexample or the
+> failing step, best of all as a Lean proof of the negation. That is a successful contribution
+> in its own right, and you need not propose a repair. If you can neither prove nor refute a
+> statement, leave a short note on the issue saying what you tried and where you got stuck. Put
+> helper lemmas directly above the declaration they serve, as `private theorem`, and edit no
+> other file. While you work, build only that file
+> (`lake build RiemannMasullo.<Chapter>.<File>`), after every proof. At the end run `lake build`
+> and `scripts/lint.sh`, then open one pull request against `main` whose description has one
+> `Closes #<issue>` line per statement you proved. Comment `Releasing` on every claimed issue
+> you did not finish.
 
 To point it at a particular file or issue, add "Work on `RiemannMasullo/…`" or "Work on issue
 #N". You are responsible for what your agent submits: read the diff before the pull request is
@@ -40,7 +48,7 @@ hand.
 
 ## By hand
 
-1. Pick an [open `proof` issue that nobody has claimed](https://github.com/mccorvie/riemann-masullo/issues?q=is%3Aissue+is%3Aopen+label%3Aproof+-label%3Aclaimed+-label%3Astuck).
+1. Pick an [open `proof` issue that nobody has claimed](https://github.com/mccorvie/riemann-masullo/issues?q=is%3Aissue+is%3Aopen+label%3Aproof+-label%3Aclaimed+-label%3Astuck+-label%3Agap).
    Each one shows the Lean statement, where it is, and the passage of the paper it comes from.
    Better still, pick a file and take several of its issues (see below).
 2. Comment `Claiming` on each issue you take. A workflow assigns it to you. If you stop, comment
@@ -177,15 +185,34 @@ on that path:
 ## When the paper is wrong
 
 The manuscript is an unrefereed draft, and finding where it does not hold is part of the job.
+Finding and documenting a problem is a successful contribution in its own right, and you need
+not propose a repair.
 
-- If a statement in Lean is false, vacuous or missing a hypothesis, do not change it and do not
-  prove something else in its place. Say so on the issue, with a counterexample if you have
-  one and the corrected statement you would propose. The integrator compares it with the page,
-  repairs the statement, and logs the finding in [`ERRATA.md`](ERRATA.md).
-- If the paper's proof does not work but the statement is true, a different proof is fine. Say
-  in the pull request what failed in the printed argument; that goes into `ERRATA.md` too.
-- Before you rely on a formula, look at the page image (`scripts/paper.sh --png <page>`). The
-  transcription is a reading aid; the PDF decides.
+- **Report it on the issue**: the paper item and page, and exactly what fails. Say which it is:
+  the Lean statement is false; the Lean does not say what the paper says; or a step of the
+  printed proof fails. In the last case the statement may still be true, and a different proof
+  is welcome.
+- **Bring evidence**: a counterexample with explicit objects, or the exact step that fails. Best
+  of all is a Lean proof of the negation, handed in as a pull request ([`AGENTS.md`](AGENTS.md),
+  "False statements and gaps", says where it goes). "I could not prove it" is a useful note for
+  the next person, but it is not a finding.
+- **Do not change the statement**, and do not prove something else in its place. The integrator
+  checks the report against the page, decides what becomes of the statement, and logs it in
+  [`ERRATA.md`](ERRATA.md).
+- **If you can neither prove nor refute it**, leave a short note on the issue saying what you
+  tried and where it stopped, and release it.
+
+What happens then:
+
+| Finding | In the Lean |
+|---|---|
+| Our Lean misreads the paper | The statement is corrected, and the issue shows the new text. |
+| The printed statement is false | The printed claim is kept as a proposition, `Printed.<name>`, with a theorem that proves its negation. The repaired statement stands next to it under the ordinary name. |
+| The printed proof fails, the statement is plausible | Nothing changes; the note stays on the issue. |
+| Nobody can prove or refute it | It becomes a recorded gap: a named theorem left as `sorry`, labelled `gap`, with everything else proved around it. |
+
+Before you rely on a formula, look at the page image (`scripts/paper.sh --png <page>`). The
+transcription is a reading aid; the PDF decides.
 
 ## Other ways to help
 

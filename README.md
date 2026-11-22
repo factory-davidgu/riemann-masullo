@@ -20,9 +20,12 @@ The aim, in this order:
 1. **Formalize as much as possible.** State the paper in Lean section by section, and prove what
    is stated.
 2. **Repair as much as possible.** Where a statement is false or a proof does not work, find the
-   statement that is true and still does the job the paper needs from it, and prove that.
+   statement that is true and still does the job the paper needs from it, and prove that. The
+   printed claim is kept in Lean as a proposition, together with a proof that it is false.
 3. **Identify clearly whatever gaps remain.** What can be neither proved nor repaired is
-   recorded exactly: the page, what is claimed, and what is missing.
+   recorded exactly: the page, what is claimed, and what is missing. In the Lean it is a named
+   statement left unproved, with everything else proved around it, so that it is plain what
+   rests on each gap.
 
 Every gap or problem found on the way is logged in [`ERRATA.md`](ERRATA.md), each compared with
 the printed page. The project does not assume that the paper's main claim is right, and it does
@@ -41,21 +44,30 @@ written. You need no special access and no knowledge of the whole paper. Give yo
 > `AGENTS.md`, `prompts/prover.md` and the section "Working efficiently" of `CONTRIBUTING.md`.
 > Pick one library file that has open issues labelled `proof` with no `claimed` or `stuck`
 > label, and take several of them, or all of them, from that one file. Comment `Claiming` on
-> each. Replace each `sorry` with a proof without changing any statement. Put helper lemmas
-> directly above the declaration they serve, as `private theorem`, and edit no other file. While
-> you work, build only that file (`lake build RiemannMasullo.<Chapter>.<File>`), after every
-> proof. At the end run `lake build` and `scripts/lint.sh`, then open one pull request against
-> `main` whose description has one `Closes #<issue>` line per statement you proved. Comment
-> `Releasing` on every claimed issue you did not finish, and say what blocked you.
+> each. Try to prove each statement as written. A different proof from the paper's is welcome,
+> and a proof that is too large can be split into smaller, precise lemmas as the prover guide
+> says. Never change a statement. If you find a counterexample, a mismatch between the Lean and
+> the manuscript, or a specific gap in the printed argument, report it on the issue instead:
+> give the paper item and page and say exactly what fails, with a concrete counterexample or the
+> failing step, best of all as a Lean proof of the negation. That is a successful contribution
+> in its own right, and you need not propose a repair. If you can neither prove nor refute a
+> statement, leave a short note on the issue saying what you tried and where you got stuck. Put
+> helper lemmas directly above the declaration they serve, as `private theorem`, and edit no
+> other file. While you work, build only that file
+> (`lake build RiemannMasullo.<Chapter>.<File>`), after every proof. At the end run `lake build`
+> and `scripts/lint.sh`, then open one pull request against `main` whose description has one
+> `Closes #<issue>` line per statement you proved. Comment `Releasing` on every claimed issue
+> you did not finish.
 
-Pick from the [open, unclaimed proofs](https://github.com/mccorvie/riemann-masullo/issues?q=is%3Aissue+is%3Aopen+label%3Aproof+-label%3Aclaimed+-label%3Astuck).
+Pick from the [open, unclaimed proofs](https://github.com/mccorvie/riemann-masullo/issues?q=is%3Aissue+is%3Aopen+label%3Aproof+-label%3Aclaimed+-label%3Astuck+-label%3Agap).
 Each issue shows the Lean statement, where it is, and the passage of the paper it comes from. To
 point your agent at a particular file or issue, add "Work on `RiemannMasullo/…`" or "Work on
 issue #N" to the instruction. (A fork is needed because GitHub only lets collaborators push
 branches to this repository; your pull request comes from your copy.)
 
 Doing it by hand works the same way. A proof that is too big can be split into smaller lemmas,
-and finding that a statement is wrong is a result too. Every pull request is built and checked
+and showing that a statement is wrong, or writing down exactly where you got stuck, is a result
+too. Every pull request is built and checked
 automatically; one that only fills in proofs, and leaves every statement unchanged, is merged
 without waiting for anyone. [`CONTRIBUTING.md`](CONTRIBUTING.md) has the details, and what we
 have learned about doing this quickly.
@@ -79,15 +91,17 @@ the roadmap below the order of work.
 
 ### What the formalization has found
 
-[`ERRATA.md`](ERRATA.md) has about 200 entries: some 45 statements that are false as printed,
-135 that are imprecise, inconsistent or wrongly justified, 16 placeholders or missing pieces,
-and 9 reports from readers about parts not yet formalized. Most are in the appendices' and early
-chapters' accounts of standard material, and are repaired where they occur: the Lean states the
+[`ERRATA.md`](ERRATA.md) has about 350 entries: some 105 statements that are false as printed,
+220 that are imprecise, inconsistent or wrongly justified, 20 placeholders or missing pieces,
+and 9 reports from readers about parts not yet formalized. Those in the appendices' and early
+chapters' accounts of standard material are repaired where they occur: the Lean states the
 corrected form and says so.
 
-The second wave has reached the first of the paper's own constructions, and the findings there
-weigh more. The printed proof of the structure theorem for the spaces of adelic θ-functions
-(Theorem 5.2.1.1) does not work, and whether the theorem holds is being tested in Lean now. The
+The second wave has reached the paper's own constructions in Chapters 5–7, and the findings
+there weigh more. Most still come with a repair. Six steps have none so far, and later results
+use them; `ERRATA.md` lists them first. The main one is the structure theorem for the spaces of
+adelic θ-functions (Theorem 5.2.1.1): its printed proof does not work, the rest of §5.2 is now
+proved in Lean from its two central claims, and those two are neither proved nor refuted. The
 explicit formulas of §B.4, which Chapter 12 quotes, need their local terms and normalizations
 recomputed. None of the entries so far is about the trace formula itself.
 
@@ -103,8 +117,8 @@ Chapter 13, which should deduce GRH from the trace formula, does not yet state i
 
 This is what the three aims above are for: when the formalization reaches a part that does not
 hold as printed, the work is to repair it if it can be repaired, and otherwise to write down
-the gap exactly. How the printed original and its repairs are recorded side by side is still
-being worked out. The prerequisites (adeles and ideles, Haar measures, locally convex and
+the gap exactly. [`CONTRIBUTING.md`](CONTRIBUTING.md#when-the-paper-is-wrong) says how each
+case is recorded. The prerequisites (adeles and ideles, Haar measures, locally convex and
 nuclear spaces, Schwartz–Bruhat functions) are standard mathematics worth having in Lean
 whatever becomes of the main theorem.
 
