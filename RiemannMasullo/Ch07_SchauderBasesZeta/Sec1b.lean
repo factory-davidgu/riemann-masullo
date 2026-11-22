@@ -6,6 +6,7 @@ public import RiemannMasullo.Ch05_ThetaZSpaces.Sec2
 public import Mathlib.NumberTheory.NumberField.DirichletDensity
 public import Mathlib.RingTheory.RamificationInertia.Inertia
 public import Mathlib.RingTheory.RamificationInertia.Ramification
+import RiemannMasullo.Ch06_LocalGlobal.Sec3
 import Mathlib.Analysis.Complex.LocallyUniformLimit
 import RiemannMasullo.ForMathlib.Analysis.SpecialFunctions.Pow.Complex
 import RiemannMasullo.ForMathlib.NumberTheory.NumberField.Completion.FinitePlace
@@ -1214,7 +1215,35 @@ theorem exists_globalPolarThetaMellin (χ : U𝔽) (τ : ℝ≥0ˣ →ₜ* I𝔽
       (Z (Submodule.Quotient.mk f)).val s =
         homogeneousThetaMellinIntegral τ ω f.val (ideleClassNormTwist χ s) ∧
       (Z (Submodule.Quotient.mk f)).val s =
-        globalIdelicZFunction f.val (ideleClassNormTwist χ s) := by sorry
+        globalIdelicZFunction f.val (ideleClassNormTwist χ s) := by
+  intro ω P T
+  -- The polar section integral is entire, so it is already its own continuation.
+  have hM (f : P) : (fun s ↦ homogeneousThetaMellinIntegral τ ω f.val (ideleClassNormTwist χ s)) =
+      (fun s ↦ globalIdelicZFunction f.val (ideleClassNormTwist χ s)) := by
+    have h := homogeneousThetaMellinIntegral_entire_on_component τ ω f.val _hτ
+      (Or.inl f.property) χ (fun _ ↦ rfl)
+    exact (homogeneousThetaMellinIntegral_meromorphicContinuation τ ω f.val _hτ χ
+      (fun _ ↦ rfl) _).mp ⟨fun s _ ↦ (h.analyticAt s).meromorphicNFAt, fun _ _ ↦ rfl⟩
+  -- On the trivial component use the pole-free converse theorem. On every other
+  -- component restrict the transform on the full homogeneous quotient to polar tests.
+  have hex : ∃ M : P →L[ℂ] Aℂ, T.ker ≤ M.ker ∧
+      ∀ (f : P) (s : ℂ), (M f).val s = globalIdelicZFunction f.val (ideleClassNormTwist χ s) := by
+    by_cases hω : ω = 1
+    · have ht := (globalConverse_existsUnique_normTwist χ hω).exists
+      refine (globalConverse_normTwist χ ht.choose ht.choose_spec).elim fun M h ↦ ?_
+      refine ⟨M, ?_, h.2.2.1⟩
+      exact (congrArg (fun ψ ↦ (homogeneousAdelicThetaLinearMap F ψ).ker.comap P.subtype)
+        hω).le.trans h.2.2.2.2.ge
+    · refine (globalConverse_nontrivial χ hω).elim fun B h ↦ ?_
+      let K := (homogeneousAdelicThetaLinearMap F ω).ker
+      refine ⟨B.comp (K.mkQL.comp P.subtypeL), ?_, fun f s ↦ h.2.1 f.val s⟩
+      intro f hf
+      change B (K.mkQ f.val) = 0
+      exact (congrArg B ((Submodule.Quotient.mk_eq_zero K).mpr hf)).trans B.map_zero
+  refine hex.elim fun M h ↦ ?_
+  refine ⟨T.ker.liftQL M h.1, fun f s ↦ ?_⟩
+  change (M f).val s = _ ∧ (M f).val s = _
+  exact ⟨(h.2 f s).trans (congrFun (hM f) s).symm, h.2 f s⟩
 
 /-- Paper: §7.1.4, p. 326.
 The entire functions in the compact-open continuous function algebra are closed under

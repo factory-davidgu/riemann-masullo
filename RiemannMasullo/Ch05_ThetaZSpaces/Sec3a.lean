@@ -6,6 +6,7 @@ public import Mathlib.Analysis.Distribution.Support
 public import Mathlib.Algebra.MvPolynomial.Degrees
 public import Mathlib.RingTheory.MvPowerSeries.PiTopology
 public import Mathlib.RingTheory.PowerSeries.PiTopology
+import RiemannMasullo.ForMathlib.NumberTheory.NumberField.Completion.FinitePlace
 
 /-! # Non-archimedean principal values and distributions supported at the origin
 
@@ -187,13 +188,76 @@ theorem finitePlacePrincipalValue_integrable (v : V) (π : Fᵥ(v)ˣ) (f : ℬ(F
       IntegrableOn
         (fun u : Fᵥ(v)ˣ ↦
           f (Multiplicative.ofAdd ((↑u⁻¹ : Fᵥ(v)) * ((↑π⁻¹ : Fᵥ(v)) * x.toAdd))))
-        Uᵥ(v) μᵥ(v) := by sorry
+        Uᵥ(v) μᵥ(v) := by
+  have : BorelSpace Fᵥ(v)ˣ := ⟨rfl⟩
+  have : (μᵥ(v)).IsHaarMeasure := finiteLocalMultiplicativeTamagawaMeasure_isHaarMeasure v
+  have hO : IsOpen (Uᵥ(v) : Set Fᵥ(v)ˣ) :=
+    Submonoid.isOpen_units (Valued.isOpen_valuationSubring _)
+  have hK : IsCompact (Uᵥ(v) : Set Fᵥ(v)ˣ) :=
+    Submonoid.units_isCompact (isCompact_iff_compactSpace.mpr
+      (compactSpace_adicCompletionIntegers v))
+  refine ⟨ENNReal.toReal_pos (hO.measure_pos _ ⟨1, Uᵥ(v).one_mem⟩).ne' hK.measure_lt_top.ne, ?_⟩
+  refine ContinuousOn.integrableOn_compact hK (Continuous.continuousOn ?_)
+  exact (schwartzBruhat_continuous f).comp (continuous_ofAdd.comp
+    ((Units.continuous_val.comp continuous_inv).mul continuous_const))
+
+/-- The unit average of a locally constant compactly supported function, after scaling by a
+fixed unit, is again locally constant with compact support. -/
+private theorem finitePlacePrincipalValue_mem_average {K : Type*} [Field K] [TopologicalSpace K]
+    [IsTopologicalRing K] [T2Space K] [MeasurableSpace Kˣ] [OpensMeasurableSpace Kˣ]
+    (μ : Measure Kˣ) (U : Set Kˣ) (hO : IsOpen U) (hK : IsCompact U) (c : Kˣ) (F0 : K → ℂ)
+    (hlc : IsLocallyConstant F0) (hcs : HasCompactSupport F0) :
+    IsLocallyConstant (fun y : K ↦ ∫ u in U, F0 ((↑u⁻¹ : K) * ((↑c⁻¹ : K) * y)) ∂μ) ∧
+      HasCompactSupport (fun y : K ↦ ∫ u in U, F0 ((↑u⁻¹ : K) * ((↑c⁻¹ : K) * y)) ∂μ) := by
+  have hinv : Continuous fun u : Kˣ ↦ (↑u⁻¹ : K) := Units.continuous_val.comp continuous_inv
+  refine ⟨(IsLocallyConstant.iff_exists_open _).mpr fun x ↦ ?_, ?_⟩
+  · have hΦ : IsLocallyConstant fun p : K × Kˣ ↦
+        (F0 ((↑p.2⁻¹ : K) * ((↑c⁻¹ : K) * p.1)), F0 ((↑p.2⁻¹ : K) * ((↑c⁻¹ : K) * x))) :=
+      (hlc.comp_continuous ((hinv.comp continuous_snd).mul
+        (continuous_const.mul continuous_fst))).prodMk
+        (hlc.comp_continuous ((hinv.comp continuous_snd).mul continuous_const))
+    obtain ⟨A, B, hA, -, hxA, hUB, hAB⟩ := generalized_tube_lemma isCompact_singleton hK
+      (hΦ {q | q.1 = q.2}) (fun p hp ↦ by
+        obtain ⟨hp1, -⟩ := hp
+        change F0 _ = F0 _
+        rw [Set.mem_singleton_iff.mp hp1])
+    exact ⟨A, hA, hxA rfl, fun x' hx' ↦
+      setIntegral_congr_fun hO.measurableSet fun u hu ↦
+        hAB (show ((x', u) : K × Kˣ) ∈ A ×ˢ B from ⟨hx', hUB hu⟩)⟩
+  · refine HasCompactSupport.intro
+      ((hK.prod hcs.isCompact).image (f := fun p : Kˣ × K ↦ (↑c : K) * ((↑p.1 : K) * p.2))
+        (continuous_const.mul ((Units.continuous_val.comp continuous_fst).mul continuous_snd)))
+      fun x hx ↦ setIntegral_eq_zero_of_forall_eq_zero fun u hu ↦ ?_
+    by_contra hne
+    refine hx ⟨(u, (↑u⁻¹ : K) * ((↑c⁻¹ : K) * x)), ⟨hu, subset_tsupport _ hne⟩, ?_⟩
+    change (↑c : K) * ((↑u : K) * ((↑u⁻¹ : K) * ((↑c⁻¹ : K) * x))) = x
+    rw [Units.mul_inv_cancel_left, Units.mul_inv_cancel_left]
 
 /-- Paper: Lemma 5.3.1.3, p. 241.
 The formula for the local principal value produces a Schwartz–Bruhat test function. -/
 theorem finitePlacePrincipalValue_mem (v : V) (π : Fᵥ(v)ˣ) (f : ℬ(Fᵥ(v))) :
     finitePlacePrincipalValueFun v π f ∈ schwartzBruhatSubmodule (Multiplicative Fᵥ(v)) :=
-  by sorry
+  by
+  have hlc := (mem_finitePlaceSchwartz_iff F v (fun y ↦ f (Multiplicative.ofAdd y))).mp
+    ⟨f, fun _ ↦ rfl⟩
+  have : BorelSpace Fᵥ(v)ˣ := ⟨rfl⟩
+  have hO : IsOpen (Uᵥ(v) : Set Fᵥ(v)ˣ) :=
+    Submonoid.isOpen_units (Valued.isOpen_valuationSubring _)
+  have hK : IsCompact (Uᵥ(v) : Set Fᵥ(v)ˣ) :=
+    Submonoid.units_isCompact (isCompact_iff_compactSpace.mpr
+      (compactSpace_adicCompletionIntegers v))
+  have h := finitePlacePrincipalValue_mem_average μᵥ(v) _ hO hK π _ hlc.1 hlc.2
+  obtain ⟨g, hg⟩ := (mem_finitePlaceSchwartz_iff F v _).mpr h
+  have heq : finitePlacePrincipalValueFun v π f =
+      (f : Multiplicative Fᵥ(v) → ℂ) -
+        (μᵥ(v).real Uᵥ(v) : ℂ)⁻¹ • (g : Multiplicative Fᵥ(v) → ℂ) :=
+    funext fun x ↦ by
+      change _ = f x - (μᵥ(v).real Uᵥ(v) : ℂ)⁻¹ * g (Multiplicative.ofAdd x.toAdd)
+      rw [hg]
+      rfl
+  rw [heq]
+  exact Submodule.sub_mem _ (show schwartzBruhatSubmodule _ from f).property
+    (Submodule.smul_mem _ _ (show schwartzBruhatSubmodule _ from g).property)
 
 local notation "pvBundle(" v ", " π ")" =>
   (fun f : ℬ(Fᵥ(v)) ↦
@@ -862,19 +926,89 @@ local notation "∂𝒮[" I ", " α "]" =>
 local notation "insertPlane" y =>
   WithLp.toLp 2 (Sum.elim (fun _ ↦ (0 : ℝ)) (fun j ↦ y j))
 
+/-- Precomposition with a closed-embedding continuous linear map of norm at most one is a
+continuous linear map between spaces of test functions. -/
+private theorem exists_testFunction_coordinatePlaneRestriction_comp {E E' : Type*}
+    [NormedAddCommGroup E] [NormedSpace ℝ E] [NormedAddCommGroup E'] [NormedSpace ℝ E']
+    (g : E' →L[ℝ] E) (hg : IsClosedEmbedding g) (hn : ‖g‖ ≤ 1) :
+    ∃ R : 𝓓((⊤ : TopologicalSpace.Opens E), ℂ) →L[ℂ] 𝓓((⊤ : TopologicalSpace.Opens E'), ℂ),
+      ∀ (f : 𝓓((⊤ : TopologicalSpace.Opens E), ℂ)) (y : E'), R f y = f (g y) := by
+  have hloc (K : TopologicalSpace.Compacts E) :
+      ∃ M : ContDiffMapSupportedIn E ℂ ⊤ K →L[ℂ]
+          ContDiffMapSupportedIn E' ℂ ⊤ ⟨g ⁻¹' K, hg.isCompact_preimage K.isCompact⟩,
+        ∀ f y, M f y = f (g y) := by
+    let M : ContDiffMapSupportedIn E ℂ ⊤ K →ₗ[ℂ]
+        ContDiffMapSupportedIn E' ℂ ⊤ ⟨g ⁻¹' K, hg.isCompact_preimage K.isCompact⟩ :=
+      { toFun := fun f ↦ ContDiffMapSupportedIn.of_support_subset
+          (f.contDiff.comp g.contDiff) (fun _ hy ↦ f.support_subset hy)
+        map_add' := fun _ _ ↦ rfl
+        map_smul' := fun _ _ ↦ rfl }
+    refine ⟨⟨M, WithSeminorms.continuous_of_isBounded
+      (ContDiffMapSupportedIn.withSeminorms ℂ _ ℂ _ _)
+      (ContDiffMapSupportedIn.withSeminorms ℂ _ ℂ _ _) _
+      (Seminorm.IsBounded.of_real fun i ↦ ⟨{i}, 1, fun f ↦ ?_⟩)⟩, fun _ _ ↦ rfl⟩
+    rw [Finset.sup_singleton, one_mul]
+    refine (ContDiffMapSupportedIn.seminorm_top_le_iff ℂ (apply_nonneg _ _) i _).mpr
+      fun y _ ↦ ?_
+    change ‖iteratedFDeriv ℝ i (⇑f ∘ g) y‖ ≤ _
+    rw [g.iteratedFDeriv_comp_right f.contDiff y (mod_cast le_top)]
+    refine (ContinuousMultilinearMap.norm_compContinuousLinearMap_le _ _).trans ?_
+    calc _ ≤ ‖iteratedFDeriv ℝ i f (g y)‖ * 1 := by
+          gcongr
+          exact Finset.prod_le_one₀ (fun _ _ ↦ norm_nonneg _) fun _ _ ↦ hn
+      _ ≤ _ := by
+          rw [mul_one]
+          exact ContDiffMapSupportedIn.norm_iteratedFDeriv_apply_le_seminorm_top ℂ
+  let L : 𝓓((⊤ : TopologicalSpace.Opens E), ℂ) →ₗ[ℂ] 𝓓((⊤ : TopologicalSpace.Opens E'), ℂ) :=
+    { toFun := fun f ↦ ⟨f ∘ g, f.contDiff.comp g.contDiff,
+        f.hasCompactSupport.comp_isClosedEmbedding hg, fun _ _ ↦ trivial⟩
+      map_add' := fun _ _ ↦ rfl
+      map_smul' := fun _ _ ↦ rfl }
+  have hL : Continuous L := by
+    refine (TestFunction.continuous_iff_continuous_comp L).mpr fun K hK ↦ ?_
+    obtain ⟨M, hM⟩ := hloc K
+    have h : L ∘ TestFunction.ofSupportedIn hK =
+        TestFunction.ofSupportedIn (fun _ _ ↦ trivial) ∘ M :=
+      funext fun f ↦ TestFunction.ext fun y ↦ (hM f y).symm
+    rw [h]
+    exact (TestFunction.continuous_ofSupportedIn _).comp M.continuous
+  exact ⟨⟨L, hL⟩, fun _ _ ↦ rfl⟩
+
+/-- Inserting zeros into the normal coordinates is a continuous linear map of norm at most one
+whose norm is preserved, hence a closed embedding. -/
+private theorem exists_coordinatePlaneRestriction_inclusion :
+    ∃ g : Eᵣ(κ) →L[ℝ] Eᵣ(ι ⊕ κ), (∀ y : Eᵣ(κ), g y = insertPlane y) ∧
+      IsClosedEmbedding g ∧ ‖g‖ ≤ 1 ∧ ∀ y, ‖g y‖ = ‖y‖ := by
+  let g : Eᵣ(κ) →L[ℝ] Eᵣ(ι ⊕ κ) := LinearMap.toContinuousLinearMap
+    { toFun := fun y ↦ insertPlane y
+      map_add' := fun y y' ↦ by ext i; cases i <;> simp
+      map_smul' := fun c y ↦ by ext i; cases i <;> simp }
+  have hnorm (y : Eᵣ(κ)) : ‖g y‖ = ‖y‖ := by
+    simp [g, EuclideanSpace.norm_eq, Fintype.sum_sum_type]
+  exact ⟨g, fun _ ↦ rfl, (AddMonoidHomClass.isometry_of_norm _ hnorm).isClosedEmbedding,
+    ContinuousLinearMap.opNorm_le_bound _ zero_le_one fun y ↦ by rw [hnorm, one_mul], hnorm⟩
+
 /-- Paper: Theorem 5.3.2.3(1), p. 245.
 Inserting zeros into the normal coordinates gives a continuous linear restriction map
 on compactly supported smooth functions. -/
 theorem exists_testFunction_coordinatePlaneRestriction :
     ∃ R : 𝒟(ι ⊕ κ) →L[ℂ] 𝒟(κ), ∀ (f : 𝒟(ι ⊕ κ)) (y : Eᵣ(κ)),
-      R f y = f (insertPlane y) := by sorry
+      R f y = f (insertPlane y) := by
+  obtain ⟨g, hg, hce, hn, -⟩ := exists_coordinatePlaneRestriction_inclusion (ι := ι) (κ := κ)
+  obtain ⟨R, hR⟩ := exists_testFunction_coordinatePlaneRestriction_comp g hce hn
+  exact ⟨R, fun f y ↦ (hR f y).trans (congrArg f (hg y))⟩
 
 /-- Paper: Theorem 5.3.2.3(1), p. 245.
 Inserting zeros into the normal coordinates gives a continuous linear restriction map
 on Schwartz functions. -/
 theorem exists_schwartz_coordinatePlaneRestriction :
     ∃ R : 𝒮(ι ⊕ κ) →L[ℂ] 𝒮(κ), ∀ (f : 𝒮(ι ⊕ κ)) (y : Eᵣ(κ)),
-      R f y = f (insertPlane y) := by sorry
+      R f y = f (insertPlane y) := by
+  obtain ⟨g, hg, -, -, hnorm⟩ := exists_coordinatePlaneRestriction_inclusion (ι := ι) (κ := κ)
+  have hA : AntilipschitzWith 1 g := AntilipschitzWith.of_le_mul_dist fun y y' ↦ by
+    rw [dist_eq_norm, dist_eq_norm, ← map_sub, hnorm, NNReal.coe_one, one_mul]
+  exact ⟨SchwartzMap.compCLMOfAntilipschitz ℂ g.hasTemperateGrowth hA,
+    fun f y ↦ congrArg f (hg y)⟩
 
 local notation "R𝒟" => (exists_testFunction_coordinatePlaneRestriction (ι := ι) (κ := κ)).choose
 local notation "R𝒮" => (exists_schwartz_coordinatePlaneRestriction (ι := ι) (κ := κ)).choose
@@ -956,7 +1090,28 @@ theorem coordinateDerivative_testFunction_toSchwartz {ι : Type*} [Fintype ι]
     (β : ι → ℕ) (f : 𝒟(ι)) :
     let g := ∂𝒟[ι, β] f
     g.hasCompactSupport.toSchwartzMap g.contDiff =
-      ∂𝒮[ι, β] (f.hasCompactSupport.toSchwartzMap f.contDiff) := by sorry
+      ∂𝒮[ι, β] (f.hasCompactSupport.toSchwartzMap f.contDiff) := by
+  intro g
+  have hpow : ∀ i (k : ℕ) (f : 𝒟(ι)),
+      ((LineDeriv.lineDerivOpCLM ℂ 𝒟(ι) (eᵣ i : Eᵣ(ι)) ^ k) f).hasCompactSupport.toSchwartzMap
+          ((LineDeriv.lineDerivOpCLM ℂ 𝒟(ι) (eᵣ i : Eᵣ(ι)) ^ k) f).contDiff =
+        (LineDeriv.lineDerivOpCLM ℂ 𝒮(ι) (eᵣ i : Eᵣ(ι)) ^ k)
+          (f.hasCompactSupport.toSchwartzMap f.contDiff) := by
+    intro i k
+    induction k with
+    | zero => intro f; rfl
+    | succ k ih =>
+      intro f
+      rw [pow_succ, pow_succ, mul_apply_eq_comp, mul_apply_eq_comp, ih]
+      congr 1
+  show (∂𝒟[ι, β] f).hasCompactSupport.toSchwartzMap (∂𝒟[ι, β] f).contDiff = _
+  unfold coordinateDerivative
+  generalize (Finset.univ.toList : List ι) = l
+  induction l generalizing f with
+  | nil => rfl
+  | cons a t ih =>
+    simp only [List.map_cons, List.prod_cons, mul_apply_eq_comp]
+    rw [← ih, ← hpow]
 
 open Classical in
 /-- Paper: Theorem 5.3.2.3(5), p. 245.

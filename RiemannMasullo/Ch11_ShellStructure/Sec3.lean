@@ -297,7 +297,20 @@ theorem mem_sLocalDivisorialStratum_iff (S : Finset V) (g : I𝔽) :
 /-- Paper: §11.3.2, p. 495, and (D.1.10.1), p. 783. The region of β is the range
 of the insertion of the ideles integral outside S. -/
 theorem sLocalDivisorialStratum_eq_range_integralIdeleInsertion (S : Finset V) :
-    sLocalDivisorialStratum F S = Set.range (integralIdeleInsertion F S) := by sorry
+    sLocalDivisorialStratum F S = Set.range (integralIdeleInsertion F S) := by
+  ext g
+  rw [mem_range_integralIdeleInsertion]
+  change (∀ v ∉ S, Valued.v (g.val.2 v) = 1) ↔ _
+  refine forall_congr' fun v ↦ imp_congr_right fun _ ↦ ?_
+  let u := Units.map ((RestrictedProduct.evalRingHom (fun w : V ↦ w.adicCompletion F) v).comp
+    (RingHom.snd (InfiniteAdeleRing F) (FiniteAdeleRing (𝓞 F) F))).toMonoidHom g
+  change Valued.v u.val = 1 ↔
+    u.val ∈ v.adicCompletionIntegers F ∧ u.inv ∈ v.adicCompletionIntegers F
+  simp only [HeightOneSpectrum.mem_adicCompletionIntegers]
+  have hinv : Valued.v u.inv = (Valued.v u.val)⁻¹ := by
+    rw [show u.inv = u.val⁻¹ from Units.val_inv_eq_inv_val u, map_inv₀]
+  rw [hinv, inv_le_one₀ (zero_lt_iff.mpr ((Valuation.ne_zero_iff _).mpr u.ne_zero))]
+  exact le_antisymm_iff
 
 /-- Paper: §11.3.1.1, pp. 492–493. At a saturated base, the limit of the
 descending primary strata is the S-local idelic region. -/
