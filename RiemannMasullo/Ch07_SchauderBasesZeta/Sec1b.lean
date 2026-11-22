@@ -57,7 +57,14 @@ def rationalPrimeSplitsCompletely (F : Type*) [Field F] [NumberField F] (p : Rat
 Every rational prime splits completely in the base field.
 Deviation: States a sanity check for the definition of complete splitting. -/
 theorem rationalPrimeSplitsCompletely_rat (p : RatPrimes) :
-    rationalPrimeSplitsCompletely ℚ p := by sorry
+    rationalPrimeSplitsCompletely ℚ p := by
+  intro v _
+  let q := v.asIdeal
+  let : q.IsPrime := v.isPrime
+  let : q.IsMaximal := v.isMaximal
+  let : q.LiesOver q := ⟨(Ideal.comap_id q).symm⟩
+  refine ⟨Ideal.ramificationIdx_eq_one q (𝓞 ℚ), ?_⟩
+  exact (Ideal.inertiaDeg_eq_of_isMaximal q q).trans (Module.finrank_self (𝓞 ℚ ⧸ q))
 
 local notation "overₚ(" T "," p ")" =>
   @Finset.filter Primes (fun v : Primes ↦ HeightOneSpectrum.under (𝓞 ℚ) v = p)
@@ -383,7 +390,18 @@ Complex conjugation is excluded from the algebra of entire functions.
 Deviation: States a sanity check distinguishing the entire subalgebra from the ambient space. -/
 theorem conj_not_mem_entireContinuousMapSubalgebra :
     (⟨starRingEnd ℂ, Complex.continuous_conj⟩ : C(ℂ, ℂ)) ∉ entireContinuousMapSubalgebra :=
-  by sorry
+  by
+  intro h
+  change Differentiable ℂ (starRingEnd ℂ : ℂ → ℂ) at h
+  let D := fderiv ℂ (starRingEnd ℂ : ℂ → ℂ) 0
+  have hD : D.restrictScalars ℝ = Complex.conjCLE.toContinuousLinearMap :=
+    ((h 0).hasFDerivAt.restrictScalars ℝ).unique Complex.conjCLE.hasFDerivAt
+  have hval (z : ℂ) : D z = (starRingEnd ℂ) z := DFunLike.congr_fun hD z
+  have he : D Complex.I = Complex.I * D 1 := by
+    simpa only [smul_eq_mul, mul_one] using D.map_smul Complex.I (1 : ℂ)
+  rw [hval, hval] at he
+  have hIm := congrArg Complex.im he
+  norm_num at hIm
 
 local notation "Entire" => Subtype (fun f : C(ℂ, ℂ) ↦ f ∈ entireContinuousMapSubalgebra)
 

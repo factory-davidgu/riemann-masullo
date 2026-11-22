@@ -209,7 +209,13 @@ theorem adelicEigendistributions_eq_span (c : QuasiCharacter C𝔽) :
 The normalized global distributions form a holomorphic family on each norm chart. -/
 theorem adelicNormalizedEigendistribution_holomorphic (χ : PontryaginDual C𝔽) :
     VectorHolomorphicOn (fun s ↦ adelicNormalizedEigendistribution (ideleClassNormTwist χ s))
-      univ := by sorry
+      univ := by
+  let D := (adelicEigendistribution_normalized χ).choose
+  have h := (adelicEigendistribution_normalized χ).choose_spec
+  have he (s : ℂ) : adelicNormalizedEigendistribution (ideleClassNormTwist χ s) = D s := by
+    have hs := (existsUnique_adelicNormalizedEigendistribution (ideleClassNormTwist χ s)).exists.choose_spec
+    exact (h.2.1 s _).mpr ⟨hs.1, hs.2 χ s rfl⟩
+  exact (congrArg (fun G : ℂ → D(ℬ(𝔸[F])) ↦ VectorHolomorphicOn G univ) (funext he)).mpr h.1
 
 /-- Paper: Theorem 5.5.1.3(2), p. 279.
 Each global eigendistribution descends uniquely to the theta quotient. The pullback
@@ -222,7 +228,17 @@ theorem adelicEigendistribution_descends (c : QuasiCharacter C𝔽) (T : D(ℬ(�
 The normalized adelic eigendistribution annihilates the global theta kernel,
 so its descent is a continuous linear quotient lift. -/
 theorem globalThetaKernel_le_eigendistribution (c : QuasiCharacter C𝔽) :
-    K𝔽 ≤ (adelicNormalizedEigendistribution c).ker := by sorry
+    K𝔽 ≤ (adelicNormalizedEigendistribution c).ker := by
+  have annihilates {M : Type _} [AddCommGroup M] [Module ℂ M] [TopologicalSpace M]
+      (K : Submodule ℂ M) (T : StrongDual ℂ M)
+      (h : ∃ U : StrongDual ℂ (M ⧸ K), pull(K) U = T) : K ≤ T.ker := by
+    obtain ⟨U, rfl⟩ := h
+    intro f hf
+    change U (Submodule.Quotient.mk f) = 0
+    exact (congrArg U ((Submodule.Quotient.mk_eq_zero K).mpr hf)).trans (map_zero U)
+  exact annihilates (M := ℬ(𝔸[F])) (K𝔽) (adelicNormalizedEigendistribution (F := F) c)
+    (adelicEigendistribution_descends (F := F) c _
+      (existsUnique_adelicNormalizedEigendistribution (F := F) c).exists.choose_spec.1).exists
 
 /-- Paper: Theorem 5.5.1.3(2), p. 279.
 The generator on the global theta quotient is the continuous descent of the
