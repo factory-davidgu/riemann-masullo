@@ -2201,7 +2201,10 @@ theorem homogeneousThetaMellinIntegral_meromorphicContinuation
 Z-function is entire in the norm-twist coordinate of every component. -/
 theorem globalIdelicZFunction_entire_of_vanishing
     (h : f ∈ adelePolarSubspace F) (χ : U[F]) :
-    Differentiable ℂ (fun s ↦ globalIdelicZFunction f (ideleClassNormTwist χ s)) := by sorry
+    Differentiable ℂ (fun s ↦ globalIdelicZFunction f (ideleClassNormTwist χ s)) := by
+  obtain ⟨hf, hFourier⟩ := (mem_adelePolarSubspace f).mp h
+  rw [← globalThetaMellinIntegral_eq_continuation_of_vanishing f hf hFourier]
+  exact globalThetaMellinIntegral_entire_of_vanishing f hf hFourier χ
 
 end HomogeneousMellin
 
