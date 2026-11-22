@@ -694,10 +694,114 @@ theorem sLocalIdelicZetaIntegral_tendstoUniformlyOn (f : ℬ(Aₛ))
         (fun g _ ↦ hle hc g)
     _ < ε := hn
 
+/-- A logarithm times a power with exponent in (σ/2, 3σ/2) is bounded by a multiple
+of the sum of the σ/4-th and 7σ/4-th powers. -/
+private theorem rpow_mul_abs_log_le_of_mem_Ioo {σ x r : ℝ} (hσ : 0 < σ)
+    (hx : x ∈ Ioo (σ / 2) (3 * σ / 2)) (hr : 0 < r) :
+    r ^ x * |Real.log r| ≤ 4 / σ * (r ^ (σ / 4) + r ^ (7 * σ / 4)) := by
+  have hε : 0 < σ / 4 := by positivity
+  rcases le_or_gt 1 r with h1 | h1
+  · have hlog := Real.log_le_rpow_div hr.le hε
+    have hpow : r ^ x ≤ r ^ (3 * σ / 2) := Real.rpow_le_rpow_of_exponent_le h1 hx.2.le
+    rw [abs_of_nonneg (Real.log_nonneg h1)]
+    calc r ^ x * Real.log r ≤ r ^ (3 * σ / 2) * (r ^ (σ / 4) / (σ / 4)) :=
+          mul_le_mul hpow hlog (Real.log_nonneg h1) (by positivity)
+      _ = 4 / σ * r ^ (7 * σ / 4) := by
+          rw [mul_div_assoc', ← Real.rpow_add hr]
+          field_simp
+          ring_nf
+      _ ≤ _ := by
+          have : 0 ≤ r ^ (σ / 4) := by positivity
+          nlinarith [show 0 < 4 / σ by positivity]
+  · have hlog := Real.log_le_rpow_div (inv_pos.mpr hr).le hε
+    have hpow : r ^ x ≤ r ^ (σ / 2) := Real.rpow_le_rpow_of_exponent_ge hr h1.le hx.1.le
+    rw [abs_of_neg (Real.log_neg hr h1), ← Real.log_inv]
+    calc r ^ x * Real.log r⁻¹ ≤ r ^ (σ / 2) * (r⁻¹ ^ (σ / 4) / (σ / 4)) :=
+          mul_le_mul hpow hlog (Real.log_nonneg ((one_le_inv₀ hr).mpr h1.le)) (by positivity)
+      _ = 4 / σ * r ^ (σ / 4) := by
+          rw [Real.inv_rpow hr.le, ← Real.rpow_neg hr.le, mul_div_assoc', ← Real.rpow_add hr]
+          field_simp
+          ring_nf
+      _ ≤ _ := by
+          have : 0 ≤ r ^ (7 * σ / 4) := by positivity
+          nlinarith [show 0 < 4 / σ by positivity]
+
 /-- Paper: Theorem 3.3.1.1(1), p. 129. The zeta integral is holomorphic in
 every norm-twist coordinate on the right half-plane. -/
 theorem sLocalIdelicZetaIntegral_analyticOn (f : ℬ(Aₛ)) (χ : PontryaginDual Jₛ) :
-    AnalyticOnNhd ℂ (fun s ↦ sLocalIdelicZetaIntegral f (chartₛ(χ) s)) rightHalf := by sorry
+    AnalyticOnNhd ℂ (fun s ↦ sLocalIdelicZetaIntegral f (chartₛ(χ) s)) rightHalf := by
+  have hopen : IsOpen (rightHalf : Set ℂ) := isOpen_Ioi.preimage Complex.continuous_re
+  refine DifferentiableOn.analyticOnNhd (fun s hs ↦ ?_) hopen
+  refine DifferentiableAt.differentiableWithinAt ?_
+  have hσ : 0 < s.re := hs
+  let (w : InfinitePlace F) : BorelSpace w.Completion := ⟨rfl⟩
+  let (w : InfinitePlace F) : SecondCountableTopology w.Completion :=
+    (InfinitePlace.Completion.isometry_extensionEmbedding w).isEmbedding.secondCountableTopology
+  let (v : S) : BorelSpace (v.val.adicCompletion F) := ⟨rfl⟩
+  let (v : S) : ProperSpace (v.val.adicCompletion F) := properSpace_adicCompletion v.val
+  let : BorelSpace Aₛ := inferInstanceAs (BorelSpace
+    (((w : InfinitePlace F) → w.Completion) × ((v : S) → v.val.adicCompletion F)))
+  let : BorelSpace Iₛ := ⟨by
+    change MeasurableSpace.comap Units.val (inferInstance : MeasurableSpace Aₛ) = _
+    rw [(sIdeleGroup_description F S).1.eq_induced, borel_comap,
+      BorelSpace.measurable_eq (α := Aₛ)]⟩
+  let r (g : Iₛ) : ℝ := ((mₛ (classOf g) : ℝ≥0) : ℝ)
+  have hr (g : Iₛ) : 0 < r g := NNReal.coe_pos.mpr (Units.zero_lt _)
+  have hrcont : Continuous r :=
+    NNReal.continuous_coe.comp (Units.continuous_val.comp (Continuous.comp hmₛ QuotientGroup.continuous_mk))
+  let W (z : ℂ) (g : Iₛ) : ℂ := f (Multiplicative.ofAdd g.val) * chartₛ(χ) z (classOf g)
+  let D (z : ℂ) (g : Iₛ) : ℂ := W z g * Complex.log (r g : ℂ)
+  have hnormW (χ' : PontryaginDual Jₛ) (z : ℂ) (g : Iₛ) :
+      ‖f (Multiplicative.ofAdd g.val) * chartₛ(χ') z (classOf g)‖ =
+        ‖f (Multiplicative.ofAdd g.val)‖ * r g ^ z.re := by
+    change ‖f (Multiplicative.ofAdd g.val) * ((χ' (classOf g) : ℂ) * (r g : ℂ) ^ z)‖ = _
+    rw [norm_mul, norm_mul, Circle.norm_coe, one_mul,
+      Complex.norm_cpow_eq_rpow_re_of_pos (hr g)]
+  let V : Set ℂ := Complex.re ⁻¹' Ioo (s.re / 2) (3 * s.re / 2)
+  have hV : V ∈ 𝓝 s := (isOpen_Ioo.preimage Complex.continuous_re).mem_nhds
+    (show s.re ∈ Ioo (s.re / 2) (3 * s.re / 2) from ⟨by linarith, by linarith⟩)
+  have hint (χ' : PontryaginDual Jₛ) (z : ℂ) (hz : 0 < z.re) :
+      Integrable (fun g : Iₛ ↦ f (Multiplicative.ofAdd g.val) * chartₛ(χ') z (classOf g)) μₛ :=
+    sLocalIdelicZetaIntegral_integrable f _ ⟨χ', z, hz, rfl⟩
+  have hmeas : ∀ᶠ z in 𝓝 s, AEStronglyMeasurable (W z) μₛ :=
+    Filter.mem_of_superset hV fun z hz ↦ (hint χ z (by
+      have h := hz.1
+      linarith)).aestronglyMeasurable
+  have hDmeas : AEStronglyMeasurable (D s) μₛ :=
+    (hint χ s hσ).aestronglyMeasurable.mul (Complex.measurable_log.comp
+      (Complex.continuous_ofReal.comp hrcont).measurable).aestronglyMeasurable
+  let P (a : ℝ) (g : Iₛ) : ℂ :=
+    f (Multiplicative.ofAdd g.val) * chartₛ((1 : PontryaginDual Jₛ)) (a : ℂ) (classOf g)
+  have hPint (a : ℝ) (ha : 0 < a) : Integrable (P a) μₛ :=
+    hint 1 (a : ℂ) (by simpa using ha)
+  let bound (g : Iₛ) : ℝ := 4 / s.re * (‖P (s.re / 4) g‖ + ‖P (7 * s.re / 4) g‖)
+  have hbound : Integrable bound μₛ :=
+    ((hPint _ (by positivity)).norm.add (hPint _ (by positivity)).norm).const_mul _
+  have hDbound : ∀ᵐ g ∂μₛ, ∀ z ∈ V, ‖D z g‖ ≤ bound g := Eventually.of_forall fun g z hz ↦ by
+    have hlog : Complex.log (r g : ℂ) = (Real.log (r g) : ℂ) :=
+      (Complex.ofReal_log (hr g).le).symm
+    change ‖W z g * Complex.log (r g : ℂ)‖ ≤
+      4 / s.re * (‖P (s.re / 4) g‖ + ‖P (7 * s.re / 4) g‖)
+    rw [norm_mul, hnormW, hlog, Complex.norm_real, Real.norm_eq_abs, hnormW, hnormW,
+      Complex.ofReal_re, Complex.ofReal_re, mul_assoc]
+    calc ‖f (Multiplicative.ofAdd g.val)‖ * (r g ^ z.re * |Real.log (r g)|)
+        ≤ ‖f (Multiplicative.ofAdd g.val)‖ *
+          (4 / s.re * (r g ^ (s.re / 4) + r g ^ (7 * s.re / 4))) :=
+          mul_le_mul_of_nonneg_left (rpow_mul_abs_log_le_of_mem_Ioo hσ hz (hr g))
+            (norm_nonneg _)
+      _ = _ := by ring
+  have hdiff : ∀ᵐ g ∂μₛ, ∀ z ∈ V, HasDerivAt (fun w ↦ W w g) (D z g) z :=
+    Eventually.of_forall fun g z _ ↦ by
+      have hg : (r g : ℂ) ≠ 0 := Complex.ofReal_ne_zero.mpr (hr g).ne'
+      change HasDerivAt (fun w : ℂ ↦ f (Multiplicative.ofAdd g.val) *
+          ((χ (classOf g) : ℂ) * (r g : ℂ) ^ w))
+        ((f (Multiplicative.ofAdd g.val) * ((χ (classOf g) : ℂ) * (r g : ℂ) ^ z)) *
+          Complex.log (r g : ℂ)) z
+      simpa only [id_eq, mul_assoc, mul_one] using
+        (((hasDerivAt_id z).const_cpow (Or.inl hg)).const_mul
+          (χ (classOf g) : ℂ)).const_mul (f (Multiplicative.ofAdd g.val))
+  exact (hasDerivAt_integral_of_dominated_loc_of_deriv_le hV hmeas (hint χ s hσ) hDmeas
+    hDbound hbound hdiff).2.differentiableAt
 
 section LocalFactors
 

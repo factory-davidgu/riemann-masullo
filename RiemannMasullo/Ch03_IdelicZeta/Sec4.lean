@@ -718,11 +718,161 @@ def finiteStandardGaussianValue (v : V) (c : QuasiCharacter (v.adicCompletion F)
     (Units.val '' integerUnits(v)).indicator
       (fun y ↦ if hy : y ≠ 0 then (c (Units.mk0 y hy))⁻¹ else 0) x
 
+/-- A complex number all of whose powers lie within `r < 1` of one is one. Otherwise the real
+parts of the geometric sums `∑ n < N, z ^ n` would grow linearly in `N`, while the sums
+themselves, equal to `(z ^ N - 1) / (z - 1)`, stay bounded. -/
+private theorem eq_one_of_forall_norm_pow_sub_one_le {z : ℂ} {r : ℝ} (hr : r < 1)
+    (h : ∀ n : ℕ, ‖z ^ n - 1‖ ≤ r) : z = 1 := by
+  by_contra hz
+  have hz1 : 0 < ‖z - 1‖ := norm_pos_iff.mpr (sub_ne_zero.mpr hz)
+  have hpos : 0 < (1 - r) * ‖z - 1‖ := mul_pos (sub_pos.mpr hr) hz1
+  obtain ⟨N, hN⟩ := exists_nat_gt (r / ((1 - r) * ‖z - 1‖))
+  rw [div_lt_iff₀ hpos] at hN
+  have hre : (N : ℝ) * (1 - r) ≤ (∑ n ∈ Finset.range N, z ^ n).re := by
+    rw [Complex.re_sum]
+    have hle : ∀ n ∈ Finset.range N, 1 - r ≤ (z ^ n).re := fun n _ ↦ by
+      have h1 := (abs_le.mp ((Complex.abs_re_le_norm (z ^ n - 1)).trans (h n))).1
+      rw [Complex.sub_re, Complex.one_re] at h1
+      linarith
+    simpa using Finset.card_nsmul_le_sum _ _ _ hle
+  have hbound : (∑ n ∈ Finset.range N, z ^ n).re * ‖z - 1‖ ≤ r :=
+    calc _ ≤ ‖∑ n ∈ Finset.range N, z ^ n‖ * ‖z - 1‖ :=
+          mul_le_mul_of_nonneg_right (Complex.re_le_norm _) hz1.le
+      _ = ‖z ^ N - 1‖ := by rw [← norm_mul, geom_sum_mul]
+      _ ≤ r := h N
+  nlinarith [mul_le_mul_of_nonneg_right hre hz1.le]
+
+/-- A continuous character of the units of a nonarchimedean normed field is trivial near one.
+If `‖t - 1‖ < δ ≤ 1`, every power of `t` also lies within `δ` of one, so all powers of the
+character value stay near one in `ℂ`, which forces the value to be one. -/
+private theorem exists_forall_norm_sub_one_lt_map_eq_one {K : Type*} [NormedField K]
+    [IsUltrametricDist K] (c : Kˣ →ₜ* ℂ) :
+    ∃ δ > 0, δ ≤ 1 ∧ ∀ t : Kˣ, ‖(t : K) - 1‖ < δ → c t = 1 := by
+  have hc : Tendsto c (nhds 1) (nhds 1) := by
+    simpa only [map_one] using (map_continuous c).tendsto 1
+  have hU := hc (Metric.ball_mem_nhds (1 : ℂ) (by norm_num : (0 : ℝ) < 1 / 2))
+  rw [Units.isEmbedding_val₀.nhds_eq_comap, mem_map, mem_comap] at hU
+  obtain ⟨s, hs, hsU⟩ := hU
+  obtain ⟨ε, hε, hball⟩ := Metric.mem_nhds_iff.mp hs
+  refine ⟨min ε 1, lt_min hε one_pos, min_le_right _ _, fun t ht ↦ ?_⟩
+  have ht1' : ‖(t : K) - 1‖ < 1 := ht.trans_le (min_le_right _ _)
+  have ht1 : ‖(t : K)‖ = 1 := by
+    have hne : ‖(1 : K)‖ ≠ ‖(t : K) - 1‖ := by rw [norm_one]; exact ht1'.ne'
+    have := IsUltrametricDist.norm_add_eq_max_of_norm_ne_norm hne
+    rwa [add_sub_cancel, norm_one, max_eq_left ht1'.le] at this
+  have hpow (n : ℕ) : ‖((t ^ n : Kˣ) : K) - 1‖ < min ε 1 := by
+    induction n with
+    | zero => simpa using lt_min hε one_pos
+    | succ n ih =>
+      rw [Units.val_pow_eq_pow_val] at ih ⊢
+      have he : (t : K) ^ (n + 1) - 1 = (t : K) ^ n * ((t : K) - 1) + ((t : K) ^ n - 1) := by
+        ring
+      rw [he]
+      refine (IsUltrametricDist.norm_add_le_max _ _).trans_lt (max_lt ?_ ih)
+      rwa [norm_mul, norm_pow, ht1, one_pow, one_mul]
+  refine eq_one_of_forall_norm_pow_sub_one_le (r := 1 / 2) (by norm_num) fun n ↦ ?_
+  have hmem : ((t ^ n : Kˣ) : K) ∈ s := hball (by
+    rw [Metric.mem_ball, dist_eq_norm, Units.val_one]
+    exact (hpow n).trans_le (min_le_left _ _))
+  have hlt := Metric.mem_ball.mp (hsU hmem)
+  rw [dist_eq_norm, map_pow] at hlt
+  exact hlt.le
+
+/-- An element of a finite completion is the image of an integral unit exactly when its norm
+is one. -/
+private theorem mem_integerUnits_iff_norm_eq_one (v : V) (x : v.adicCompletion F) :
+    x ∈ Units.val '' integerUnits(v) ↔ ‖x‖ = 1 := by
+  have he1 : (Ideal.absNorm v.asIdeal : ℝ≥0) ≠ 1 :=
+    (NumberField.HeightOneSpectrum.one_lt_absNorm_nnreal v).ne'
+  rw [NumberField.FinitePlace.norm_def, NNReal.coe_eq_one,
+    WithZeroMulInt.toNNReal_eq_one_iff _ _ he1]
+  constructor
+  · rintro ⟨a, ha, rfl⟩
+    exact HeightOneSpectrum.adicCompletionIntegers.mem_units_iff_valued_eq_one.mp ha
+  · intro hx
+    have hx0 : x ≠ 0 := by
+      rintro rfl
+      simp at hx
+    exact ⟨Units.mk0 x hx0,
+      HeightOneSpectrum.adicCompletionIntegers.mem_units_iff_valued_eq_one.mpr hx, rfl⟩
+
 /-- Paper: Definition 3.4.3.2(3), p. 152. Both finite Gaussian formulas
 give Schwartz–Bruhat test functions on the completion. -/
 theorem finiteStandardGaussian_mem (v : V) (c : QuasiCharacter (v.adicCompletion F)ˣ) :
     (fun x : Multiplicative (v.adicCompletion F) ↦ finiteStandardGaussianValue v c x.toAdd) ∈
-      schwartzBruhatSubmodule (Multiplicative (v.adicCompletion F)) := by sorry
+      schwartzBruhatSubmodule (Multiplicative (v.adicCompletion F)) := by
+  -- At a finite place, Schwartz–Bruhat means locally constant with compact support.
+  classical
+  set O : Set (v.adicCompletion F) := ↑(v.adicCompletionIntegers F) with hO
+  have hOc : IsCompact O :=
+    isCompact_iff_compactSpace.mpr (compactSpace_adicCompletionIntegers (K := F) v)
+  have hOo : IsOpen O := Valued.isOpen_valuationSubring _
+  have hOcl : IsClosed O := Valued.isClosed_valuationSubring _
+  have hlc : IsLocallyConstant (finiteStandardGaussianValue v c) ∧
+      HasCompactSupport (finiteStandardGaussianValue v c) := by
+    by_cases hu : unramified(v, c)
+    · -- Unramified: the indicator of the compact open integer ring.
+      have hf : finiteStandardGaussianValue v c = O.indicator (fun _ ↦ 1) := by
+        funext x
+        unfold finiteStandardGaussianValue
+        rw [ite_eq_left hu]
+      rw [hf]
+      refine ⟨(IsLocallyConstant.iff_exists_open _).mpr fun x ↦ ?_,
+        HasCompactSupport.intro hOc fun x hx ↦ indicator_of_notMem hx _⟩
+      by_cases hx : x ∈ O
+      · exact ⟨O, hOo, hx, fun y hy ↦ by rw [indicator_of_mem hy, indicator_of_mem hx]⟩
+      · exact ⟨Oᶜ, hOcl.isOpen_compl, hx, fun y hy ↦ by
+          rw [indicator_of_notMem hy, indicator_of_notMem hx]⟩
+    · -- Ramified: the inverse character on the integral units, which form the unit sphere.
+      set U₀ : Set (v.adicCompletion F) := Units.val '' integerUnits(v) with hU₀
+      have hU₀O : U₀ ⊆ O := by
+        rintro _ ⟨a, ha, rfl⟩
+        exact (HeightOneSpectrum.adicCompletionIntegers.mem_units_iff_valued_eq_one.mp ha).le
+      have hf : finiteStandardGaussianValue v c = U₀.indicator
+          (fun y ↦ if hy : y ≠ 0 then (c (Units.mk0 y hy))⁻¹ else 0) := by
+        funext x
+        unfold finiteStandardGaussianValue
+        rw [ite_eq_right hu]
+      rw [hf]
+      refine ⟨(IsLocallyConstant.iff_exists_open _).mpr fun x ↦ ?_,
+        HasCompactSupport.intro hOc fun x hx ↦ indicator_of_notMem (fun h ↦ hx (hU₀O h)) _⟩
+      by_cases hx : x ∈ U₀
+      · obtain ⟨δ, hδ, hδ1, hδc⟩ := exists_forall_norm_sub_one_lt_map_eq_one c
+        have hx1 : ‖x‖ = 1 := (mem_integerUnits_iff_norm_eq_one v x).mp hx
+        have hx0 : x ≠ 0 := by
+          rintro rfl
+          simp at hx1
+        refine ⟨Metric.ball x δ, Metric.isOpen_ball, Metric.mem_ball_self hδ, fun y hy ↦ ?_⟩
+        rw [Metric.mem_ball, dist_eq_norm] at hy
+        have hy1 : ‖y‖ = 1 := by
+          have hne : ‖x‖ ≠ ‖y - x‖ := by rw [hx1]; exact (hy.trans_le hδ1).ne'
+          have := IsUltrametricDist.norm_add_eq_max_of_norm_ne_norm hne
+          rwa [add_sub_cancel, hx1, max_eq_left (hy.trans_le hδ1).le] at this
+        have hy0 : y ≠ 0 := by
+          rintro rfl
+          simp at hy1
+        have hyU : y ∈ U₀ := (mem_integerUnits_iff_norm_eq_one v y).mpr hy1
+        rw [indicator_of_mem hyU, indicator_of_mem hx, dite_eq_left hy0, dite_eq_left hx0]
+        have ht : Units.mk0 y hy0 = Units.mk0 x hx0 * Units.mk0 (y / x) (div_ne_zero hy0 hx0) :=
+          Units.ext (by simp [mul_div_cancel₀ _ hx0])
+        have hsmall : ‖((Units.mk0 (y / x) (div_ne_zero hy0 hx0) : (v.adicCompletion F)ˣ) :
+            v.adicCompletion F) - 1‖ < δ := by
+          rw [Units.val_mk0, show y / x - 1 = (y - x) / x by field_simp, norm_div, hx1, div_one]
+          exact hy
+        rw [ht, map_mul, hδc _ hsmall, mul_one]
+      · refine ⟨U₀ᶜ, ?_, hx, fun y hy ↦ by rw [indicator_of_notMem hy, indicator_of_notMem hx]⟩
+        have hsphere : U₀ = Metric.sphere 0 1 := by
+          ext y
+          rw [mem_sphere_zero_iff_norm]
+          exact mem_integerUnits_iff_norm_eq_one v y
+        rw [hsphere]
+        exact Metric.isClosed_sphere.isOpen_compl
+  obtain ⟨g, hg⟩ := (mem_finitePlaceSchwartz_iff F v (finiteStandardGaussianValue v c)).mpr hlc
+  have heq : (fun x : Multiplicative (v.adicCompletion F) ↦
+      finiteStandardGaussianValue v c x.toAdd) = (g : Multiplicative (v.adicCompletion F) → ℂ) :=
+    funext fun x ↦ (hg x.toAdd).symm
+  rw [heq]
+  exact g.property
 
 /-- Paper: Definition 3.4.3.2(3), p. 152. The finite-place standard
 Gaussian is the bundled test function given by the local indicator formula. -/

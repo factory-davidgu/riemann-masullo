@@ -2116,7 +2116,34 @@ is surjective onto the bidual, this follows by separating points in the discrete
 theorem lcaAnnihilator_dualAnnihilator_of_open (H : Subgroup (PontryaginDual G))
     (hH : IsOpen (H : Set (PontryaginDual G))) :
     lcaAnnihilator (lcaDualAnnihilator H) = H := by
-  sorry
+  apply le_antisymm
+  · -- A character outside `H` is separated from `H` by a character of the discrete quotient.
+    -- By biduality that character is evaluation at a point of the dual annihilator.
+    intro χ hχ
+    by_contra hχH
+    let D := PontryaginDual G ⧸ H
+    let : DiscreteTopology D := QuotientGroup.discreteTopology hH
+    let q : PontryaginDual G →ₜ* D := ⟨QuotientGroup.mk' H, QuotientGroup.continuous_mk⟩
+    have hq : q χ ≠ 1 := fun h ↦ hχH ((QuotientGroup.eq_one_iff χ).mp h)
+    obtain ⟨ψ, hψ⟩ : ∃ ψ : PontryaginDual D, ψ (q χ) ≠ 1 := by
+      by_contra! h
+      apply hq
+      apply (pontryaginDual_pairing_separates (G := D)).1
+      funext ψ
+      exact (h ψ).trans (map_one ψ).symm
+    obtain ⟨e, he⟩ := pontryaginDual_bidual (G := G)
+    let Ψ : PontryaginDual (PontryaginDual G) := PontryaginDual.map q ψ
+    have hx (η : PontryaginDual G) : η (e.symm Ψ) = ψ (q η) := by
+      rw [← he (e.symm Ψ) η, e.apply_symm_apply]
+      rfl
+    have hxmem : e.symm Ψ ∈ lcaDualAnnihilator H := by
+      refine (mem_lcaDualAnnihilator_iff H _).mpr fun η ↦ ?_
+      have hη : q η.val = 1 := (QuotientGroup.eq_one_iff η.val).mpr η.property
+      rw [hx, hη, map_one]
+    exact hψ ((hx χ).symm.trans ((mem_lcaAnnihilator_iff _ χ).mp hχ ⟨_, hxmem⟩))
+  · intro χ hχ
+    refine (mem_lcaAnnihilator_iff _ χ).mpr fun x ↦ ?_
+    exact (mem_lcaDualAnnihilator_iff H x.val).mp x.property ⟨χ, hχ⟩
 
 /-- Paper: Lemma D.1.5.2, p. 760. Structural pairs form a nonempty directed order. -/
 theorem bruhatStructuralPair_filtered :

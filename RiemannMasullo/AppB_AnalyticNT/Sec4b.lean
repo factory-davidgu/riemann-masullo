@@ -790,7 +790,8 @@ def explicitFormulaCompletedHeckeL (χ : U[F]) : ℂ → ℂ :=
 meromorphic normal form and agrees with the completed Euler product on the right half-plane. -/
 theorem explicitFormulaCompletedHeckeL_spec (χ : U[F]) :
     MeromorphicNFOn (explicitFormulaCompletedHeckeL χ) univ ∧
-      ∀ s : halfPlane, explicitFormulaCompletedHeckeL χ s = completedHeckeL χ s := by sorry
+      ∀ s : halfPlane, explicitFormulaCompletedHeckeL χ s = completedHeckeL χ s :=
+  (completedHeckeL_exists_continuation χ).choose_spec
 
 local notation "chartZeros(" τ ")" =>
   {z : {χ : U[F] // ∀ t : ℝ≥0ˣ, χ (τ t) = 1} × ℂ //

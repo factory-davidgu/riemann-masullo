@@ -359,7 +359,120 @@ theorem sLocalIdelicZFunction_mem (f : ℬₛ) :
 /-- Paper: Definition 5.1.1.1(2), p. 223.
 The regular values of S-local Z-functions depend complex linearly on the test function. -/
 theorem sLocalIdelicZFunction_isLinear :
-    IsLinearMap ℂ (sLocalZValues : ℬₛ → _) := by sorry
+    IsLinearMap ℂ (sLocalZValues : ℬₛ → _) := by
+  classical
+  let u : Circle →ₜ* ℂ := ⟨Circle.coeHom, continuous_subtype_val⟩
+  have : LocallyCompactSpace (SAdeleRing F S)ˣ := (sIdeleGroup_description F S).2.2.1
+  have := isClosed_sProjectedDiagonal (F := F) (S := S)
+  have hpos (g : Jₛ) : 0 < ((mₛ g : ℝ≥0) : ℝ) := NNReal.coe_pos.mpr (Units.zero_lt _)
+  have hne (g : Jₛ) : (((mₛ g : ℝ≥0) : ℝ) : ℂ) ≠ 0 :=
+    Complex.ofReal_ne_zero.mpr (hpos g).ne'
+  have hm : ∃ x, mₛ x ≠ 1 := by
+    obtain ⟨σ, hσ⟩ := sIdeleQuotientNorm_exists_section F S
+    obtain ⟨t, ht⟩ := exists_ne (1 : ℝ≥0ˣ)
+    exact ⟨σ t, (hσ t).trans_ne ht⟩
+  -- Every quasi-character lies on a norm-twist chart of a unitary character.
+  have hdecomp (c : Xₛ) : ∃ (χ : PontryaginDual Jₛ) (s : ℂ), normChartₛ (u.comp χ) s = c := by
+    let s := quasiCharacterAbscissa (G := Jₛ) mₛ (isProperMap_sIdeleQuotientNorm F S) hm c
+    let d := normChartₛ c (-(s : ℂ))
+    have hd (g : Jₛ) : ‖d g‖ = 1 := by
+      change ‖c g * (((mₛ g : ℝ≥0) : ℝ) : ℂ) ^ (-(s : ℂ))‖ = 1
+      rw [norm_mul, norm_quasiCharacter_eq_rpow_abscissa (G := Jₛ) mₛ
+        (isProperMap_sIdeleQuotientNorm F S) hm,
+        Complex.norm_cpow_eq_rpow_re_of_pos (hpos g), Complex.neg_re, Complex.ofReal_re]
+      change ((mₛ g : ℝ≥0) : ℝ) ^ s * ((mₛ g : ℝ≥0) : ℝ) ^ (-s) = 1
+      rw [← Real.rpow_add (hpos g), add_neg_cancel, Real.rpow_zero]
+    let χ : PontryaginDual Jₛ :=
+      { toFun := fun g ↦ ⟨d g, mem_sphere_zero_iff_norm.mpr (hd g)⟩
+        map_one' := Circle.ext (map_one d)
+        map_mul' := fun g h ↦ Circle.ext (map_mul d g h)
+        continuous_toFun := d.continuous.subtype_mk _ }
+    refine ⟨χ, s, ?_⟩
+    ext1 g
+    change (c g * (((mₛ g : ℝ≥0) : ℝ) : ℂ) ^ (-(s : ℂ))) * (((mₛ g : ℝ≥0) : ℝ) : ℂ) ^ (s : ℂ) =
+      c g
+    rw [mul_assoc, ← Complex.cpow_add _ _ (hne g), neg_add_cancel, Complex.cpow_zero, mul_one]
+  -- The norm-twist chart centred at a point of a chart is a translate of it.
+  have hchart (c : Xₛ) (w z : ℂ) : normChartₛ (normChartₛ c w) z = normChartₛ c (w + z) := by
+    ext1 g
+    change (c g * (((mₛ g : ℝ≥0) : ℝ) : ℂ) ^ w) * (((mₛ g : ℝ≥0) : ℝ) : ℂ) ^ z =
+      c g * (((mₛ g : ℝ≥0) : ℝ) : ℂ) ^ (w + z)
+    rw [Complex.cpow_add _ _ (hne g), mul_assoc]
+  -- Linear relations between zeta integrals on the positive half-plane persist at regular points.
+  have key (f₁ f₂ f₃ : ℬₛ) (a b : ℂ)
+      (hI : ∀ (χ : PontryaginDual Jₛ) (s : ℂ), 0 < s.re →
+        sLocalIdelicZetaIntegral f₃ (normChartₛ (u.comp χ) s) =
+          a * sLocalIdelicZetaIntegral f₁ (normChartₛ (u.comp χ) s) +
+            b * sLocalIdelicZetaIntegral f₂ (normChartₛ (u.comp χ) s))
+      (c : Xₛ) (hc : 0 ≤ sLocalIdelicOrderBound c) :
+      sLocalIdelicZFunction f₃ c =
+        a * sLocalIdelicZFunction f₁ c + b * sLocalIdelicZFunction f₂ c := by
+    obtain ⟨χ, s₀, rfl⟩ := hdecomp c
+    have hρ : 0 ≤ min 0 (meromorphicOrderAt
+        (fun z ↦ sLocalRhoFactor (F := F) (S := S) (normChartₛ (u.comp χ) z)) s₀) := by
+      have h := hc
+      simp only [sLocalIdelicOrderBound, hchart] at h
+      have e : meromorphicOrderAt
+          (fun z ↦ sLocalRhoFactor (F := F) (S := S) (normChartₛ (u.comp χ) (s₀ + z))) 0 =
+          meromorphicOrderAt
+            (fun z ↦ sLocalRhoFactor (F := F) (S := S) (normChartₛ (u.comp χ) z)) s₀ := by
+        have := meromorphicOrderAt_comp_add_const_eq_meromorphicOrderAt (x := (0 : ℂ)) (c := s₀)
+          (f := fun z ↦ sLocalRhoFactor (F := F) (S := S) (normChartₛ (u.comp χ) z))
+        simpa only [Function.comp_def, add_comm, zero_add, add_zero] using this
+      rwa [e] at h
+    have hA (f : ℬₛ) :
+        AnalyticAt ℂ (fun w ↦ sLocalIdelicZFunction f (normChartₛ (u.comp χ) w)) s₀ :=
+      (sLocalIdelicZFunction_meromorphic f χ (Set.mem_univ s₀)
+        ).meromorphicOrderAt_nonneg_iff_analyticAt.mp
+          (hρ.trans (sLocalIdelicZFunction_poles f χ s₀))
+    let D : ℂ → ℂ := fun w ↦ sLocalIdelicZFunction f₃ (normChartₛ (u.comp χ) w) -
+      (a * sLocalIdelicZFunction f₁ (normChartₛ (u.comp χ) w) +
+        b * sLocalIdelicZFunction f₂ (normChartₛ (u.comp χ) w))
+    have hM (f : ℬₛ) (w : ℂ) :
+        MeromorphicAt (fun w ↦ sLocalIdelicZFunction f (normChartₛ (u.comp χ) w)) w :=
+      (sLocalIdelicZFunction_meromorphic f χ (Set.mem_univ w)).meromorphicAt
+    have hDM : MeromorphicOn D Set.univ := fun w _ ↦
+      (hM f₃ w).sub ((analyticAt_const.meromorphicAt.mul (hM f₁ w)).add
+        (analyticAt_const.meromorphicAt.mul (hM f₂ w)))
+    have hDA : AnalyticAt ℂ D s₀ :=
+      (hA f₃).sub ((analyticAt_const.mul (hA f₁)).add (analyticAt_const.mul (hA f₂)))
+    have hEq (w : ℂ) (hw : 0 < w.re) : D w = 0 := by
+      have hp : normChartₛ (u.comp χ) w ∈ {c : Xₛ | ∃ (χ : PontryaginDual Jₛ) (s : ℂ),
+          s ∈ Complex.re ⁻¹' Set.Ioi (0 : ℝ) ∧ c = normChartₛ (u.comp χ) s} :=
+        ⟨χ, w, hw, rfl⟩
+      simp only [D, sLocalIdelicZFunction_eq_integral _ hp, hI χ w hw, sub_self]
+    have hnear : ∀ᶠ z in 𝓝 (1 : ℂ), 0 < z.re :=
+      (isOpen_lt continuous_const Complex.continuous_re).mem_nhds (by norm_num)
+    have htop : meromorphicOrderAt D 1 = ⊤ :=
+      meromorphicOrderAt_eq_top_iff.mpr ((hnear.mono hEq).filter_mono nhdsWithin_le_nhds)
+    have ho := hDM.meromorphicOrderAt_eq_top_of_isPreconnected isPreconnected_univ
+      (Set.mem_univ (1 : ℂ)) (Set.mem_univ s₀) htop
+    have hloc : D =ᶠ[𝓝[≠] s₀] fun _ ↦ 0 := meromorphicOrderAt_eq_top_iff.mp ho
+    have hD₀ : D s₀ = 0 :=
+      tendsto_nhds_unique (hDA.continuousAt.tendsto.mono_left nhdsWithin_le_nhds)
+        (tendsto_const_nhds.congr' hloc.symm)
+    exact sub_eq_zero.mp hD₀
+  refine ⟨fun f g ↦ ?_, fun a f ↦ ?_⟩
+  · ext c
+    change sLocalIdelicZFunction (f + g) c.val =
+      sLocalIdelicZFunction f c.val + sLocalIdelicZFunction g c.val
+    have h := key f g (f + g) 1 1 (fun χ s hs ↦
+      ((integral_congr_ae (Filter.Eventually.of_forall fun x ↦
+        add_mul (f (Multiplicative.ofAdd x.val)) (g (Multiplicative.ofAdd x.val))
+          (normChartₛ (u.comp χ) s (QuotientGroup.mk x)))).trans
+        (integral_add (sLocalIdelicZetaIntegral_integrable f _ ⟨χ, s, hs, rfl⟩)
+          (sLocalIdelicZetaIntegral_integrable g _ ⟨χ, s, hs, rfl⟩))).trans
+        (congrArg₂ (· + ·) (one_mul _).symm (one_mul _).symm)) c.val c.property
+    exact h.trans (congrArg₂ (· + ·) (one_mul _) (one_mul _))
+  · ext c
+    change sLocalIdelicZFunction (a • f) c.val = a * sLocalIdelicZFunction f c.val
+    have h := key f f (a • f) a 0 (fun χ s _ ↦
+      ((integral_congr_ae (Filter.Eventually.of_forall fun x ↦
+        mul_assoc a (f (Multiplicative.ofAdd x.val))
+          (normChartₛ (u.comp χ) s (QuotientGroup.mk x)))).trans
+        (integral_const_mul a _)).trans
+        ((add_zero _).symm.trans (congrArg (_ + ·) (zero_mul _).symm))) c.val c.property
+    exact h.trans ((congrArg (_ + ·) (zero_mul _)).trans (add_zero _))
 
 /-- Paper: Definition 5.1.1.1(2), p. 223.
 The S-local idelic Mellin transform sends a test function to its continued Z-function.
