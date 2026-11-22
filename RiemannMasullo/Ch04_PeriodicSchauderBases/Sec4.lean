@@ -259,12 +259,102 @@ exponentially decaying function over the integer translates of a quotient point.
 def modulatedPeriodization (f : E) : S :=
   ⟨fun z ↦ per[f, z.out], modulatedPeriodization_mem m γ hm hms hγ f⟩
 
+/-- A function in the Schwartz–Bruhat submodule is bounded. -/
+private theorem schwartzBruhatSubmodule_exists_norm_le {H : Type*} [CommGroup H]
+    [TopologicalSpace H] {g : H → ℂ} (hg : g ∈ schwartzBruhatSubmodule H) :
+    ∃ C : ℝ, ∀ x, ‖g x‖ ≤ C := by
+  let P (g : H → ℂ) : Prop := ∃ C : ℝ, ∀ x, ‖g x‖ ≤ C
+  have hzero : P 0 := ⟨0, fun x ↦ by simp⟩
+  have hadd : ∀ g h, P g → P h → P (g + h) := by
+    rintro g h ⟨C, hC⟩ ⟨D, hD⟩
+    exact ⟨C + D, fun x ↦ (norm_add_le (g x) (h x)).trans (add_le_add (hC x) (hD x))⟩
+  refine Submodule.iSup_induction (motive := P) _ hg (fun a g hg ↦ ?_) hzero hadd
+  refine Submodule.iSup_induction (motive := P) _ hg (fun e g hg ↦ ?_) hzero hadd
+  obtain ⟨s, rfl⟩ := LinearMap.mem_range.mp hg
+  have hb (z) : ‖s z‖ ≤ (elementarySchwartzBound (s : _ → ℂ) (0, 0, 0, 0)).toReal := by
+    have hz : (‖s z‖₊ : ℝ≥0∞) ≤ elementarySchwartzBound (s : _ → ℂ) (0, 0, 0, 0) := by
+      rw [elementarySchwartzBound_zero]
+      exact le_iSup (fun y ↦ (‖s y‖₊ : ℝ≥0∞)) z
+    exact ENNReal.toReal_mono (s.property.2 (0, 0, 0, 0)).ne hz
+  refine ⟨(elementarySchwartzBound (s : _ → ℂ) (0, 0, 0, 0)).toReal, fun x ↦ ?_⟩
+  rw [schwartzBruhatStageRealization_apply]
+  split_ifs
+  · exact hb _
+  · simp
+
+/-- A two-sided sequence with geometric decay in both directions is summable. -/
+private theorem summable_of_zpow_bounds (u : ℤ → ℂ) (c ρ C₁ C₂ : ℝ) (hc : 1 < c)
+    (h1 : ∀ n, ‖u n‖ ≤ C₁ * (c ^ n * ρ)⁻¹) (h2 : ∀ n, ‖u n‖ ≤ C₂ * (c ^ n * ρ)) :
+    Summable u := by
+  have hg : Summable fun n : ℕ ↦ c⁻¹ ^ n :=
+    summable_geometric_of_lt_one (inv_nonneg.mpr (zero_le_one.trans hc.le))
+      (inv_lt_one_of_one_lt₀ hc)
+  refine Summable.of_nat_of_neg ?_ ?_
+  · refine Summable.of_norm_bounded (hg.mul_left (C₁ * ρ⁻¹)) fun n ↦ (h1 n).trans_eq ?_
+    change C₁ * (c ^ (n : ℤ) * ρ)⁻¹ = C₁ * ρ⁻¹ * c⁻¹ ^ n
+    rw [zpow_natCast, inv_pow]
+    ring
+  · refine Summable.of_norm_bounded (hg.mul_left (C₂ * ρ)) fun n ↦ (h2 (-n)).trans_eq ?_
+    change C₂ * (c ^ (-(n : ℤ)) * ρ) = C₂ * ρ * c⁻¹ ^ n
+    rw [zpow_neg, zpow_natCast, inv_pow]
+    ring
+
+/-- A two-sided decay function is dominated by the module and by its inverse. -/
+private theorem modulatedExponentialDecay_exists_weight_bounds (f : E) :
+    ∃ C₁ C₂ : ℝ, ∀ y : G, ‖f.val y‖ ≤ C₁ * ((m y).val : ℝ)⁻¹ ∧
+      ‖f.val y‖ ≤ C₂ * ((m y).val : ℝ) := by
+  obtain ⟨C₁, h1⟩ := schwartzBruhatSubmodule_exists_norm_le
+    (Submodule.mem_comap.mp ((Submodule.mem_iInf _).mp f.property ⟨1, mem_univ 1⟩))
+  obtain ⟨C₂, h2⟩ := schwartzBruhatSubmodule_exists_norm_le
+    (Submodule.mem_comap.mp ((Submodule.mem_iInf _).mp f.property ⟨-1, mem_univ (-1)⟩))
+  refine ⟨C₁, C₂, fun y ↦ ?_⟩
+  have hy : 0 < ((m y).val : ℝ) := NNReal.coe_pos.mpr (Units.zero_lt (m y))
+  have e1 : ‖((((m y).val : ℝ) ^ (1 : ℝ) : ℝ) : ℂ) * f.val y‖ ≤ C₁ := h1 y
+  have e2 : ‖((((m y).val : ℝ) ^ (-1 : ℝ) : ℝ) : ℂ) * f.val y‖ ≤ C₂ := h2 y
+  rw [norm_mul, Complex.norm_real, Real.norm_of_nonneg (Real.rpow_nonneg hy.le _),
+    Real.rpow_one] at e1
+  rw [norm_mul, Complex.norm_real, Real.norm_of_nonneg (Real.rpow_nonneg hy.le _),
+    Real.rpow_neg_one] at e2
+  refine ⟨?_, ((inv_mul_le_iff₀ hy).mp e2).trans_eq (mul_comm _ _)⟩
+  rw [← div_eq_mul_inv]
+  exact (le_div_iff₀ hy).mpr ((mul_comm _ _).trans_le e1)
+
+/-- The module of a point of the orbit of the generator. -/
+private theorem modulation_zpow_mul (n : ℤ) (z : G) :
+    ((m (γ ^ n * z)).val : ℝ) = ((m γ).val : ℝ) ^ n * ((m z).val : ℝ) := by
+  rw [map_mul m, map_zpow m, Units.val_mul, Units.val_zpow_eq_zpow_val, NNReal.coe_mul,
+    NNReal.coe_zpow]
+
+/-- The periodization at the class of a point is the orbit sum at that point. -/
+private theorem modulatedPeriodization_apply_mk (f : E) (x : G) :
+    modulatedPeriodization m γ hm hms hγ f (QuotientGroup.mk x) =
+      ∑' n : ℤ, f.val (γ ^ n * x) := by
+  obtain ⟨⟨h, hh⟩, e⟩ := QuotientGroup.mk_out_eq_mul Γ x
+  obtain ⟨j, rfl⟩ := Subgroup.mem_zpowers_iff.mp hh
+  have e' : (QuotientGroup.mk x : Q).out = γ ^ j * x := e.trans (mul_comm _ _)
+  change ∑' n : ℤ, f.val (γ ^ n * (QuotientGroup.mk x : Q).out) = _
+  rw [e', ← (Equiv.addRight j).tsum_eq (fun n : ℤ ↦ f.val (γ ^ n * x))]
+  refine tsum_congr fun n ↦ ?_
+  change f.val (γ ^ n * (γ ^ j * x)) = f.val (γ ^ (n + j) * x)
+  rw [zpow_add, mul_assoc]
+
+/-- The orbit series of a two-sided decay function is summable. -/
+private theorem modulatedPeriodization_summable (hc : 1 < (m γ).val) (f : E) (x : G) :
+    Summable fun n : ℤ ↦ f.val (γ ^ n * x) := by
+  obtain ⟨C₁, C₂, hb⟩ := modulatedExponentialDecay_exists_weight_bounds m f
+  refine summable_of_zpow_bounds _ ((m γ).val : ℝ) ((m x).val : ℝ) C₁ C₂
+    (by exact_mod_cast hc) (fun n ↦ ?_) (fun n ↦ ?_)
+  · rw [← modulation_zpow_mul m γ]
+    exact (hb _).1
+  · rw [← modulation_zpow_mul m γ]
+    exact (hb _).2
 /-- Paper: Definition 4.4.2.1, p. 192. At every lift of a quotient point the
 orbit series converges to the specified periodization. -/
 theorem modulatedPeriodization_hasSum (f : E) (x : G) :
     HasSum (fun n : ℤ ↦ f.val (γ ^ n * x))
-      (modulatedPeriodization m γ hm hms hγ f (QuotientGroup.mk x)) := by sorry
-
+      (modulatedPeriodization m γ hm hms hγ f (QuotientGroup.mk x)) := by
+  rw [modulatedPeriodization_apply_mk m γ hm hms hγ f x]
+  exact (modulatedPeriodization_summable m γ hγ f x).hasSum
 variable [MeasurableSpace G] [BorelSpace G]
 variable (μ₁ : Measure m.toMonoidHom.ker) [μ₁.IsHaarMeasure] (χ : PontryaginDual G)
 
@@ -301,18 +391,71 @@ theorem modulatedIsotypicPeriodization_integrable (f : E) (n : ℤ) (x : G) :
       (hf.comp (continuous_const.mul (continuous_subtype_val.mul continuous_const)))
   exact hcont.integrable_of_hasCompactSupport (HasCompactSupport.of_compactSpace _)
 
+/-- The homogeneous periodization at the class of a point is the sum of the compact
+averages over the orbit of that point. -/
+private theorem modulatedIsotypicPeriodization_apply_mk (f : E) (x : G) :
+    modulatedIsotypicPeriodization m γ hm hms hγ μ₁ χ f (QuotientGroup.mk x) =
+      ∑' n : ℤ, weightedOrbit⟦f, n, x⟧ := by
+  obtain ⟨⟨h, hh⟩, e⟩ := QuotientGroup.mk_out_eq_mul Γ x
+  obtain ⟨j, rfl⟩ := Subgroup.mem_zpowers_iff.mp hh
+  have e' : (QuotientGroup.mk x : Q).out = γ ^ j * x := e.trans (mul_comm _ _)
+  change ∑' n : ℤ, weightedOrbit⟦f, n, (QuotientGroup.mk x : Q).out⟧ = _
+  rw [e', ← (Equiv.addRight j).tsum_eq (fun n : ℤ ↦ weightedOrbit⟦f, n, x⟧)]
+  refine tsum_congr fun n ↦ integral_congr_ae (.of_forall fun k ↦ ?_)
+  change (χ k.val : ℂ) * f.val (γ ^ n * (k.val * (γ ^ j * x))) =
+    (χ k.val : ℂ) * f.val (γ ^ (n + j) * (k.val * x))
+  rw [zpow_add, mul_assoc, mul_left_comm (γ ^ j)]
+
+/-- The series of the compact averages over an orbit is summable. -/
+private theorem modulatedIsotypicPeriodization_summable (hprop : IsModulation m)
+    (hc : 1 < (m γ).val) (f : E) (x : G) :
+    Summable fun n : ℤ ↦ weightedOrbit⟦f, n, x⟧ := by
+  obtain ⟨C₁, C₂, hb⟩ := modulatedExponentialDecay_exists_weight_bounds m f
+  have : CompactSpace K :=
+    isCompact_iff_compactSpace.mp (hprop.1.isCompact_preimage (isCompact_singleton (x := 1)))
+  have hk (k : K) : ((m (k.val * x)).val : ℝ) = ((m x).val : ℝ) := by
+    rw [map_mul m, show m k.val = 1 from MonoidHom.mem_ker.mp k.property, one_mul]
+  have hbd (D : ℝ) (n : ℤ) (h : ∀ k : K, ‖f.val (γ ^ n * (k.val * x))‖ ≤ D) :
+      ‖weightedOrbit⟦f, n, x⟧‖ ≤ D * μ₁.real univ :=
+    norm_integral_le_of_norm_le_const (.of_forall fun k ↦ by
+      rw [norm_mul, Circle.norm_coe, one_mul]
+      exact h k)
+  refine summable_of_zpow_bounds _ ((m γ).val : ℝ) ((m x).val : ℝ) (C₁ * μ₁.real univ)
+    (C₂ * μ₁.real univ) (by exact_mod_cast hc) (fun n ↦ ?_) (fun n ↦ ?_)
+  · refine (hbd (C₁ * (((m γ).val : ℝ) ^ n * ((m x).val : ℝ))⁻¹) n fun k ↦ ?_).trans_eq
+      (by ring)
+    rw [← hk k, ← modulation_zpow_mul m γ]
+    exact (hb _).1
+  · refine (hbd (C₂ * (((m γ).val : ℝ) ^ n * ((m x).val : ℝ))) n fun k ↦ ?_).trans_eq
+      (by ring)
+    rw [← hk k, ← modulation_zpow_mul m γ]
+    exact (hb _).2
 /-- Paper: Definition 4.4.2.1, p. 192. At every lift the orbit series of the
 compact averages converges to the homogeneous periodization. -/
 theorem modulatedIsotypicPeriodization_hasSum (f : E) (x : G) :
     HasSum (fun n : ℤ ↦ weightedOrbit⟦f, n, x⟧)
-      (modulatedIsotypicPeriodization m γ hm hms hγ μ₁ χ f (QuotientGroup.mk x)) := by sorry
-
+      (modulatedIsotypicPeriodization m γ hm hms hγ μ₁ χ f (QuotientGroup.mk x)) := by
+  rw [modulatedIsotypicPeriodization_apply_mk m γ hm hms hγ μ₁ χ f x]
+  exact (modulatedIsotypicPeriodization_summable m γ μ₁ χ hm hγ f x).hasSum
 /-- Paper: Definition 4.4.2.1, p. 192. Left translation by a norm-one element
 multiplies the homogeneous periodization by the character evaluated there. -/
 theorem modulatedIsotypicPeriodization_homogeneous (f : E) (k : K) (z : Q) :
     let F := modulatedIsotypicPeriodization m γ hm hms hγ μ₁ χ f
-    F (QuotientGroup.mk k.val⁻¹ * z) = (χ k.val : ℂ) * F z := by sorry
-
+    F (QuotientGroup.mk k.val⁻¹ * z) = (χ k.val : ℂ) * F z := by
+  intro F
+  obtain ⟨x, rfl⟩ := QuotientGroup.mk_surjective z
+  have h1 : F (QuotientGroup.mk (k.val⁻¹ * x)) = ∑' n : ℤ, weightedOrbit⟦f, n, k.val⁻¹ * x⟧ :=
+    modulatedIsotypicPeriodization_apply_mk m γ hm hms hγ μ₁ χ f _
+  have h2 : F (QuotientGroup.mk x) = ∑' n : ℤ, weightedOrbit⟦f, n, x⟧ :=
+    modulatedIsotypicPeriodization_apply_mk m γ hm hms hγ μ₁ χ f x
+  rw [← QuotientGroup.mk_mul, h1, h2, ← tsum_mul_left]
+  refine tsum_congr fun n ↦ ?_
+  rw [← integral_const_mul, ← integral_mul_right_eq_self (μ := μ₁) _ k]
+  refine integral_congr_ae (.of_forall fun k' ↦ ?_)
+  change (χ (k' * k).val : ℂ) * f.val (γ ^ n * ((k' * k).val * (k.val⁻¹ * x))) =
+    (χ k.val : ℂ) * ((χ k'.val : ℂ) * f.val (γ ^ n * (k'.val * x)))
+  rw [Subgroup.coe_mul, map_mul χ, Circle.coe_mul, mul_assoc k'.val, mul_inv_cancel_left]
+  ring
 -- TODO(later): needs §4.5.1.1 for convergence in the Schwartz–Bruhat topology
 -- and the continuous, open and surjective periodization maps there.
 
@@ -537,7 +680,16 @@ theorem modulatedCyclicExponential_split (τ : ℝ≥0ˣ →ₜ* G) (hτ : Right
     e j (QuotientGroup.mk (τ t * k.val)) =
       star (j.1 k : ℂ) *
         (Circle.exp ((t₀ j.1 - 2 * Real.pi * (j.2 : ℝ) / L - b j.1) *
-          Real.log (t.val : ℝ)) : ℂ) := by sorry
+          Real.log (t.val : ℝ)) : ℂ) := by
+  have hlog : (logModule (τ t * k.val)) = Real.log (t.val : ℝ) := by
+    rw [map_mul, hτ t, show m k.val = 1 from k.2, mul_one]
+  change ((modulatedCyclicCharacter m γ hγ χ t₀ ht₀ j (QuotientGroup.mk (τ t * k.val)) :
+    Circle) : ℂ) = _
+  rw [modulatedCyclicCharacter_mk, hlog, map_mul, hb, hk, sub_mul _ (b j.1), Circle.exp_sub,
+    Complex.star_def, ← Circle.coe_inv_eq_conj, ← Circle.coe_mul]
+  congr 1
+  simp only [mul_inv, div_eq_mul_inv]
+  ac_rfl
 
 variable [MeasurableSpace G] [BorelSpace G]
 variable (μ₁ : Measure m.toMonoidHom.ker) [hHaar₁ : μ₁.IsHaarMeasure]
@@ -548,12 +700,81 @@ variable (ν : Measure (G ⧸ Subgroup.zpowers γ)) [hHaar : ν.IsHaarMeasure]
 
 local notation "coeff⟦" j "⟧" => (fun f : S ↦ (L * μ₁.real univ)⁻¹ * lcaFourier ν f (ξ j))
 
+/-- A linear functional on the Schwartz–Bruhat space that is bounded by a multiple of the
+supremum norm is continuous, because the supremum norm is a continuous seminorm on every
+elementary stage. -/
+private theorem schwartzBruhat_continuous_of_sup_bound {A : Type*} [CommGroup A]
+    [TopologicalSpace A] (Λ : SchwartzBruhat A →ₗ[ℂ] ℂ) (C : ℝ≥0)
+    (hΛ : ∀ (f : SchwartzBruhat A) (M : ℝ), (∀ x, ‖f x‖ ≤ M) → ‖Λ f‖ ≤ C * M) :
+    Continuous Λ := by
+  classical
+  let p := (normSeminorm ℂ ℂ).comp Λ
+  have hp : ∀ (b : BruhatStructuralPair A) (s : ElementaryLCAPresentation b.quotient),
+      Continuous (p ∘ schwartzBruhatStageInclusion b s) := by
+    intro b s
+    let q := (normSeminorm ℂ ℂ).comp (Λ.comp (schwartzBruhatStageInclusion b s))
+    change Continuous q
+    let p₀ : Seminorm ℂ (SchwartzBruhatStage s) := elementarySchwartzSeminorm (0, 0, 0, 0)
+    have hp₀ : Continuous p₀ :=
+      (withGeneratingSeminorms_spec _ _).continuous_seminorm (0, 0, 0, 0)
+    have hpt (f : SchwartzBruhatStage s) (x : A) :
+        ‖schwartzBruhatStageRealization b s f x‖ ≤ p₀ f := by
+      let := s.finiteGroup
+      have he := schwartzBruhatStageRealization_apply b s f x
+      by_cases hx : x ∈ b.val.1
+      · rw [dite_eq_left hx] at he
+        rw [he]
+        let y := Multiplicative.toAdd (s.equiv (QuotientGroup.mk ⟨x, hx⟩))
+        change (‖f y‖₊ : ENNReal).toReal ≤ (elementarySchwartzBound f.val (0, 0, 0, 0)).toReal
+        have hb : (‖f y‖₊ : ENNReal) ≤ elementarySchwartzBound f.val (0, 0, 0, 0) :=
+          (le_iSup (fun g ↦ (‖f.val g‖₊ : ENNReal)) y).trans_eq
+            (elementarySchwartzBound_zero f.val).symm
+        exact ENNReal.toReal_mono (f.property.2 (0, 0, 0, 0)).ne hb
+      · rw [dite_eq_right hx] at he
+        exact ((congrArg norm he).trans (norm_zero : ‖(0 : ℂ)‖ = 0)).le.trans
+          (apply_nonneg p₀ f)
+    have hC : Continuous (C • p₀) := hp₀.const_smul C
+    exact Seminorm.continuous_of_le hC fun f ↦
+      hΛ (schwartzBruhatStageInclusion b s f) (p₀ f) (hpt f)
+  let i : {q : Seminorm ℂ (schwartzBruhatSubmodule A) //
+      ∀ (b : BruhatStructuralPair A) (s : ElementaryLCAPresentation b.quotient),
+        Continuous (q ∘ schwartzBruhatStageInclusion b s)} := ⟨p, hp⟩
+  exact (norm_withSeminorms ℂ ℂ).continuous_of_continuous_comp Λ fun _ ↦
+    (withGeneratingSeminorms_spec _ Subtype.val).continuous_seminorm i
+
 include hm hHaar₁ hHaar in
 /-- Paper: Equation (4.4.2.6), p. 193. With Haar measure on the compact quotient,
 the Fourier coefficient formula is linear and continuous in the test function. -/
 theorem modulatedCyclicFourierCoeff_linearContinuous (j : J) :
-    IsLinearMap ℂ (coeff⟦j⟧) ∧ Continuous (coeff⟦j⟧) := by sorry
-
+    IsLinearMap ℂ (coeff⟦j⟧) ∧ Continuous (coeff⟦j⟧) := by
+  classical
+  have := modulatedCyclicQuotient_compact m γ hm hγ
+  have hξ : Continuous (fun z : Q ↦ ((ξ j z : Circle) : ℂ)) :=
+    continuous_subtype_val.comp (ξ j).continuous
+  have hint (f : S) : Integrable (fun z ↦ f z * star ((ξ j z : Circle) : ℂ)) ν :=
+    ((schwartzBruhat_continuous f).mul hξ.star).integrable_of_hasCompactSupport
+      (HasCompactSupport.of_compactSpace _)
+  have hlin : IsLinearMap ℂ (coeff⟦j⟧) := by
+    refine ⟨fun f g ↦ ?_, fun c f ↦ ?_⟩
+    · change _ * (∫ z, (f z + g z) * star ((ξ j z : Circle) : ℂ) ∂ν) =
+        _ * (∫ z, f z * star ((ξ j z : Circle) : ℂ) ∂ν) +
+          _ * ∫ z, g z * star ((ξ j z : Circle) : ℂ) ∂ν
+      simp_rw [add_mul]
+      rw [integral_add (hint f) (hint g), mul_add]
+    · change _ * (∫ z, (c * f z) * star ((ξ j z : Circle) : ℂ) ∂ν) =
+        c * (_ * ∫ z, f z * star ((ξ j z : Circle) : ℂ) ∂ν)
+      simp_rw [mul_assoc c]
+      rw [integral_const_mul, mul_left_comm]
+  refine ⟨hlin, ?_⟩
+  let C : ℝ≥0 := ⟨‖(((L * μ₁.real univ)⁻¹ : ℝ) : ℂ)‖ * ν.real univ, by positivity⟩
+  refine schwartzBruhat_continuous_of_sup_bound (IsLinearMap.mk' _ hlin) C fun f M hM ↦ ?_
+  change ‖(((L * μ₁.real univ)⁻¹ : ℝ) : ℂ) * ∫ z, f z * star ((ξ j z : Circle) : ℂ) ∂ν‖ ≤
+    ‖(((L * μ₁.real univ)⁻¹ : ℝ) : ℂ)‖ * ν.real univ * M
+  rw [norm_mul, mul_assoc, mul_comm (ν.real univ)]
+  refine mul_le_mul_of_nonneg_left (norm_integral_le_of_norm_le_const
+    (.of_forall fun z ↦ ?_)) (norm_nonneg _)
+  rw [norm_mul, norm_star, Circle.norm_coe, mul_one]
+  exact hM z
 -- TODO(paper-gap): The exponent in (4.4.2.6) uses log γ, which is undefined
 -- for a general group element. The conjugate of (4.4.2.5) uses log|γ|_G.
 
@@ -571,7 +792,13 @@ local notation "a" => modulatedCyclicFourierCoeff m γ hm hγ χ t₀ ht₀ μ�
 Schwartz–Bruhat function against the conjugate exponential with the stated normalization. -/
 theorem modulatedCyclicFourierCoeff_apply (j : J) (f : S) :
     Integrable (fun z ↦ f z * star (e j z)) ν ∧
-    a j f = (L * μ₁.real univ)⁻¹ * ∫ z, f z * star (e j z) ∂ν := by sorry
+    a j f = (L * μ₁.real univ)⁻¹ * ∫ z, f z * star (e j z) ∂ν := by
+  have := modulatedCyclicQuotient_compact m γ hm hγ
+  refine ⟨?_, rfl⟩
+  have hξ : Continuous (fun z : Q ↦ ((ξ j z : Circle) : ℂ)) :=
+    continuous_subtype_val.comp (ξ j).continuous
+  exact ((schwartzBruhat_continuous f).mul hξ.star).integrable_of_hasCompactSupport
+    (HasCompactSupport.of_compactSpace _)
 
 variable [SecondCountableTopology G]
 variable (τ : ℝ≥0ˣ →ₜ* G) (hτ : RightInverse τ m)
@@ -747,7 +974,17 @@ include hm hγ hτ hμ hν in
 /-- Paper: Remark 4.4.2.7, p. 194. Dividing the quotient Haar measure by its
 specified total mass gives the probability Haar measure. -/
 theorem modulatedCyclicQuotient_probabilityHaar :
-    IsProbabilityMeasure ((ENNReal.ofReal L * μ₁ univ)⁻¹ • ν) := by sorry
+    IsProbabilityMeasure ((ENNReal.ofReal L * μ₁ univ)⁻¹ • ν) := by
+  have hL : 0 < L := Real.log_pos (by exact_mod_cast hγ)
+  have : CompactSpace K := isCompact_iff_compactSpace.mp hm.isCompact_ker
+  have h0 : ENNReal.ofReal L * μ₁ univ ≠ 0 :=
+    mul_ne_zero (ENNReal.ofReal_pos.mpr hL).ne' (Measure.measure_univ_ne_zero.mpr (NeZero.ne μ₁))
+  have htop : ENNReal.ofReal L * μ₁ univ ≠ ∞ :=
+    ENNReal.mul_ne_top ENNReal.ofReal_ne_top (measure_ne_top μ₁ univ)
+  constructor
+  rw [smul_apply, smul_eq_mul,
+    modulatedCyclicQuotient_measure_univ m γ hm hγ μ₁ ν τ hτ μ hμ hν,
+    ENNReal.inv_mul_cancel h0 htop]
 
 include hms hτ hμ hν in
 /-- Paper: Remark 4.4.2.7, p. 194. Normalizing the norm-one Haar measure to
@@ -792,8 +1029,43 @@ theorem modulatedCyclicQuotient_canonicalHaar :
 /-- Paper: Remark 4.4.2.9, p. 194. Multiplication by a unitary character
 preserves the Schwartz–Bruhat space of the original group. -/
 theorem pontryaginDual_mul_schwartzBruhat (η : PontryaginDual G) (f : SchwartzBruhat G) :
-    (fun x ↦ (η x : ℂ) * f x) ∈ schwartzBruhatSubmodule G := by sorry
-
+    (fun x ↦ (η x : ℂ) * f x) ∈ schwartzBruhatSubmodule G := by
+  -- The Fourier transform turns multiplication by `η` into translation on the dual group.
+  let μ : Measure G := Measure.haar
+  have : μ.IsHaarMeasure := inferInstanceAs ((Measure.haar (G := G)).IsHaarMeasure)
+  have : μ.Regular := inferInstanceAs ((Measure.haar (G := G)).Regular)
+  obtain ⟨F, hF⟩ := schwartzBruhat_fourier_equiv (G := G) μ
+  obtain ⟨Φ, hΦ, hinj, -⟩ := lcaFourier_L1 (G := G) μ
+  let v : SchwartzBruhat G := F.symm (schwartzBruhatTranslate η (F f))
+  let u : G → ℂ := v
+  let g (y : G) := (η y : ℂ) * f y
+  have hη : Continuous (fun y : G ↦ (η y : ℂ)) := continuous_subtype_val.comp η.continuous
+  have hg : Integrable g μ := by
+    simpa only [g, mul_comm] using
+      (hF f).1.mul_bdd (c := 1) hη.aestronglyMeasurable (.of_forall fun y ↦ by simp)
+  have hu : Integrable u μ := (hF v).1
+  have htransform (χ : PontryaginDual G) : lcaFourier μ u χ = lcaFourier μ g χ := by
+    rw [← (hF v).2 χ]
+    have hv : F v = schwartzBruhatTranslate η (F f) := F.apply_symm_apply _
+    rw [hv]
+    change F f (η⁻¹ * χ) = _
+    rw [(hF f).2]
+    apply integral_congr_ae
+    exact Filter.Eventually.of_forall fun y ↦ by
+      change f y * star (((η y)⁻¹ * χ y : Circle) : ℂ) = g y * star (χ y : ℂ)
+      rw [Circle.coe_mul, Circle.coe_inv_eq_conj, ← Complex.star_def, star_mul, star_star]
+      dsimp only [g]
+      ring
+  have hcoe (w : G → ℂ) (hw : Integrable w μ) (χ : PontryaginDual G) :
+      Φ (hw.toL1 w) χ = lcaFourier μ w χ := by
+    rw [hΦ]
+    exact integral_congr_ae (hw.coeFn_toL1.mono fun y hy ↦ congrArg (· * star (χ y : ℂ)) hy)
+  have hL1 : hu.toL1 u = hg.toL1 g :=
+    hinj (ZeroAtInftyContinuousMap.ext fun χ ↦ by rw [hcoe, hcoe, htransform])
+  have hae : u =ᵐ[μ] g := (Integrable.toL1_eq_toL1_iff u g hu hg).mp hL1
+  have heq : u = g := ((schwartzBruhat_continuous v).ae_eq_iff_eq μ
+    (hη.mul (schwartzBruhat_continuous f))).mp hae
+  exact (congrArg (· ∈ schwartzBruhatSubmodule G) heq).mp v.property
 /-- Paper: Remark 4.4.2.9, p. 194. At a fixed compact character the values of a
 continuous seminorm on the cyclic exponentials have polynomial growth.
 Deviation: The polynomial bound is expressed with a nonnegative constant and
