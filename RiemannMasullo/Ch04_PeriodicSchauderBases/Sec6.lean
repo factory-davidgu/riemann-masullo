@@ -310,11 +310,29 @@ theorem modulatedPeriodicMultiplicity_repeat (ξ : PontryaginDual G)
 
 variable (hγs : ∀ k, 1 < (m (γs k)).val)
 
+omit hSC in
+/-- The annihilator of a subgroup is closed in the dual group. -/
+private theorem isClosed_lcaAnnihilator_coe (H : Subgroup G) :
+    IsClosed (lcaAnnihilator H : Set (PontryaginDual G)) := by
+  have : (lcaAnnihilator H : Set (PontryaginDual G)) = ⋂ x : H, {ξ | ξ x.val = 1} := by
+    ext ξ; simp [mem_lcaAnnihilator_iff]
+  rw [this]
+  exact isClosed_iInter fun x ↦ isClosed_eq
+    (continuous_eval_const (F := ContinuousMonoidHom G Circle) x.val) continuous_const
+
 include hm hγs in
 /-- Paper: Equation (4.6.1.12), p. 212. The finite union of the cyclic
 fibers is discrete in the unitary dual. -/
 theorem modulatedPeriodicSpectrum_isDiscrete :
-    IsDiscrete (modulatedPeriodicSpectrum m ω γs) := by sorry
+    IsDiscrete (modulatedPeriodicSpectrum m ω γs) := by
+  have hann (k : Fin N) :
+      IsDiscrete (lcaAnnihilator (Subgroup.zpowers (γs k)) : Set (PontryaginDual G)) :=
+    isDiscrete_iff_discreteTopology.mpr
+      (modulatedCyclicAnnihilator_discrete m (γs k) hm (hγs k))
+  have hsub (k : Fin N) : modulatedCyclicAnnihilatorFiber m ω (γs k) ⊆
+      lcaAnnihilator (Subgroup.zpowers (γs k)) := fun _ h ↦ h.1
+  exact IsDiscrete.iUnion (fun k ↦ (hann k).mono (hsub k)) fun k ↦
+    isClosed_of_subset_discrete_closed (hsub k) (hann k) (isClosed_lcaAnnihilator_coe _)
 
 variable (χ : PontryaginDual m.toMonoidHom.ker → PontryaginDual G)
 variable (hχ : ∀ (ω' : PontryaginDual m.toMonoidHom.ker) (u : m.toMonoidHom.ker), χ ω' u.val = ω' u)
