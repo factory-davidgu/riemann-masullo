@@ -660,7 +660,15 @@ def finiteStandardGaussian (v : V) (c : QuasiCharacter (v.adicCompletion F)ˣ) :
 the local Gaussian takes the reciprocal of the character value. -/
 theorem finiteStandardGaussian_integerUnit (v : V) (c : QuasiCharacter (v.adicCompletion F)ˣ)
     (u : (v.adicCompletion F)ˣ) (hu : u ∈ integerUnits(v)) :
-    finiteStandardGaussian v c (Multiplicative.ofAdd u.val) = (c u)⁻¹ := by sorry
+    finiteStandardGaussian v c (Multiplicative.ofAdd u.val) = (c u)⁻¹ := by
+  classical
+  change finiteStandardGaussianValue v c u.val = (c u)⁻¹
+  unfold finiteStandardGaussianValue
+  split_ifs with hc
+  · rw [indicator_of_mem (show u.val ∈ (v.adicCompletionIntegers F : Set _) from hu.1),
+      hc u hu, inv_one]
+  · rw [indicator_of_mem (mem_image_of_mem _ hu)]
+    simp [u.ne_zero]
 
 local notation "infiniteUnitaryRestriction(" χ "," w ")" =>
   ((χ).comp ⟨IdeleClassGroup.ofCompletion (𝓞 F) F w, continuous_ideleClass_ofCompletion F w⟩)
