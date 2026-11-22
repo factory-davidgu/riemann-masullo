@@ -1867,6 +1867,151 @@ theorem modulatedIntervalSobolev_dual (_hm : IsModulation m)
     (fun g ↦ inv_pos.mpr (intervalSobolevDensity_pos a b s _))
     (fun g ↦ mul_inv_cancel₀ (intervalSobolevDensity_pos a b s _).ne')
 
+/-- Below the upper endpoint, the squared moment kernel divided by the compact-interval
+density decays exponentially on a half-line that is bounded below. -/
+private theorem sq_moment_div_intervalSobolevDensity_le (a b s : ℝ) (hs : 0 ≤ s) {σ L : ℝ}
+    (hσ : σ < b) (hL : 0 ≤ L) (k : ℕ) {x : ℝ} (hx : -L ≤ x) :
+    (|x| ^ k * Real.exp (σ * x)) ^ 2 * (intervalSobolevDensity a b s x)⁻¹ ≤
+      ((2 * k).factorial : ℝ) / (b - σ) ^ (2 * k) * Real.exp (2 * (b - σ) * L) *
+        Real.exp (-((b - σ) * x)) := by
+  have hη : 0 < b - σ := sub_pos.2 hσ
+  have hρpos := intervalSobolevDensity_pos a b s x
+  have h1 : (1 : ℝ) ≤ (1 + x ^ 2) ^ (s / 2) :=
+    Real.one_le_rpow (by nlinarith [sq_nonneg x]) (by linarith)
+  have hρge : Real.exp (2 * b * x) ≤ intervalSobolevDensity a b s x := by
+    unfold intervalSobolevDensity
+    exact (le_max_right _ _).trans
+      (le_mul_of_one_le_right (le_max_of_le_left (Real.exp_pos _).le) h1)
+  have hinv : (intervalSobolevDensity a b s x)⁻¹ ≤ Real.exp (-(2 * b * x)) := by
+    rw [Real.exp_neg]
+    exact inv_anti₀ (Real.exp_pos _) hρge
+  have hfact : ((b - σ) * |x|) ^ (2 * k) ≤
+      Real.exp ((b - σ) * |x|) * ((2 * k).factorial : ℝ) :=
+    (div_le_iff₀ (Nat.cast_pos.2 (Nat.factorial_pos _))).1
+      (Real.pow_div_factorial_le_exp _ (mul_nonneg hη.le (abs_nonneg x)) (2 * k))
+  have hηk : 0 < (b - σ) ^ (2 * k) := pow_pos hη _
+  have habs : |x| ^ (2 * k) ≤
+      ((2 * k).factorial : ℝ) / (b - σ) ^ (2 * k) * Real.exp ((b - σ) * |x|) := by
+    rw [mul_pow] at hfact
+    rw [div_mul_eq_mul_div, le_div_iff₀ hηk]
+    linarith
+  have habsle : |x| ≤ x + 2 * L := abs_le.2 ⟨by linarith, by linarith⟩
+  have hexp : Real.exp ((b - σ) * |x|) ≤ Real.exp ((b - σ) * (x + 2 * L)) :=
+    Real.exp_le_exp.2 (mul_le_mul_of_nonneg_left habsle hη.le)
+  have he : Real.exp (σ * x) ^ 2 = Real.exp (2 * σ * x) := by
+    rw [← Real.exp_nat_mul]
+    congr 1
+    push_cast
+    ring
+  have hcomb : Real.exp ((b - σ) * (x + 2 * L)) *
+      (Real.exp (2 * σ * x) * Real.exp (-(2 * b * x))) =
+      Real.exp (2 * (b - σ) * L) * Real.exp (-((b - σ) * x)) := by
+    rw [← Real.exp_add, ← Real.exp_add, ← Real.exp_add]
+    congr 1
+    ring
+  calc (|x| ^ k * Real.exp (σ * x)) ^ 2 * (intervalSobolevDensity a b s x)⁻¹
+      = |x| ^ (2 * k) * (Real.exp (2 * σ * x) * (intervalSobolevDensity a b s x)⁻¹) := by
+        rw [mul_pow, he, ← pow_mul, mul_comm k 2, mul_assoc]
+    _ ≤ ((2 * k).factorial : ℝ) / (b - σ) ^ (2 * k) * Real.exp ((b - σ) * (x + 2 * L)) *
+          (Real.exp (2 * σ * x) * Real.exp (-(2 * b * x))) :=
+        mul_le_mul (habs.trans (mul_le_mul_of_nonneg_left hexp (by positivity)))
+          (mul_le_mul_of_nonneg_left hinv (Real.exp_pos _).le)
+          (mul_nonneg (Real.exp_pos _).le (inv_nonneg.2 hρpos.le)) (by positivity)
+    _ = ((2 * k).factorial : ℝ) / (b - σ) ^ (2 * k) * Real.exp (2 * (b - σ) * L) *
+          Real.exp (-((b - σ) * x)) := by
+        rw [mul_assoc, hcomb]
+        exact (mul_assoc _ _ _).symm
+
+/-- For a Haar measure, a decaying exponential of the logarithmic module is integrable on
+the part of the group where the logarithmic module is bounded below: translation by an
+element of nontrivial module moves one compact band onto the next. -/
+private theorem integrableOn_exp_neg_logModule (hm : IsModulation m) (μ : Measure G)
+    [μ.IsHaarMeasure] {η : ℝ} (hη : 0 < η) (c : ℝ) :
+    IntegrableOn (fun g ↦ Real.exp (-(η * logModule m g))) (logModule m ⁻¹' Ici c) μ := by
+  let f (g : G) := Real.log ((m g).val : ℝ)
+  have hpos (g : G) : 0 < ((m g).val : ℝ) :=
+    NNReal.coe_pos.mpr (pos_of_ne_zero (m g).ne_zero)
+  have hmul (g h : G) : f (g * h) = f g + f h := by
+    simp only [f, map_mul, Units.val_mul, NNReal.coe_mul]
+    exact Real.log_mul (hpos g).ne' (hpos h).ne'
+  have hone : f 1 = 0 := by simp [f]
+  have hproper : IsProperMap f := by
+    let e : ℝ≥0ˣ ≃ₜ ℝ :=
+      (Nonneg.unitsHomeomorphPos ℝ).trans Real.expOrderIso.symm.toHomeomorph
+    have he : (e ∘ m) = f := funext fun g ↦ (Real.log_of_pos (hpos g)).symm
+    exact he ▸ e.isProperMap.comp hm.1
+  have hfm : Measurable f := hproper.continuous.measurable
+  obtain ⟨u, hu⟩ : ∃ u : G, 0 < f u := by
+    obtain ⟨g, hg⟩ := hm.2
+    have hn : f g ≠ 0 := by
+      intro hz
+      apply hg
+      apply Units.ext
+      apply NNReal.eq
+      change ((m g).val : ℝ) = 1
+      calc ((m g).val : ℝ) = Real.exp (f g) := (Real.exp_log (hpos g)).symm
+        _ = 1 := by rw [hz, Real.exp_zero]
+    rcases hn.lt_or_gt with h | h
+    · refine ⟨g⁻¹, ?_⟩
+      have hsum := hmul g⁻¹ g
+      rw [inv_mul_cancel, hone] at hsum
+      linarith
+    · exact ⟨g, h⟩
+  have hpow (j : ℕ) (g : G) : f (u ^ j * g) = j * f u + f g := by
+    induction j with
+    | zero => simp
+    | succ n ih =>
+      rw [pow_succ', mul_assoc, hmul, ih]
+      push_cast
+      ring
+  let B (j : ℕ) : Set G := f ⁻¹' Icc (c + j * f u) (c + (j + 1) * f u)
+  have hB0 : μ (f ⁻¹' Icc c (c + f u)) < ⊤ :=
+    (hproper.isCompact_preimage isCompact_Icc).measure_lt_top
+  have hBj (j : ℕ) : μ (B j) = μ (f ⁻¹' Icc c (c + f u)) := by
+    rw [← measure_preimage_mul μ (u ^ j) (B j)]
+    congr 1
+    ext g
+    simp only [B, mem_preimage, mem_Icc, hpow]
+    constructor <;> rintro ⟨h1, h2⟩ <;> constructor <;> linarith
+  have hcover : f ⁻¹' Ici c ⊆ ⋃ j, B j := by
+    intro g hg
+    have hg' : c ≤ f g := hg
+    have h0 : 0 ≤ (f g - c) / f u := div_nonneg (sub_nonneg.2 hg') hu.le
+    have h1 := Nat.floor_le h0
+    have h2 := Nat.lt_floor_add_one ((f g - c) / f u)
+    rw [le_div_iff₀ hu] at h1
+    rw [div_lt_iff₀ hu] at h2
+    have hmem : f g ∈ Icc (c + (⌊(f g - c) / f u⌋₊ : ℝ) * f u)
+        (c + ((⌊(f g - c) / f u⌋₊ : ℝ) + 1) * f u) := ⟨by linarith, by linarith⟩
+    exact mem_iUnion.2 ⟨_, hmem⟩
+  have hr : Real.exp (-(η * f u)) < 1 :=
+    Real.exp_lt_one_iff.2 (neg_lt_zero.2 (mul_pos hη hu))
+  have hsum : Summable fun j : ℕ ↦ Real.exp (-(η * (c + j * f u))) := by
+    refine ((summable_geometric_of_lt_one (Real.exp_pos _).le hr).mul_left
+      (Real.exp (-(η * c)))).congr fun j ↦ ?_
+    rw [← Real.exp_nat_mul, ← Real.exp_add]
+    congr 1
+    ring
+  have hfin : ∫⁻ g in f ⁻¹' Ici c, ENNReal.ofReal (Real.exp (-(η * f g))) ∂μ < ⊤ :=
+    calc ∫⁻ g in f ⁻¹' Ici c, ENNReal.ofReal (Real.exp (-(η * f g))) ∂μ
+        ≤ ∫⁻ g in ⋃ j, B j, ENNReal.ofReal (Real.exp (-(η * f g))) ∂μ :=
+          lintegral_mono_set hcover
+      _ ≤ ∑' j, ∫⁻ g in B j, ENNReal.ofReal (Real.exp (-(η * f g))) ∂μ :=
+          lintegral_iUnion_le B _
+      _ ≤ ∑' j : ℕ, ENNReal.ofReal (Real.exp (-(η * (c + j * f u)))) *
+            μ (f ⁻¹' Icc c (c + f u)) := by
+          refine tsum_le_tsum fun j ↦ ?_
+          rw [← hBj j, ← setLIntegral_const]
+          refine setLIntegral_mono' (hfm measurableSet_Icc) fun g hg ↦ ?_
+          exact ENNReal.ofReal_le_ofReal (Real.exp_le_exp.2
+            (neg_le_neg (mul_le_mul_of_nonneg_left hg.1 hη.le)))
+      _ < ⊤ := by
+          rw [ENNReal.tsum_mul_right]
+          exact ENNReal.mul_lt_top hsum.tsum_ofReal_ne_top.lt_top hB0
+  have hint : Integrable (fun g ↦ Real.exp (-(η * f g))) (μ.restrict (f ⁻¹' Ici c)) :=
+    ⟨(Real.measurable_exp.comp (hfm.const_mul η).neg).aestronglyMeasurable,
+      (hasFiniteIntegral_iff_ofReal (ae_of_all _ fun g ↦ (Real.exp_pos _).le)).2 hfin⟩
+  exact hint
 -- TODO(paper-gap): Corollary 9.2.2.12(1) omits the kernel character in the integral
 -- for a general isotype and uses m rather than k for the power of the logarithm.
 
@@ -1883,8 +2028,55 @@ theorem modulatedIntervalSobolev_cutoff_eval (a b A s : ℝ)
     let c := quasiCharacterNormTwist m.toMonoidHom m.continuous χ z
     ∃! Λ : E →L[ℂ] ℂ,
       ∀ f : E, Integrable (fun g ↦ U.indicator (⇑f) g * (logModule m g : ℂ) ^ k * c g) μ ∧
-        Λ f = ∫ g, U.indicator (⇑f) g * (logModule m g : ℂ) ^ k * c g ∂μ := by sorry
-
+        Λ f = ∫ g, U.indicator (⇑f) g * (logModule m g : ℂ) ^ k * c g ∂μ := by
+  intro μ E U c
+  have hμ : μ.IsHaarMeasure :=
+    (Classical.choose_spec (existsUnique_canonicalModulatedHaar m hm).exists).1
+  have hpos (g : G) : 0 < ((m g).val : ℝ) :=
+    NNReal.coe_pos.mpr (pos_of_ne_zero (m g).ne_zero)
+  have hlog : Measurable (fun g ↦ Real.log ((m g).val : ℝ)) :=
+    (NNReal.continuous_coe.comp (Units.continuous_val.comp m.continuous)).measurable.log
+  have hρ : Measurable fun g ↦ intervalSobolevDensity a b s (logModule m g) :=
+    (continuous_intervalSobolevDensity' a b s).measurable.comp hlog
+  have hU : MeasurableSet U := hlog measurableSet_Ici
+  have hker : Measurable fun g ↦ (logModule m g : ℂ) ^ k * c g :=
+    ((Complex.measurable_ofReal.comp hlog).pow_const k).mul (map_continuous c).measurable
+  have hη : 0 < b - z.re := sub_pos.2 _hz.2
+  have hint : Integrable (fun g ↦ ‖U.indicator (fun g ↦ (logModule m g : ℂ) ^ k * c g) g‖ ^ 2 *
+      (intervalSobolevDensity a b s (logModule m g))⁻¹) μ := by
+    refine ((integrable_indicator_iff hU).2 (Integrable.const_mul
+      (integrableOn_exp_neg_logModule m hm μ hη (-Real.log A))
+      (((2 * k).factorial : ℝ) / (b - z.re) ^ (2 * k) *
+        Real.exp (2 * (b - z.re) * Real.log A)))).mono'
+      (((hker.indicator hU).norm.pow_const 2).mul hρ.inv).aestronglyMeasurable
+      (Eventually.of_forall fun g ↦ ?_)
+    have hρpos := intervalSobolevDensity_pos a b s (logModule m g)
+    beta_reduce
+    rw [Real.norm_of_nonneg (mul_nonneg (sq_nonneg _) (inv_nonneg.2 hρpos.le))]
+    by_cases hg : g ∈ U
+    · have hc : ‖c g‖ = Real.exp (z.re * logModule m g) := by
+        change ‖χ g * ((((m g : ℝ≥0) : ℝ) : ℂ)) ^ z‖ =
+          Real.exp (z.re * Real.log ((m g).val : ℝ))
+        rw [norm_mul, _hχ g, one_mul, Complex.norm_cpow_eq_rpow_re_of_pos (hpos g),
+          Real.rpow_def_of_pos (hpos g), mul_comm]
+      rw [Set.indicator_of_mem hg, Set.indicator_of_mem hg, norm_mul, norm_pow,
+        Complex.norm_real, Real.norm_eq_abs, hc]
+      exact sq_moment_div_intervalSobolevDensity_le a b s _hs _hz.2 (Real.log_pos _hA).le k
+        (show -Real.log A ≤ logModule m g from hg)
+    · rw [Set.indicator_of_notMem hg, Set.indicator_of_notMem hg, norm_zero]
+      simp
+  obtain ⟨Λ, hΛ⟩ := weightedL2_pairing μ hρ (fun g ↦ intervalSobolevDensity_pos a b s _)
+    (hker.indicator hU).aestronglyMeasurable hint
+  have hfun (f : E) : (fun g ↦ U.indicator (⇑f) g * (logModule m g : ℂ) ^ k * c g) =
+      fun g ↦ f g * U.indicator (fun g ↦ (logModule m g : ℂ) ^ k * c g) g := by
+    funext g
+    by_cases hg : g ∈ U
+    · rw [Set.indicator_of_mem hg, Set.indicator_of_mem hg, mul_assoc]
+    · rw [Set.indicator_of_notMem hg, Set.indicator_of_notMem hg, zero_mul, zero_mul, mul_zero]
+  refine ⟨Λ, fun f ↦ ?_, fun Λ' hΛ' ↦ ContinuousLinearMap.ext fun f ↦ ?_⟩
+  · rw [hfun f]
+    exact hΛ f
+  · rw [(hΛ' f).2, (hΛ f).2, hfun f]
 /-- Paper: Corollary 9.2.2.12(1), p. 418. In the norm-twist coordinate of a unitary
 quasi-character, the kth derivative of the cutoff Mellin integral equals its kth moment.
 Deviation: The intrinsic quasi-character includes the character missing in (9.2.2.43),
