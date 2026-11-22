@@ -723,7 +723,13 @@ local notation "a" => modulatedCyclicFourierCoeff m γ hm hγ χ t₀ ht₀ μ�
 Schwartz–Bruhat function against the conjugate exponential with the stated normalization. -/
 theorem modulatedCyclicFourierCoeff_apply (j : J) (f : S) :
     Integrable (fun z ↦ f z * star (e j z)) ν ∧
-    a j f = (L * μ₁.real univ)⁻¹ * ∫ z, f z * star (e j z) ∂ν := by sorry
+    a j f = (L * μ₁.real univ)⁻¹ * ∫ z, f z * star (e j z) ∂ν := by
+  have := modulatedCyclicQuotient_compact m γ hm hγ
+  refine ⟨?_, rfl⟩
+  have hξ : Continuous (fun z : Q ↦ ((ξ j z : Circle) : ℂ)) :=
+    continuous_subtype_val.comp (ξ j).continuous
+  exact ((schwartzBruhat_continuous f).mul hξ.star).integrable_of_hasCompactSupport
+    (HasCompactSupport.of_compactSpace _)
 
 variable [SecondCountableTopology G]
 variable (τ : ℝ≥0ˣ →ₜ* G) (hτ : RightInverse τ m)
