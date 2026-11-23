@@ -257,6 +257,98 @@ theorem exists_indentationAverageL1 {ν₀ : Measure Q} [ν₀.Regular] {μ₀ :
         ∀ (f : C_c(G, ℂ)) (F : Lp ℂ 1 μ₀), (F : G → ℂ) =ᵐ[μ₀] f →
           (A F : Q → ℂ) =ᵐ[ν₀] indentationAverage H hH μH f := by sorry
 
+include hH in
+omit [T2Space G] [BorelSpace G] [μH.IsHaarMeasure] in
+private theorem exists_indentationLiftL1_compact {b : G → ℝ} (hb : IsIndentation H μH b)
+    {K : Set Q} (hK : IsCompact K) : IsCompact (tsupport b ∩ π ⁻¹' K) := by
+  let : IsClosed (H : Set G) := hH
+  let E := CompactExhaustion.choice G
+  obtain ⟨n, hn⟩ := hK.elim_directed_cover (fun n ↦ π '' interior (E n))
+    (fun _ ↦ QuotientGroup.isOpenMap_coe _ isOpen_interior) (by
+      rintro q -
+      obtain ⟨x, rfl⟩ := QuotientGroup.mk_surjective q
+      obtain ⟨n, hx⟩ := E.exists_mem x
+      exact mem_iUnion.mpr ⟨n + 1, x, E.subset_interior_succ _ hx, rfl⟩)
+    (Monotone.directed_le fun _ _ h ↦ image_mono (interior_mono (E.subset h)))
+  refine (hb.2.2.1 (E n) (E.isCompact n)).of_isClosed_subset
+    ((isClosed_tsupport _).inter (hK.isClosed.preimage QuotientGroup.continuous_mk)) ?_
+  exact inter_subset_inter_right _ (preimage_mono (hn.trans (image_mono interior_subset)))
+
+private theorem exists_indentationLiftL1_test {b : G → ℝ} (hb : IsIndentation H μH b)
+    (f : C_c(Q, ℂ)) : ∃ F : C_c(G, ℂ), (⇑F = indentationLift H b f) ∧
+      indentationAverage H hH μH F = f := by
+  have hF : HasCompactSupport (indentationLift H b f) := by
+    refine exists_compact_iff_hasCompactSupport.mp ⟨_,
+      exists_indentationLiftL1_compact H hH μH hb f.hasCompactSupport, ?_⟩
+    intro x hx
+    by_cases hb' : x ∈ tsupport b
+    · have hx' : π x ∉ tsupport f := fun h ↦ hx ⟨hb', h⟩
+      exact mul_eq_zero_of_right _ (image_eq_zero_of_notMem_tsupport hx')
+    · simp [indentationLift, image_eq_zero_of_notMem_tsupport hb']
+  let F : C_c(G, ℂ) := ⟨⟨indentationLift H b f,
+    (Complex.continuous_ofReal.comp hb.1).mul (f.continuous.comp QuotientGroup.continuous_mk)⟩, hF⟩
+  refine ⟨F, rfl, ?_⟩
+  ext q
+  obtain ⟨x, rfl⟩ := QuotientGroup.mk_surjective q
+  let e := TopologicalGroup.IsSES.ofClosedSubgroup H hH
+  change e.pushforward μH F (π x) = f (π x)
+  rw [e.pushforward_apply_apply]
+  change (∫ h : H, (b (x * h) : ℂ) * f (π (x * h)) ∂μH) = _
+  have hf (h : H) : π (x * h) = π x := by simp
+  simp_rw [hf]
+  rw [integral_mul_const, integral_complex_ofReal]
+  let : LocallyCompactSpace H := hH.locallyCompactSpace
+  have : SecondCountableTopology H := TopologicalSpace.Subtype.secondCountableTopology _
+  have hb1 : (∫ h : H, b (x * h) ∂μH) = 1 := by
+    rw [← integral_inv_eq_self]
+    simpa only [Subgroup.coe_inv, mul_comm x] using (hb.2.2.2 x).2
+  rw [hb1, Complex.ofReal_one, one_mul]
+
+private theorem exists_indentationLiftL1_measure {ν₀ : Measure Q} [ν₀.Regular] {μ₀ : Measure G}
+    (hμ₀ : IsIndentationMeasureLift H hH μH ν₀ μ₀) {b : G → ℝ} (hb : IsIndentation H μH b) :
+    MeasurePreserving π (μ₀.withDensity fun x ↦ ENNReal.ofReal (b x)) ν₀ := by
+  let : IsClosed (H : Set G) := hH
+  let : μ₀.Regular := hμ₀.1
+  have : BorelSpace Q := ⟨rfl⟩
+  let w (x : G) := (b x).toNNReal
+  have hw : Measurable w := hb.1.measurable.real_toNNReal
+  let m := μ₀.withDensity fun x ↦ (w x : ℝ≥0∞)
+  have hπ : Measurable π := QuotientGroup.continuous_mk.measurable
+  have hs : ∀ᵐ x ∂m, x ∈ tsupport b := by
+    apply (ae_withDensity_iff hw.coe_nnreal_ennreal).2
+    filter_upwards with x hx
+    apply subset_tsupport b
+    intro h
+    exact hx (by simp [w, h])
+  have : IsFiniteMeasureOnCompacts (m.map π) := ⟨fun {K} hK ↦ by
+    rw [Measure.map_apply hπ hK.measurableSet, ← Measure.measure_inter_eq_of_ae hs]
+    have hC := exists_indentationLiftL1_compact H hH μH hb hK
+    change μ₀.withDensity (fun x ↦ (w x : ℝ≥0∞)) _ < ∞
+    rw [withDensity_apply _ hC.measurableSet]
+    have hi := (hb.1.continuousOn.integrableOn_compact (μ := μ₀) hC).hasFiniteIntegral
+    simpa only [hasFiniteIntegral_def, Real.eNorm_of_nonneg, hb.2.1, w, ENNReal.ofReal] using hi⟩
+  refine ⟨hπ, ?_⟩
+  change m.map π = ν₀
+  apply Measure.ext_of_integral_eq_on_compactlySupported
+  intro f
+  let f' : C_c(Q, ℂ) := ⟨⟨fun q ↦ (f q : ℂ), Complex.continuous_ofReal.comp f.continuous⟩,
+    f.hasCompactSupport.comp_left Complex.ofReal_zero⟩
+  obtain ⟨F, hF, havg⟩ := exists_indentationLiftL1_test H hH μH hb f'
+  have hi := (hμ₀.2 F).symm
+  rw [havg] at hi
+  rw [integral_map (f := (⇑f : Q → ℝ)) hπ.aemeasurable (map_continuous f).aestronglyMeasurable]
+  change (∫ x, f (π x) ∂μ₀.withDensity (fun x ↦ (w x : ℝ≥0∞))) = _
+  rw [integral_withDensity_eq_integral_smul hw]
+  apply Complex.ofReal_injective
+  rw [← integral_complex_ofReal, ← integral_complex_ofReal]
+  convert hi using 1
+  apply integral_congr_ae
+  apply ae_of_all
+  intro x
+  rw [hF]
+  change (((w x : ℝ) * f (π x) : ℝ) : ℂ) = (b x : ℂ) * (f (π x) : ℂ)
+  rw [Complex.ofReal_mul, show (w x : ℝ) = b x from Real.coe_toNNReal _ (hb.2.1 x)]
+
 /-- Paper: Corollary 12.2.1.2(2), p. 506. Multiplying the pulled-back L¹ representative
 by any indentation defines an isometric continuous linear right inverse to the L¹ extension. -/
 theorem exists_indentationLiftL1 {ν₀ : Measure Q} [ν₀.Regular] {μ₀ : Measure G}
@@ -267,7 +359,60 @@ theorem exists_indentationLiftL1 {ν₀ : Measure Q} [ν₀.Regular] {μ₀ : Me
     {b : G → ℝ} (hb : IsIndentation H μH b) :
     ∃ L : Lp ℂ 1 ν₀ →L[ℂ] Lp ℂ 1 μ₀,
       Isometry L ∧ Function.RightInverse L A ∧
-        ∀ u : Lp ℂ 1 ν₀, (L u : G → ℂ) =ᵐ[μ₀] indentationLift H b u := by sorry
+        ∀ u : Lp ℂ 1 ν₀, (L u : G → ℂ) =ᵐ[μ₀] indentationLift H b u := by
+  have : IsClosed (H : Set G) := hH
+  have : BorelSpace Q := ⟨rfl⟩
+  let w (x : G) := (b x).toNNReal
+  have hw : Measurable w := hb.1.measurable.real_toNNReal
+  let m := μ₀.withDensity fun x ↦ (w x : ℝ≥0∞)
+  have hπ : MeasurePreserving π m ν₀ := exists_indentationLiftL1_measure H hH μH hμ₀ hb
+  let P : Lp ℂ 1 ν₀ →ₗᵢ[ℂ] Lp ℂ 1 m := Lp.compMeasurePreservingₗᵢ ℂ π hπ
+  let B := withDensitySMulLI (E := ℂ) μ₀ hw
+  have hrep (u : Lp ℂ 1 ν₀) (v : Q → ℂ) (hv : ⇑u =ᵐ[ν₀] v) :
+      ⇑(B (P u)) =ᵐ[μ₀] indentationLift H b v := by
+    have he : ⇑(P u) =ᵐ[m] v ∘ π := (Lp.coeFn_compMeasurePreserving u hπ).trans
+      (hπ.quasiMeasurePreserving.ae_eq_comp hv)
+    have hw' : ⇑(B (P u)) =ᵐ[μ₀] fun x ↦ w x • P u x :=
+      (memL1_smul_of_L1_withDensity hw (P u)).coeFn_toLp
+    filter_upwards [hw', (ae_withDensity_iff hw.coe_nnreal_ennreal).1 he] with x hx he'
+    rw [hx, NNReal.smul_def, Complex.real_smul, show (w x : ℝ) = b x from
+      Real.coe_toNNReal _ (hb.2.1 x)]
+    by_cases hz : w x = 0
+    · have hbz : b x = 0 := (Real.coe_toNNReal _ (hb.2.1 x)).symm.trans (congrArg NNReal.toReal hz)
+      simp [indentationLift, hbz]
+    · rw [he' (by simpa using hz)]
+      rfl
+  let L : Lp ℂ 1 ν₀ →ₗᵢ[ℂ] Lp ℂ 1 μ₀ := {
+    toFun := fun u ↦ B (P u)
+    map_add' := by intro u v; rw [map_add, map_add]
+    map_smul' := by
+      intro c u
+      apply Lp.ext
+      refine (hrep (c • u) _ (Lp.coeFn_smul c u)).trans ?_
+      filter_upwards [Lp.coeFn_smul c (B (P u)), hrep u u .rfl] with x hx hu
+      rw [RingHom.id_apply, hx, Pi.smul_apply, hu]
+      exact mul_left_comm _ _ _
+    norm_map' := fun u ↦ (B.norm_map _).trans (P.norm_map u) }
+  refine ⟨L.toContinuousLinearMap, L.isometry, ?_, fun u ↦ hrep u u .rfl⟩
+  let D := {u : Lp ℂ 1 ν₀ | ∃ f : C_c(Q, ℂ), ⇑u =ᵐ[ν₀] f}
+  have hd : Dense D := by
+    intro u
+    apply EMetric.mem_closure_iff.mpr
+    intro ε hε
+    obtain ⟨δ, hδ, hδε⟩ := exists_between hε
+    obtain ⟨f, hc, he, hf, hm⟩ := (Lp.memLp u).exists_hasCompactSupport_eLpNorm_sub_le
+      ENNReal.one_ne_top hδ.ne'
+    refine ⟨hm.toLp f, ⟨⟨⟨f, hf⟩, hc⟩, hm.coeFn_toLp⟩, ?_⟩
+    rw [Lp.edist_def, eLpNorm_congr_ae (EventuallyEq.rfl.sub hm.coeFn_toLp)]
+    exact he.trans_lt hδε
+  have heq : (A ∘ L) = id := by
+    apply Continuous.ext_on hd (A.continuous.comp L.continuous) continuous_id
+    rintro u ⟨f, huf⟩
+    obtain ⟨F, hF, havg⟩ := exists_indentationLiftL1_test H hH μH hb f
+    apply Lp.ext
+    have hLF : ⇑(L u) =ᵐ[μ₀] F := hF ▸ hrep u f huf
+    exact (hA F (L u) hLF).trans (havg ▸ huf.symm)
+  exact fun u ↦ congrFun heq u
 
 end Indentations
 

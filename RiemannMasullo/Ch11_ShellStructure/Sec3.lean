@@ -96,7 +96,17 @@ theorem divisorialIndicator_eq_indicator (T : Finset V) :
 
 /-- Paper: §11.3.1.1, p. 492. Every divisorial stratum is open and closed. -/
 theorem isClopen_divisorialStratum (T : Finset V) :
-    IsClopen (divisorialStratum F T) := by sorry
+    IsClopen (divisorialStratum F T) := by
+  have h : divisorialStratum F T = ⋂ v ∈ T, {g : I𝔽 | Valued.v (g.val.2 v) = 1} := by
+    ext g; simp [divisorialStratum]
+  rw [h]
+  refine isClopen_biInter_finset fun v _ ↦ ?_
+  have hc : Continuous fun g : I𝔽 ↦ g.val.2 v :=
+    (RestrictedProduct.continuous_eval v).comp (continuous_snd.comp Units.continuous_val)
+  have hs : IsClopen {x : v.adicCompletion F | Valued.v.restrict x = 1} :=
+    Valued.isClopen_sphere _ one_ne_zero
+  simp only [Valuation.restrict_eq_one_iff] at hs
+  exact hs.preimage hc
 
 /-- Paper: §11.3.1.1, pp. 492–493. The difference of two nested strata consists
 of ideles satisfying the old conditions and failing a condition at some new place.
@@ -116,10 +126,18 @@ theorem divisorialStratum_sdiff (T U : Finset V) (hTU : T ⊆ U) :
   · rintro ⟨v, ⟨hvU, _⟩, hT, hv⟩
     exact ⟨hT, fun hU ↦ hv (hU v hvU)⟩
 
+private theorem primaryDivisorial_infinite (S : Finset V) :
+    (setOf (fun p : ℕ ↦ p.Prime ∧ p ∉ S.image (fun v ↦ resChar(v)))).Infinite := by
+  have := Nat.infinite_setOf_prime.diff (S.image (fun v ↦ resChar(v))).finite_toSet
+  refine this.mono ?_
+  intro p hp
+  exact ⟨hp.1, by simpa using hp.2⟩
+
 /-- Paper: §11.3.1.1, pp. 492–493. The sequence of rational primes omitting the
 residue characteristics represented in the finite base consists of primes. -/
 theorem primaryDivisorialPrime_isPrime (S : Finset V) (k : ℕ) :
-    (Nat.nth (fun p ↦ p.Prime ∧ p ∉ S.image (fun v ↦ resChar(v))) k).Prime := by sorry
+    (Nat.nth (fun p ↦ p.Prime ∧ p ∉ S.image (fun v ↦ resChar(v))) k).Prime :=
+  (Nat.nth_mem_of_infinite (primaryDivisorial_infinite S) k).1
 
 /-- Paper: §11.3.1.1, p. 493. The rational prime for the next primary step is
 selected in increasing order.
@@ -131,7 +149,14 @@ def primaryDivisorialPrime (S : Finset V) (k : ℕ) : Vℚ :=
 prime 2. -/
 theorem primaryDivisorialPrime_empty_zero :
     primaryDivisorialPrime (∅ : Finset V) 0 =
-      Rat.HeightOneSpectrum.primesEquiv.symm ⟨2, Nat.prime_two⟩ := by sorry
+      Rat.HeightOneSpectrum.primesEquiv.symm ⟨2, Nat.prime_two⟩ := by
+  unfold primaryDivisorialPrime
+  refine congrArg Rat.HeightOneSpectrum.primesEquiv.symm (Subtype.ext ?_)
+  show Nat.nth _ 0 = 2
+  rw [Nat.nth_zero]
+  simp only [Finset.image_empty, Finset.notMem_empty, not_false_eq_true, and_true]
+  exact le_antisymm (Nat.sInf_le Nat.prime_two)
+    (le_csInf ⟨2, Nat.prime_two⟩ fun p hp ↦ hp.two_le)
 
 variable (F) in
 /-- Paper: §11.3.1.1, p. 493. The kth primary place set takes the full fibres
@@ -147,11 +172,48 @@ theorem primaryDivisorialPlaces_succ (S : Finset V) (k : ℕ) :
   simp only [primaryDivisorialPlaces, Finset.range_add_one, Finset.biUnion_insert]
   exact Finset.union_comm _ _
 
+private theorem primaryDivisorialPrime_eq_iff (S : Finset V) (k : ℕ) (p : Vℚ) :
+    primaryDivisorialPrime S k = p ↔
+      Rat.HeightOneSpectrum.natGenerator p =
+        Nat.nth (fun p ↦ p.Prime ∧ p ∉ S.image (fun v ↦ resChar(v))) k := by
+  unfold primaryDivisorialPrime
+  constructor
+  · rintro rfl
+    exact congrArg Subtype.val (Rat.HeightOneSpectrum.primesEquiv.apply_symm_apply _)
+  · intro h
+    exact Rat.HeightOneSpectrum.primesEquiv.symm_apply_eq.2 (Subtype.ext h.symm)
+
 /-- Paper: §11.3.1.1, p. 493. Together the indices exhaust the finite places
 outside a saturated base. -/
 theorem iUnion_primaryDivisorialPlaces (S : Finset V)
     (_hS : ∀ v ∈ S, ∀ w : V, w.under (𝓞 ℚ) = v.under (𝓞 ℚ) → w ∈ S) :
-    (⋃ k, (primaryDivisorialPlaces F S k : Set V)) = (S : Set V)ᶜ := by sorry
+    (⋃ k, (primaryDivisorialPlaces F S k : Set V)) = (S : Set V)ᶜ := by
+  ext w
+  simp only [Set.mem_iUnion, Finset.mem_coe, Set.mem_compl_iff, primaryDivisorialPlaces,
+    Finset.mem_biUnion, Finset.mem_range]
+  constructor
+  · rintro ⟨k, j, hj, hw⟩ hwS
+    have hw' : w.under (𝓞 ℚ) = primaryDivisorialPrime S j := by
+      simpa [Set.Finite.mem_toFinset] using hw
+    have h1 := (primaryDivisorialPrime_eq_iff S j _).1 hw'.symm
+    have h2 := (Nat.nth_mem_of_infinite (primaryDivisorial_infinite S) j).2
+    have h3 : Rat.HeightOneSpectrum.natGenerator (w.under (𝓞 ℚ)) ∈
+        S.image (fun v ↦ resChar(v)) := Finset.mem_image.2 ⟨w, hwS, rfl⟩
+    rw [h1] at h3
+    exact h2 h3
+  · intro hwS
+    have hq : (fun p : ℕ ↦ p.Prime ∧ p ∉ S.image (fun v ↦ resChar(v))) (resChar(w)) := by
+      refine ⟨Rat.HeightOneSpectrum.prime_natGenerator _, fun hin ↦ ?_⟩
+      obtain ⟨v, hv, hvq⟩ := Finset.mem_image.1 hin
+      apply hwS
+      apply _hS v hv w
+      exact Rat.HeightOneSpectrum.primesEquiv.injective (Subtype.ext hvq.symm)
+    have hq' : resChar(w) ∈ Set.ofPred
+        (fun p : ℕ ↦ p.Prime ∧ p ∉ S.image (fun v ↦ resChar(v))) := hq
+    obtain ⟨k, hk⟩ := Nat.subset_range_nth hq'
+    refine ⟨k + 1, k, by omega, ?_⟩
+    rw [Set.Finite.mem_toFinset]
+    exact ((primaryDivisorialPrime_eq_iff S k _).2 hk.symm).symm
 
 /-- Paper: §11.3.1.1, p. 493. An idele with unit components at every place over
 the chosen rational primes has unit norm components at those primes.
@@ -219,10 +281,79 @@ def divisorialThetaStage (ω : PontryaginDual C₁) (T : Finset V) : Submodule �
   Submodule.span ℂ (Set.range fun f : P ↦ (Submodule.Quotient.mk
     ⟨adelePrincipalValue F T f.val, adelePrincipalValue_mem_polarSubspace T f⟩ : Θ(ω)))
 
+/-- Conjugating `map id Q` by an equivalence gives the identity when `Q` fixes every vector.
+Stated in the shape of `sAdelePrincipalValue`, so that it applies syntactically. -/
+private theorem divisorialThetaStage_empty_conj_left {E G N : Type*} [AddCommGroup E]
+    [Module ℂ E] [TopologicalSpace E] [AddCommGroup G] [Module ℂ G] [TopologicalSpace G]
+    [AddCommGroup N] [Module ℂ N] [TopologicalSpace N]
+    (e : InductiveTensor E G ≃L[ℂ] N) (Q : G →ₗ[ℂ] G) (hQ : ∀ x, Q x = x) :
+    e.toLinearMap.comp ((TensorProduct.map (LinearMap.id : E →ₗ[ℂ] E) Q).comp
+      e.symm.toLinearMap) = LinearMap.id := by
+  have hQ' : Q = LinearMap.id := LinearMap.ext hQ
+  subst hQ'
+  refine LinearMap.ext fun x ↦ ?_
+  have h := LinearMap.congr_fun (TensorProduct.map_id (R := ℂ) (M := E) (N := G)) (e.symm x)
+  exact (congrArg e h).trans (e.apply_symm_apply x)
+
+/-- Conjugating `map Q id` by an equivalence gives the identity when `Q` fixes every vector.
+Stated in the shape of `adelePrincipalValue`, so that it applies syntactically. -/
+private theorem divisorialThetaStage_empty_conj_right {E G N : Type*} [AddCommGroup E]
+    [Module ℂ E] [TopologicalSpace E] [AddCommGroup G] [Module ℂ G] [TopologicalSpace G]
+    [AddCommGroup N] [Module ℂ N] [TopologicalSpace N]
+    (e : InductiveTensor E G ≃L[ℂ] N) (Q : E →ₗ[ℂ] E) (hQ : ∀ x, Q x = x) :
+    e.toLinearMap.comp ((TensorProduct.map Q (LinearMap.id : G →ₗ[ℂ] G)).comp
+      e.symm.toLinearMap) = LinearMap.id := by
+  have hQ' : Q = LinearMap.id := LinearMap.ext hQ
+  subst hQ'
+  refine LinearMap.ext fun x ↦ ?_
+  have h := LinearMap.congr_fun (TensorProduct.map_id (R := ℂ) (M := E) (N := G)) (e.symm x)
+  exact (congrArg e h).trans (e.apply_symm_apply x)
+
+open scoped TensorProduct in
+/-- A tensor power of identity maps fixes every vector of the finest locally convex copy. -/
+private theorem divisorialThetaStage_empty_piMap {ι : Type*} [Fintype ι] [DecidableEq ι]
+    {M : ι → Type*} [∀ i, AddCommGroup (M i)] [∀ i, Module ℂ (M i)]
+    (f : ∀ i, M i →ₗ[ℂ] M i) (hf : ∀ i, f i = LinearMap.id)
+    (x : FinestLocallyConvex (⨂[ℂ] i, M i)) :
+    (PiTensorProduct.map f : FinestLocallyConvex (⨂[ℂ] i, M i) →ₗ[ℂ]
+      FinestLocallyConvex (⨂[ℂ] i, M i)) x = x := by
+  have : f = fun _ ↦ LinearMap.id := funext hf
+  subst this
+  rw [PiTensorProduct.map_id]
+  rfl
+
+/-- With no selected places the S-local principal value is the identity. -/
+private theorem divisorialThetaStage_empty_sPV (h : (∅ : Finset V) ⊆ ∅) :
+    sAdelePrincipalValue F h = LinearMap.id := by
+  unfold sAdelePrincipalValue
+  exact divisorialThetaStage_empty_conj_left _ _
+    (divisorialThetaStage_empty_piMap _ fun w ↦ absurd w.2 (Finset.notMem_empty _))
+
+/-- With no selected places the global principal value is the identity. -/
+private theorem divisorialThetaStage_empty_PV :
+    adelePrincipalValue F (∅ : Finset V) = LinearMap.id := by
+  unfold adelePrincipalValue
+  exact divisorialThetaStage_empty_conj_right _ _ fun x ↦
+    LinearMap.congr_fun (divisorialThetaStage_empty_sPV _) x
+
+private theorem divisorialThetaStage_empty_span {α M : Type*} [AddCommMonoid M] [Module ℂ M]
+    (f g : α → M) (hfg : f = g) (hg : Function.Surjective g) :
+    Submodule.span ℂ (Set.range f) = ⊤ := by
+  subst hfg
+  rw [hg.range_eq]
+  exact Submodule.span_univ
+
 /-- Paper: (11.3.1.3), p. 494. With no principal values the stage is the entire
 polar homogeneous theta space. -/
 theorem divisorialThetaStage_empty (ω : PontryaginDual C₁) :
-    divisorialThetaStage ω ∅ = ⊤ := by sorry
+    divisorialThetaStage ω ∅ = ⊤ := by
+  unfold divisorialThetaStage
+  refine divisorialThetaStage_empty_span _ (fun p : P ↦ (Submodule.Quotient.mk p : Θ(ω))) ?_
+    (Submodule.Quotient.mk_surjective _)
+  funext p
+  have e : (⟨adelePrincipalValue F ∅ p.val, adelePrincipalValue_mem_polarSubspace ∅ p⟩ : P) = p :=
+    Subtype.ext (LinearMap.ext_iff.mp divisorialThetaStage_empty_PV p.val)
+  exact congrArg (fun y : P ↦ (Submodule.Quotient.mk y : Θ(ω))) e
 
 /-- Paper: (11.3.1.3), p. 494. Adding places decreases the principal-value image
 of the polar theta space. -/
@@ -426,7 +557,37 @@ theorem orbitalPlacePoissonTerm_eq_zero (χ : PontryaginDual C𝔽) (φ : 𝒟) 
     (π : (v.adicCompletion F)ˣ) (_hπ : Valued.v.IsUniformizer (π : v.adicCompletion F))
     (_hφ : tsupport φ.val ⊆ {g : C𝔽 | ((ideleClassNorm F g).val : ℝ) ∈ Ioo 1 (q(v) : ℝ)})
     (n : ℤ) :
-    orbitalPlacePoissonTerm χ φ v π n = 0 := by sorry
+    orbitalPlacePoissonTerm χ φ v π n = 0 := by
+  have hz : ∀ h : C₁, φ.val (πclass(v, π) ^ n * h.val) = 0 := by
+    intro h
+    apply image_eq_zero_of_notMem_tsupport
+    intro hmem
+    have hm := _hφ hmem
+    simp only [Set.mem_setOf_eq] at hm
+    have h1 : ideleClassNorm F h.val = 1 := h.2
+    have hq : (1 : ℝ) < q(v) := by
+      exact_mod_cast Nat.one_lt_iff_ne_zero_and_ne_one.2
+        ⟨(Nat.pos_of_ne_zero (Ideal.absNorm_eq_zero_iff.not.2 v.ne_bot)).ne', by
+          intro h0; exact v.isPrime.ne_top (Ideal.absNorm_eq_one_iff.1 h0)⟩
+    have hn : (((ideleClassNorm F (πclass(v, π) ^ n * h.val)).val : ℝ≥0) : ℝ) =
+        (q(v) : ℝ) ^ (-n) := by
+      rw [map_mul, map_zpow, ideleClassNorm_ofAdicCompletion, h1, mul_one]
+      rw [Units.val_zpow_eq_zpow_val, NNReal.coe_zpow, Units.coe_map]
+      change ‖π.val‖ ^ n = _
+      rw [norm_uniformizer_adicCompletion v _ _hπ, inv_zpow', zpow_neg]
+    rw [hn] at hm
+    obtain ⟨hm1, hm2⟩ := hm
+    rcases lt_trichotomy n 0 with h0 | h0 | h0
+    · have : (q(v) : ℝ) ≤ (q(v) : ℝ) ^ (-n) := by
+        calc (q(v) : ℝ) = (q(v) : ℝ) ^ (1 : ℤ) := (zpow_one _).symm
+          _ ≤ _ := zpow_le_zpow_right₀ hq.le (by omega)
+      linarith
+    · subst h0; simp at hm1
+    · have : (q(v) : ℝ) ^ (-n) ≤ 1 := zpow_le_one_of_nonpos₀ hq.le (by omega)
+      linarith
+  unfold orbitalPlacePoissonTerm
+  simp_rw [hz, zero_mul]
+  simp
 
 /-- Paper: §11.3.1.1(2), pp. 494–495. For a fixed compactly supported test
 above norm one, only finitely many finite places contribute to the Poisson sum.

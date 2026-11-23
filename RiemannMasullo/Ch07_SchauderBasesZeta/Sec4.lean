@@ -104,6 +104,120 @@ theorem isStronglyNuclearOperator_rankOne {E : Type*} [AddCommGroup E] [Module �
   | zero => simp [hr]
   | succ n => simp [htail n]
 
+private theorem specDenom_mem_div (g : Entire) (φ : B) :
+    φ ∈ schwartzBergmanDivisible g ↔
+      ∃ u : ℂ → ℂ, Differentiable ℂ u ∧ ∀ s, φ.val s = g.val s * u s := by
+  rw [schwartzBergmanDivisible, Submodule.mem_comap, Submodule.restrictScalars_mem,
+    Ideal.mem_span_singleton']
+  constructor
+  · rintro ⟨a, ha⟩
+    refine ⟨a.val, a.property, fun s ↦ ?_⟩
+    have h := congrArg (fun e : Entire ↦ e.val s) ha
+    change a.val s * g.val s = (schwartzBergmanEntireInclusion φ).val s at h
+    rw [schwartzBergmanEntireInclusion_apply] at h
+    rw [← h, mul_comm]
+  · rintro ⟨u, hu, h⟩
+    refine ⟨⟨⟨u, hu.continuous⟩, hu⟩, ?_⟩
+    apply Subtype.ext
+    ext s
+    change u s * g.val s = (schwartzBergmanEntireInclusion φ).val s
+    rw [schwartzBergmanEntireInclusion_apply, h, mul_comm]
+
+private theorem specDenom_B_ext (φ ψ : B) (h : ∀ s, φ.val s = ψ.val s) : φ = ψ :=
+  Subtype.ext (funext h)
+
+private theorem specDenom_shift_mem (φ : B) (c : ℂ) :
+    (fun w ↦ φ.val (w - c)) ∈ schwartzBergmanSubmodule (univ : Set ℝ) := by
+  obtain ⟨-, hd, hb⟩ := φ.property
+  refine ⟨fun z hz ↦ absurd (mem_univ _) hz, ?_, ?_⟩
+  · have hd' : Differentiable ℂ φ.val := fun z ↦
+      (hd z (mem_univ _)).differentiableAt (Filter.univ_mem' fun _ ↦ mem_univ _)
+    exact (hd'.comp (differentiable_id.sub_const c)).differentiableOn
+  · intro a b hab _ N
+    obtain ⟨A, hA⟩ := hb (a - c.re) (b - c.re) (by linarith) (subset_univ _) N
+    obtain ⟨A₀, hA₀⟩ := hb (a - c.re) (b - c.re) (by linarith) (subset_univ _) 0
+    refine ⟨2 ^ N * (A + ‖c‖ ^ N * A₀), ?_⟩
+    rintro _ ⟨w, hw, rfl⟩
+    have hz : w - c ∈ Complex.re ⁻¹' Icc (a - c.re) (b - c.re) := by
+      simp only [mem_preimage, mem_Icc, Complex.sub_re] at hw ⊢
+      constructor <;> linarith [hw.1, hw.2]
+    have h1 := hA ⟨w - c, hz, rfl⟩
+    have h0 := hA₀ ⟨w - c, hz, rfl⟩
+    simp only [pow_zero, one_mul] at h0
+    change ‖(w - c) ^ N * φ.val (w - c)‖ ≤ A at h1
+    change ‖w ^ N * φ.val (w - c)‖ ≤ _
+    set z := w - c
+    have hwz : w = z + c := by simp [z]
+    rw [hwz, norm_mul, norm_pow]
+    rw [norm_mul, norm_pow] at h1
+    have hn : ‖z + c‖ ^ N ≤ 2 ^ N * (‖z‖ ^ N + ‖c‖ ^ N) := by
+      calc ‖z + c‖ ^ N ≤ (‖z‖ + ‖c‖) ^ N := pow_le_pow_left₀ (norm_nonneg _) (norm_add_le _ _) N
+        _ ≤ (2 * max ‖z‖ ‖c‖) ^ N := by
+          apply pow_le_pow_left₀ (by positivity)
+          linarith [le_max_left ‖z‖ ‖c‖, le_max_right ‖z‖ ‖c‖]
+        _ = 2 ^ N * max ‖z‖ ‖c‖ ^ N := mul_pow _ _ _
+        _ ≤ 2 ^ N * (‖z‖ ^ N + ‖c‖ ^ N) := by
+          gcongr
+          rcases le_total ‖z‖ ‖c‖ with h | h
+          · rw [max_eq_right h]; linarith [pow_nonneg (norm_nonneg z) N]
+          · rw [max_eq_left h]; linarith [pow_nonneg (norm_nonneg c) N]
+    calc ‖z + c‖ ^ N * ‖φ.val z‖ ≤ 2 ^ N * (‖z‖ ^ N + ‖c‖ ^ N) * ‖φ.val z‖ :=
+          mul_le_mul_of_nonneg_right hn (norm_nonneg _)
+      _ = 2 ^ N * (‖z‖ ^ N * ‖φ.val z‖ + ‖c‖ ^ N * ‖φ.val z‖) := by ring
+      _ ≤ 2 ^ N * (A + ‖c‖ ^ N * A₀) := by
+          gcongr
+
+private theorem specDenom_gen_bwd {X Y Q Bm : Type*} (ι : X → Y) (q : Y → Q) (c : X → Q)
+    (hc : Surjective c) (hcq : ∀ x, c x = q (ι x)) (ZB : Q → Bm) (S : Set Bm)
+    (hr : Set.range ZB = S) (φ : Bm) (hφ : φ ∈ S) : ∃ x : X, ZB (q (ι x)) = φ := by
+  rw [← hr] at hφ
+  obtain ⟨y, rfl⟩ := hφ
+  obtain ⟨x, rfl⟩ := hc y
+  exact ⟨x, by rw [hcq]⟩
+
+private theorem specDenom_gen_mem {M Q Bm : Type*} (mk : M → Q) (hmk : Surjective mk) (Zf : Q → Bm)
+    (ev : Bm → ℂ → ℂ) (hev : Injective ev) (zf : M → ℂ → ℂ)
+    (hspec : ∀ f s, ev (Zf (mk f)) s = zf f s) (G' : ℂ → ℂ)
+    (hv : ∃ G : ℂ → ℂ, G' = G ∧
+      (∀ f : M, ∃ u : ℂ → ℂ, Differentiable ℂ u ∧ ∀ s, zf f s = G s * u s) ∧
+      (∀ φ : Bm, (∃ u : ℂ → ℂ, Differentiable ℂ u ∧ ∀ s, ev φ s = G s * u s) →
+        ∃ f : M, ∀ s, ev φ s = zf f s)) (φ : Bm) :
+    (∃ x, Zf x = φ) ↔ ∃ u : ℂ → ℂ, Differentiable ℂ u ∧ ∀ s, ev φ s = G' s * u s := by
+  obtain ⟨G, rfl, hfwd, hbwd⟩ := hv
+  constructor
+  · rintro ⟨x, rfl⟩
+    obtain ⟨f, rfl⟩ := hmk x
+    obtain ⟨u, hu, h⟩ := hfwd f
+    exact ⟨u, hu, fun s ↦ (hspec f s).trans (h s)⟩
+  · intro h
+    obtain ⟨f, hf⟩ := hbwd φ h
+    exact ⟨mk f, hev (funext fun s ↦ (hspec f s).trans (hf s).symm)⟩
+
+private theorem specDenom_gen_range_eq {Q Bm : Type*} {_ : AddCommGroup Q} {_ : Module ℂ Q}
+    {_ : TopologicalSpace Q} {_ : AddCommGroup Bm} {_ : Module ℂ Bm} {_ : TopologicalSpace Bm}
+    (Zc : Q →L[ℂ] Bm) (D : Submodule ℂ Bm) (h : ∀ φ, (∃ x, Zc x = φ) ↔ φ ∈ D) :
+    Zc.toLinearMap.range = D := by
+  ext φ
+  rw [LinearMap.mem_range]
+  exact h φ
+
+private theorem specDenom_gen_shift {Q Bm : Type*} (Zf : Q → Bm) (ev : Bm → ℂ → ℂ) (L : ℂ → ℂ)
+    (c : ℂ)
+    (hrange : ∀ φ : Bm, (∃ x, Zf x = φ) ↔
+      ∃ u : ℂ → ℂ, Differentiable ℂ u ∧ ∀ s, ev φ s = L s * u s)
+    (hshift : ∀ φ : Bm, ∃ ψ : Bm, ∀ w, ev ψ w = ev φ (w - c)) (f : Bm) :
+    (∃ u : ℂ → ℂ, Differentiable ℂ u ∧ ∀ s, ev f s = L (s + c) * u s) ↔
+      ∃ x : Q, ∀ s, ev f s = ev (Zf x) (s + c) := by
+  constructor
+  · rintro ⟨u, hu, h⟩
+    obtain ⟨ψ, hψ⟩ := hshift f
+    obtain ⟨x, hx⟩ := (hrange ψ).mpr ⟨fun w ↦ u (w - c), hu.comp (differentiable_id.sub_const c),
+      fun w ↦ by rw [hψ, h, sub_add_cancel]⟩
+    exact ⟨x, fun s ↦ by rw [hx, hψ, add_sub_cancel_right]⟩
+  · rintro ⟨x, hx⟩
+    obtain ⟨u, hu, h⟩ := (hrange (Zf x)).mp ⟨x, rfl⟩
+    exact ⟨fun s ↦ u (s + c), hu.comp (differentiable_id.add_const c), fun s ↦ by rw [hx, h]⟩
+
 section Spectral
 
 variable (χ : PontryaginDual (IdeleClassGroup (𝓞 F) F))
@@ -130,16 +244,136 @@ def spectralNuclearityDenominator (a : ℝ) : Submodule ℂ B :=
 This is the spectral quotient with its quotient topology, in Mellin coordinates. -/
 abbrev SpectralNuclearityQuotient (a : ℝ) := B ⧸ spectralNuclearityDenominator χ τ hτ a
 
+open Classical in
+private theorem specDenom_Lambda_val :
+    ⇑(Λ(χ, τ, hτ)).val = toMeromorphicNFOn (fun s ↦
+      (s + ((existsUnique_ideleNormSection_character_phase χ τ hτ).exists.choose : ℂ) *
+        Complex.I) ^ (if χ.toMonoidHom.comp (ideleClassNorm F).ker.subtype = 1 then 1 else 0) *
+      (1 - s - ((existsUnique_ideleNormSection_character_phase χ τ hτ).exists.choose : ℂ) *
+        Complex.I) ^ (if χ.toMonoidHom.comp (ideleClassNorm F).ker.subtype = 1 then 1 else 0) *
+      continuedCompletedHeckeL χ s) univ := rfl
+
+
+private theorem specDenom_hδ (hω : ¬ ω(χ) = 1) :
+    ¬ χ.toMonoidHom.comp (ideleClassNorm F).ker.subtype = 1 := by
+  intro h
+  apply hω
+  ext g
+  exact congrArg Subtype.val (DFunLike.congr_fun h g)
+
+private theorem specDenom_hδ' (hω : ω(χ) = 1) :
+    χ.toMonoidHom.comp (ideleClassNorm F).ker.subtype = 1 := by
+  ext g
+  exact congrArg Subtype.val (DFunLike.congr_fun hω g)
+
+open Classical in
+private theorem specDenom_L0 (hδ : ¬ χ.toMonoidHom.comp (ideleClassNorm F).ker.subtype = 1) :
+    ⇑(Λ(χ, τ, hτ)).val = continuedCompletedHeckeL χ := by
+  rw [specDenom_Lambda_val, ite_eq_right_of_eq_false _ _ (eq_false hδ)]
+  simp only [pow_zero, one_mul]
+  exact toMeromorphicNFOn_eq_self.mpr (continuedCompletedHeckeL_spec χ).1
+
+open Classical in
+private theorem specDenom_L1 (t : ℝ) (hω : ω(χ) = 1)
+    (ht : ideleClassNormTwist χ 0 = ideleClassNormTwist (1 : U) (((t : ℝ) : ℂ) * Complex.I)) :
+    ⇑(Λ(χ, τ, hτ)).val = toMeromorphicNFOn (fun s ↦ ((s + (t : ℂ) * Complex.I) *
+      (1 - s - (t : ℂ) * Complex.I)) * continuedCompletedHeckeL χ s) univ := by
+  have hphase := existsUnique_ideleNormSection_character_phase χ τ hτ
+  have ht' : ∀ u : ℝ≥0ˣ, (χ (QuotientGroup.mk (τ u)) : ℂ) =
+      (((u : ℝ≥0) : ℝ) : ℂ) ^ ((t : ℂ) * Complex.I) := by
+    intro u
+    have he := DFunLike.congr_fun ht (QuotientGroup.mk (τ u))
+    change (χ (QuotientGroup.mk (τ u)) : ℂ) * _ ^ (0 : ℂ) =
+      1 * ((((ideleNorm F (τ u)).val : ℝ) : ℂ) ^ ((t : ℂ) * Complex.I)) at he
+    rw [Complex.cpow_zero, mul_one, one_mul, hτ u] at he
+    exact he
+  have hx : hphase.exists.choose = t := hphase.unique hphase.exists.choose_spec ht'
+  rw [specDenom_Lambda_val, hx, ite_eq_left_of_eq_true _ _ (eq_true (specDenom_hδ' χ hω))]
+  simp only [pow_one]
+
+open Classical in
+private theorem specDenom_values :
+    ∃ G : ℂ → ℂ, ⇑(Λ(χ, τ, hτ)).val = G ∧
+      (∀ f : P, ∃ u : ℂ → ℂ, Differentiable ℂ u ∧
+        ∀ s, globalIdelicZFunction f.val (ideleClassNormTwist χ s) = G s * u s) ∧
+      (∀ φ : B, (∃ u : ℂ → ℂ, Differentiable ℂ u ∧ ∀ s, φ.val s = G s * u s) →
+        ∃ f : P, ∀ s, φ.val s = globalIdelicZFunction f.val (ideleClassNormTwist χ s)) := by
+  by_cases hω : ω(χ) = 1
+  · have h1 := (globalConverse_existsUnique_normTwist χ hω).exists
+    obtain ⟨t, ht⟩ := h1
+    have h2 := globalConverse_normTwist χ t ht
+    obtain ⟨ZB, h3⟩ := h2
+    have hZB := h3.2.2.1
+    have hrange := h3.2.2.2.1
+    refine ⟨_, specDenom_L1 χ τ hτ t hω ht, ?_, ?_⟩
+    · intro f
+      have hm : ∃ u : ℂ → ℂ, Differentiable ℂ u ∧ ∀ s, (ZB f).val s =
+          toMeromorphicNFOn (fun s ↦ ((s + (t : ℂ) * Complex.I) *
+            (1 - s - (t : ℂ) * Complex.I)) * continuedCompletedHeckeL χ s) univ s * u s :=
+        (Set.ext_iff.mp hrange (ZB f)).mp ⟨f, rfl⟩
+      obtain ⟨u, hu, h⟩ := hm
+      exact ⟨u, hu, fun s ↦ (hZB f s).symm.trans (h s)⟩
+    · intro φ hφ
+      have hm : φ ∈ Set.range ZB := (Set.ext_iff.mp hrange φ).mpr hφ
+      obtain ⟨f, hf⟩ := hm
+      refine ⟨f, fun s ↦ ?_⟩
+      rw [← hf]
+      exact hZB f s
+  · have h2 := globalConverse_nontrivial χ hω
+    obtain ⟨ZB, h3⟩ := h2
+    have hZB := h3.2.1
+    have hrange := h3.2.2
+    refine ⟨_, specDenom_L0 χ τ hτ (specDenom_hδ χ hω), ?_, ?_⟩
+    · intro f
+      have hm : ∃ u : ℂ → ℂ, Differentiable ℂ u ∧ ∀ s,
+          (ZB ((LinearMap.ker (homogeneousAdelicThetaLinearMap F (ω(χ)))).mkQ f.val)).val s =
+          continuedCompletedHeckeL χ s * u s :=
+        (Set.ext_iff.mp hrange _).mp ⟨_, rfl⟩
+      obtain ⟨u, hu, h⟩ := hm
+      exact ⟨u, hu, fun s ↦ (hZB f.val s).symm.trans (h s)⟩
+    · intro φ hφ
+      have hs0 := globalConverse_nontrivial_exact (F := F) _ hω
+      have hs := hs0.surjective
+      have hx := specDenom_gen_bwd (fun f : P ↦ f.val) _ _ hs (fun _ ↦ rfl) ZB _ hrange φ hφ
+      obtain ⟨f, hf⟩ := hx
+      refine ⟨f, fun s ↦ ?_⟩
+      rw [← hf]
+      exact hZB f.val s
+
+
+private theorem specDenom_range_mem (φ : B) :
+    (∃ x : Θ₀(χ), (Z(χ, τ, hτ)) x = φ) ↔
+      ∃ u : ℂ → ℂ, Differentiable ℂ u ∧ ∀ s, φ.val s = (Λ(χ, τ, hτ)).val s * u s :=
+  specDenom_gen_mem (fun f : P ↦ (Submodule.Quotient.mk f : Θ₀(χ)))
+    (Submodule.Quotient.mk_surjective _) (fun x ↦ (Z(χ, τ, hτ)) x) (fun φ : B ↦ φ.val)
+    (fun φ ψ h ↦ specDenom_B_ext φ ψ fun s ↦ congrFun h s)
+    (fun (f : P) s ↦ globalIdelicZFunction f.val (ideleClassNormTwist χ s))
+    (fun f s ↦ ((exists_globalPolarThetaMellin χ τ hτ).choose_spec f s).2)
+    (⇑(Λ(χ, τ, hτ)).val) (specDenom_values χ τ hτ) φ
+
+private theorem specDenom_mem_D (a : ℝ) (f : B) :
+    f ∈ spectralNuclearityDenominator χ τ hτ a ↔
+      ∃ u : ℂ → ℂ, Differentiable ℂ u ∧ ∀ s, f.val s = (Λ(χ, τ, hτ)).val (s + (a : ℂ)) * u s :=
+  specDenom_mem_div _ f
+
 /-- Paper: Equation (7.4.0.1), p. 366.
 The unshifted denominator is precisely the image of the pole-free theta Mellin map. -/
 theorem spectralNuclearityDenominator_zero :
-    spectralNuclearityDenominator χ τ hτ 0 = (Z(χ, τ, hτ)).toLinearMap.range := by sorry
+    spectralNuclearityDenominator χ τ hτ 0 = (Z(χ, τ, hτ)).toLinearMap.range :=
+  (specDenom_gen_range_eq (Z(χ, τ, hτ)) (spectralNuclearityDenominator χ τ hτ 0) fun φ ↦
+    (specDenom_range_mem χ τ hτ φ).trans ((specDenom_mem_D χ τ hτ 0 φ).trans
+      (exists_congr fun u ↦ and_congr_right fun _ ↦ forall_congr' fun s ↦ by
+        rw [Complex.ofReal_zero, add_zero])).symm).symm
 
 /-- Paper: Equation (7.4.0.1), p. 366.
 The denominator consists precisely of the Mellin transforms of norm-twisted theta classes. -/
 theorem mem_spectralNuclearityDenominator_iff (a : ℝ) (f : B) :
     f ∈ spectralNuclearityDenominator χ τ hτ a ↔
-      ∃ x : Θ₀(χ), ∀ s : ℂ, f.val s = ((Z(χ, τ, hτ)) x).val (s + (a : ℂ)) := by sorry
+      ∃ x : Θ₀(χ), ∀ s : ℂ, f.val s = ((Z(χ, τ, hτ)) x).val (s + (a : ℂ)) :=
+  (specDenom_mem_D χ τ hτ a f).trans
+    (specDenom_gen_shift (fun x : Θ₀(χ) ↦ (Z(χ, τ, hτ)) x) (fun φ : B ↦ φ.val) (⇑(Λ(χ, τ, hτ)).val)
+      (a : ℂ) (specDenom_range_mem χ τ hτ)
+      (fun φ ↦ ⟨⟨_, specDenom_shift_mem φ (a : ℂ)⟩, fun _ ↦ rfl⟩) f)
 
 /-- Paper: Equation (7.4.0.1), p. 366.
 The section Mellin transform identifies the decay isotype with the full

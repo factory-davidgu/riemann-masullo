@@ -1,6 +1,10 @@
 module
 
 public import RiemannMasullo.Ch05_ThetaZSpaces.Sec2
+import all RiemannMasullo.Ch05_ThetaZSpaces.Sec2
+import all RiemannMasullo.AppD_SchwartzBruhat.Sec1b
+import RiemannMasullo.ForMathlib.Topology.Algebra.Group.AutomaticContinuity
+import RiemannMasullo.ForMathlib.Analysis.LocallyConvex.Separable
 public import RiemannMasullo.Ch04_PeriodicSchauderBases.Sec3b
 import RiemannMasullo.ForMathlib.Topology.Algebra.Module.StrongDualQuotient
 import RiemannMasullo.ForMathlib.Topology.ContinuousMap.Sigma
@@ -433,6 +437,476 @@ theorem sLocalHomogeneousThetaTransition_isClosedEmbedding
     (hω : NormOneCharacterUnramifiedOutside (F := F) ω S) (hST : S ⊆ T) :
     IsClosedEmbedding (sLocalHomogeneousThetaTransition (F := F) (ω := ω) hω hST) := by sorry
 
+section
+open Set TopologicalSpace
+
+/-- A neighborhood of the kernel in the ambient group which contains no subgroup
+larger than the kernel (in fact every subgroup inside it lies in the kernel). -/
+private theorem bruhat_kernel_open_tube {G : Type*} [CommGroup G] [TopologicalSpace G]
+    [IsTopologicalGroup G] [LocallyCompactSpace G] (a : BruhatStructuralPair G)
+    (e : ElementaryLCAPresentation a.quotient) :
+    ∃ V : Set G, IsOpen V ∧ ((OrderDual.ofDual a.val.2 : Subgroup G) : Set G) ⊆ V ∧
+      ∀ L : Subgroup G, (L : Set G) ⊆ V → L ≤ OrderDual.ofDual a.val.2 := by
+  let : LocallyCompactSpace a.val.1 := a.property.1.isOpenEmbedding_subtypeVal.locallyCompactSpace
+  let : T1Space a.quotient := QuotientGroup.t1Space_iff.mpr
+    (a.property.2.2.1.1.preimage continuous_subtype_val)
+  obtain ⟨W, hW, hPow⟩ := exists_nhds_one_of_isLocallyEuclidean
+    (locallyEuclidean_of_elementaryPresentation e)
+  let q : a.val.1 →* a.quotient := QuotientGroup.mk' _
+  refine ⟨Subtype.val '' (q ⁻¹' interior W), a.property.1.isOpenEmbedding_subtypeVal.isOpenMap _
+    (isOpen_interior.preimage (QuotientGroup.continuous_mk : Continuous q)), ?_, ?_⟩
+  · intro x hx
+    let y : a.val.1 := ⟨x, a.property.2.2.2 hx⟩
+    refine ⟨y, ?_, rfl⟩
+    change q y ∈ interior W
+    rw [show q y = 1 from (a.quotient_mk_eq_one y).mpr hx]
+    exact mem_interior_iff_mem_nhds.mpr hW
+  · intro L hL x hx
+    obtain ⟨y, _, rfl⟩ := hL hx
+    apply (a.quotient_mk_eq_one y).mp
+    change q y = 1
+    apply hPow
+    intro k
+    rw [← map_pow]
+    obtain ⟨z, hz, he⟩ := hL (L.pow_mem hx k)
+    exact (Subtype.ext he : z = y ^ k) ▸ interior_subset hz
+
+/-- A compact set inside an open set is still mapped into that open set by
+sufficiently small continuous perturbations of the identity. -/
+private theorem bruhat_eventually_mapsTo {U G : Type*} [TopologicalSpace U] [TopologicalSpace G]
+    (f : U → G → G) (hf : Continuous (Function.uncurry f)) (u : U) (hu : ∀ x, f u x = x)
+    {C V : Set G} (hC : IsCompact C) (hV : IsOpen V) (hCV : C ⊆ V) :
+    ∀ᶠ v in 𝓝 u, MapsTo (f v) C V := by
+  let F (v : U) : C(G, G) := ⟨f v, continuous_curry v hf⟩
+  have hF : Continuous F := ContinuousMap.continuous_of_continuous_uncurry F hf
+  exact hF.continuousAt.preimage_mem_nhds (ContinuousMap.eventually_mapsTo hC hV
+    (f := F u) (fun x hx ↦ by change f u x ∈ V; rw [hu]; exact hCV hx))
+
+/-- Units close to one preserve each Bruhat structural subgroup, jointly with their inverses. -/
+private theorem exists_open_unit_stabilizer {R : Type*} [CommRing R] [TopologicalSpace R]
+    [IsTopologicalRing R] [LocallyCompactSpace R] [T2Space R]
+    (a : BruhatStructuralPair (Multiplicative R)) (e : ElementaryLCAPresentation a.quotient) :
+    ∃ H : OpenSubgroup Rˣ, ∀ u : H,
+      (∀ x ∈ a.val.1, Multiplicative.ofAdd (u.val.val * x.toAdd) ∈ a.val.1) ∧
+      (∀ x ∈ OrderDual.ofDual a.val.2,
+        Multiplicative.ofAdd (u.val.val * x.toAdd) ∈ OrderDual.ofDual a.val.2) := by
+  let G := Multiplicative R
+  let : LocallyCompactSpace (Multiplicative R) := ‹LocallyCompactSpace R›
+  let : T2Space (Multiplicative R) := ‹T2Space R›
+  obtain ⟨D, _, hDc, hDgen⟩ := a.property.2.1
+  let f (u : Rˣ) : G →* G := (AddMonoidHom.mulLeft u.val).toMultiplicative
+  have hf : Continuous (fun p : Rˣ × G ↦ f p.1 p.2) :=
+    continuous_ofAdd.comp ((Units.continuous_val.comp continuous_fst).mul
+      (continuous_toAdd.comp continuous_snd))
+  have h1 (x : G) : f 1 x = x := by change Multiplicative.ofAdd (1 * x.toAdd) = x; simp
+  have hm (u v : Rˣ) (x : G) : f (u * v) x = f u (f v x) := by
+    change Multiplicative.ofAdd ((u.val * v.val) * x.toAdd) = _
+    rw [mul_assoc]; rfl
+  let K := OrderDual.ofDual a.val.2
+  let P (u : Rˣ) := MapsTo (f u) (a.val.1 : Set G) a.val.1 ∧ MapsTo (f u) (K : Set G) K
+  have hp : ∀ᶠ u in 𝓝 (1 : Rˣ), P u := by
+    obtain ⟨V, hV, hKV, hsmall⟩ := bruhat_kernel_open_tube a e
+    filter_upwards [bruhat_eventually_mapsTo (fun u x ↦ f u x) hf 1 h1 (hDc.image continuous_subtype_val)
+      a.property.1 (image_subset_iff.mpr fun x _ ↦ x.property),
+      bruhat_eventually_mapsTo (fun u x ↦ f u x) hf 1 h1 (compact_bruhat_kernel a) hV hKV] with u hD hK
+    constructor
+    · let J := a.val.1.comap ((f u).comp a.val.1.subtype)
+      have hJD : D ⊆ J := fun d hd ↦ hD (mem_image_of_mem _ hd)
+      have hJ : ⊤ ≤ J := hDgen ▸ J.closure_le.mpr hJD
+      exact fun x hx ↦ hJ (Subgroup.mem_top (x := (⟨x, hx⟩ : a.val.1)))
+    · have hL := hsmall (K.map (f u)) (by rintro _ ⟨x, hx, rfl⟩; exact hK hx)
+      exact fun x hx ↦ hL (Subgroup.mem_map_of_mem _ hx)
+  have pid : P 1 := by
+    constructor <;> intro x hx <;> rw [h1] <;> exact hx
+  have pmul {u v : Rˣ} (hu : P u) (hv : P v) : P (u * v) :=
+    ⟨fun x hx ↦ hm u v x ▸ hu.1 (hv.1 hx), fun x hx ↦ hm u v x ▸ hu.2 (hv.2 hx)⟩
+  let H : Subgroup Rˣ := {
+    carrier := {u | P u ∧ P u⁻¹}
+    one_mem' := ⟨pid, by simpa using pid⟩
+    mul_mem' := fun ha hb ↦ ⟨pmul ha.1 hb.1, by simpa using pmul hb.2 ha.2⟩
+    inv_mem' := fun ha ↦ ⟨ha.2, by simpa using ha.1⟩ }
+  have hi : Tendsto Inv.inv (𝓝 (1 : Rˣ)) (𝓝 1) := continuous_inv.tendsto' _ _ inv_one
+  have ho : IsOpen (H : Set Rˣ) := H.isOpen_of_mem_nhds (g := 1) (hp.and (hi.eventually hp))
+  exact ⟨⟨H, ho⟩, fun u ↦ ⟨fun _ hx ↦ u.property.1.1 hx, fun _ hx ↦ u.property.1.2 hx⟩⟩
+
+/-- A continuous group automorphism preserving a structural pair pulls realized
+stage functions back by a continuous linear equivalence of the very same stage. -/
+private theorem fixedStage_pullback {G : Type*} [CommGroup G] [TopologicalSpace G]
+    (a : BruhatStructuralPair G) (e : ElementaryLCAPresentation a.quotient)
+    (d : G ≃ₜ* G) (hO : ∀ x, d x ∈ a.val.1 ↔ x ∈ a.val.1)
+    (hK : ∀ x, d x ∈ OrderDual.ofDual a.val.2 ↔ x ∈ OrderDual.ofDual a.val.2) :
+    ∃ L : SchwartzBruhatStage e ≃L[ℂ] SchwartzBruhatStage e,
+      ∀ f x, schwartzBruhatStageRealization a e (L f) x =
+        schwartzBruhatStageRealization a e f (d x) := by
+  classical
+  let b : a.val.1 ≃ₜ* a.val.1 :=
+    { toFun := fun x ↦ ⟨d x, (hO x).mpr x.property⟩
+      invFun := fun x ↦ ⟨d.symm x, (hO _).mp (by simpa only [d.apply_symm_apply] using x.property)⟩
+      left_inv := fun x ↦ Subtype.ext (d.symm_apply_apply x)
+      right_inv := fun x ↦ Subtype.ext (d.apply_symm_apply x)
+      map_mul' := fun x y ↦ Subtype.ext (map_mul d x.val y.val)
+      continuous_toFun := (d.continuous.comp continuous_subtype_val).subtype_mk _
+      continuous_invFun := (d.symm.continuous.comp continuous_subtype_val).subtype_mk _ }
+  let K := (OrderDual.ofDual a.val.2).comap a.val.1.subtype
+  have hb : K.map b.toMulEquiv = K := by
+    ext x
+    constructor
+    · rintro ⟨y, hy, rfl⟩
+      exact (hK y).mpr hy
+    · intro hx
+      refine ⟨b.symm x, ?_, b.apply_symm_apply x⟩
+      apply (hK (d.symm x.val)).mp
+      rw [d.apply_symm_apply]
+      exact hx
+  let q : a.quotient ≃ₜ* a.quotient :=
+    { QuotientGroup.congr K K b.toMulEquiv hb with
+      continuous_toFun := (QuotientGroup.isQuotientMap_mk K).continuous_iff.mpr
+        (QuotientGroup.continuous_mk.comp b.continuous)
+      continuous_invFun := (QuotientGroup.isQuotientMap_mk K).continuous_iff.mpr
+        (QuotientGroup.continuous_mk.comp b.symm.continuous) }
+  let c := (e.equiv.symm.trans q).trans e.equiv
+  let E := ElementaryLieGroup e.realDim e.torusDim e.latticeRank e.finiteFactor
+  let ψ : E ≃ₜ+ E :=
+    { MulEquiv.toAdditive c.toMulEquiv with
+      continuous_toFun := c.continuous_toFun
+      continuous_invFun := c.continuous_invFun }
+  obtain ⟨L, hL⟩ := elementarySchwartz_pullback ψ
+  refine ⟨L, fun f x ↦ ?_⟩
+  have hin (s : SchwartzBruhatStage e) (t : a.val.1) :
+      schwartzBruhatStageRealization a e s t.val = s (e.equiv (QuotientGroup.mk t)).toAdd := by
+    rw [schwartzBruhatStageRealization_apply, dite_eq_left t.property]
+  have hout (s : SchwartzBruhatStage e) {t : G} (ht : t ∉ a.val.1) :
+      schwartzBruhatStageRealization a e s t = 0 := by
+    rw [schwartzBruhatStageRealization_apply, dite_eq_right ht]
+  by_cases hx : x ∈ a.val.1
+  · let t : a.val.1 := ⟨x, hx⟩
+    refine (hin (L f) t).trans ((hL f _).trans (Eq.trans ?_ (hin f (b t)).symm))
+    change f (e.equiv (q (e.equiv.symm (e.equiv (QuotientGroup.mk t))))).toAdd = _
+    rw [e.equiv.symm_apply_apply]
+    rfl
+  · exact (hout (L f) hx).trans (hout f (mt (hO x).mp hx)).symm
+
+/-- Every elementary coordinate is realized by evaluation at a representative. -/
+private theorem fixedStage_eval_representative {G : Type*} [CommGroup G] [TopologicalSpace G]
+    (a : BruhatStructuralPair G) (e : ElementaryLCAPresentation a.quotient)
+    (y : ElementaryLieGroup e.realDim e.torusDim e.latticeRank e.finiteFactor) :
+    ∃ x : a.val.1, ∀ f : SchwartzBruhatStage e,
+      schwartzBruhatStageRealization a e f x.val = f y := by
+  classical
+  obtain ⟨x, hx⟩ := QuotientGroup.mk_surjective (e.equiv.symm (Multiplicative.ofAdd y))
+  exact ⟨x, fun f ↦ by rw [schwartzBruhatStageRealization_apply, dite_eq_left x.property,
+    hx, e.equiv.apply_symm_apply]; rfl⟩
+
+/-- Point evaluations on the elementary model are continuous for the stage topology. -/
+private theorem fixedStage_continuous_eval {A : Type*} [CommGroup A] [TopologicalSpace A]
+    (e : ElementaryLCAPresentation A)
+    (y : ElementaryLieGroup e.realDim e.torusDim e.latticeRank e.finiteFactor) :
+    Continuous (fun f : SchwartzBruhatStage e ↦ f y) := by
+  let L := (LinearMap.proj y).comp
+    (elementarySchwartzSubmodule e.realDim e.torusDim e.latticeRank e.finiteFactor).subtype
+  refine (norm_withSeminorms ℂ ℂ).continuous_of_continuous_comp (E := SchwartzBruhatStage e) L
+    fun _ ↦ ?_
+  apply Seminorm.continuous_of_le (elementarySchwartz_withSeminorms.continuous_seminorm (0, 0, 0, 0))
+  intro f
+  change (‖f y‖₊ : ENNReal).toReal ≤ (elementarySchwartzBound f.val (0, 0, 0, 0)).toReal
+  apply ENNReal.toReal_mono (f.property.2 _).ne
+  rw [elementarySchwartzBound_zero]
+  exact le_iSup (fun w ↦ (‖f w‖₊ : ENNReal)) y
+
+/-- Left multiplication by a unit is a topological automorphism of the additive group. -/
+private theorem fixedStage_unitEquiv {R : Type*} [CommRing R] [TopologicalSpace R]
+    [IsTopologicalRing R] (u : Rˣ) :
+    ∃ d : Multiplicative R ≃ₜ* Multiplicative R, ∀ x : Multiplicative R,
+      d x = Multiplicative.ofAdd (u.val * x.toAdd) := by
+  let d : Multiplicative R ≃ₜ* Multiplicative R :=
+    { toFun := fun x ↦ Multiplicative.ofAdd (u.val * x.toAdd)
+      invFun := fun x ↦ Multiplicative.ofAdd (u.inv * x.toAdd)
+      left_inv := fun x ↦ congrArg Multiplicative.ofAdd (by
+        change u.inv * (u.val * x.toAdd) = x.toAdd
+        rw [← mul_assoc, u.inv_val, one_mul])
+      right_inv := fun x ↦ congrArg Multiplicative.ofAdd (by
+        change u.val * (u.inv * x.toAdd) = x.toAdd
+        rw [← mul_assoc, u.val_inv, one_mul])
+      map_mul' := fun x y ↦ congrArg Multiplicative.ofAdd (mul_add _ x.toAdd y.toAdd)
+      continuous_toFun := continuous_ofAdd.comp (continuous_const.mul continuous_toAdd)
+      continuous_invFun := continuous_ofAdd.comp (continuous_const.mul continuous_toAdd) }
+  exact ⟨d, fun _ ↦ rfl⟩
+
+/-- Inverse dilation via the unit induces an equivalence by stage pullback. -/
+private theorem fixedStage_unitPullback {R : Type*} [CommRing R] [TopologicalSpace R]
+    [IsTopologicalRing R] (a : BruhatStructuralPair (Multiplicative R))
+    (e : ElementaryLCAPresentation a.quotient) (H : Subgroup Rˣ)
+    (hO : ∀ (u : H) (x : R), Multiplicative.ofAdd x ∈ a.val.1 →
+      Multiplicative.ofAdd (u.val.val * x) ∈ a.val.1)
+    (hK : ∀ (u : H) (x : R), Multiplicative.ofAdd x ∈ OrderDual.ofDual a.val.2 →
+      Multiplicative.ofAdd (u.val.val * x) ∈ OrderDual.ofDual a.val.2) (u : H) :
+    ∃ T : SchwartzBruhatStage e →L[ℂ] SchwartzBruhatStage e,
+      ∀ (f : SchwartzBruhatStage e) (x : R),
+        schwartzBruhatStageRealization a e (T f) (Multiplicative.ofAdd x) =
+          schwartzBruhatStageRealization a e f (Multiplicative.ofAdd (u.val.inv * x)) := by
+  classical
+  choose d hd using fun t : H ↦ fixedStage_unitEquiv t.val
+  have iff_mem (U : Subgroup (Multiplicative R))
+      (hU : ∀ (u : H) (x : R), Multiplicative.ofAdd x ∈ U → Multiplicative.ofAdd (u.val.val * x) ∈ U)
+      (u : H) (x : Multiplicative R) : d u x ∈ U ↔ x ∈ U := by
+    rw [hd]
+    refine ⟨fun hx ↦ ?_, hU u x.toAdd⟩
+    have h := hU u⁻¹ _ hx
+    change Multiplicative.ofAdd (u.val.inv * (u.val.val * x.toAdd)) ∈ U at h
+    rwa [← mul_assoc, u.val.inv_val, one_mul] at h
+  have ho := iff_mem a.val.1 hO u⁻¹
+  have hk := iff_mem (OrderDual.ofDual a.val.2) hK u⁻¹
+  have h := fixedStage_pullback (G := Multiplicative R) a e (d u⁻¹) ho hk
+  obtain ⟨L, hL⟩ := h
+  exact ⟨L.toContinuousLinearMap, fun f x ↦ (hL f (Multiplicative.ofAdd x)).trans
+    (congrArg (schwartzBruhatStageRealization a e f) (hd u⁻¹ (Multiplicative.ofAdd x)))⟩
+
+/-- Coordinates in a presentation detect equality after realization. -/
+private theorem fixedStage_realization_injective {G : Type*} [CommGroup G] [TopologicalSpace G]
+    (a : BruhatStructuralPair G) (e : ElementaryLCAPresentation a.quotient) :
+    Injective (schwartzBruhatStageRealization a e) := by
+  intro f k hfk
+  apply Subtype.ext
+  funext y
+  obtain ⟨x, hx⟩ := fixedStage_eval_representative a e y
+  exact (hx f).symm.trans ((congrFun hfk x.val).trans (hx k))
+
+/-- Scalar orbit continuity follows directly from continuity of the projected coordinate in the quotient. -/
+private theorem fixedStage_unitOrbit_continuous_eval {R : Type*} [CommRing R] [TopologicalSpace R]
+    [IsTopologicalRing R] (a : BruhatStructuralPair (Multiplicative R))
+    (e : ElementaryLCAPresentation a.quotient) (H : Subgroup Rˣ)
+    (hO : ∀ (u : H) (x : R), Multiplicative.ofAdd x ∈ a.val.1 →
+      Multiplicative.ofAdd (u.val.val * x) ∈ a.val.1)
+    (T : H → (SchwartzBruhatStage e →L[ℂ] SchwartzBruhatStage e))
+    (heval : ∀ (u : H) (f : SchwartzBruhatStage e) (x : R),
+        schwartzBruhatStageRealization a e (T u f) (Multiplicative.ofAdd x) =
+          schwartzBruhatStageRealization a e f (Multiplicative.ofAdd (u.val.inv * x))) :
+    ∀ (f : SchwartzBruhatStage e) y, Continuous (fun u : H ↦ T u f y) := by
+  classical
+  intro f y
+  obtain ⟨x, hx⟩ := fixedStage_eval_representative a e y
+  let p (u : H) : a.val.1 := ⟨Multiplicative.ofAdd (u.val.inv * x.val.toAdd), hO u⁻¹ _ x.property⟩
+  have hp : Continuous p := (continuous_ofAdd.comp
+    ((Units.continuous_coe_inv.comp continuous_subtype_val).mul_const x.val.toAdd)).subtype_mk _
+  have hc := (elementarySchwartz_continuous f).comp (continuous_toAdd.comp
+    (e.equiv.continuous.comp (QuotientGroup.continuous_mk.comp hp)))
+  refine hc.congr fun u ↦ ?_
+  refine Eq.trans ?_ ((heval u f x.val.toAdd).symm.trans (hx (T u f)))
+  exact (by rw [schwartzBruhatStageRealization_apply, dite_eq_left (p u).property] :
+    f (e.equiv (QuotientGroup.mk (p u))).toAdd = schwartzBruhatStageRealization a e f (p u).val)
+
+/-- A subgroup of units preserving a structural pair acts on its elementary
+Schwartz stage. The action realizes inverse-dilation, and each scalar coordinate
+of each orbit varies continuously with the unit. -/
+private theorem fixedStage_exists_unitAction {R : Type*} [CommRing R] [TopologicalSpace R]
+    [IsTopologicalRing R] (a : BruhatStructuralPair (Multiplicative R))
+    (e : ElementaryLCAPresentation a.quotient) (H : OpenSubgroup Rˣ)
+    (hs : ∀ u : H,
+      (∀ x ∈ a.val.1, Multiplicative.ofAdd (u.val.val * x.toAdd) ∈ a.val.1) ∧
+      (∀ x ∈ OrderDual.ofDual a.val.2,
+        Multiplicative.ofAdd (u.val.val * x.toAdd) ∈ OrderDual.ofDual a.val.2)) :
+    ∃ ρ : H →* (SchwartzBruhatStage e →L[ℂ] SchwartzBruhatStage e),
+      (∀ (u : H) (f : SchwartzBruhatStage e) (x : R),
+        schwartzBruhatStageRealization a e (ρ u f) (Multiplicative.ofAdd x) =
+          schwartzBruhatStageRealization a e f (Multiplicative.ofAdd (u.val.inv * x))) ∧
+      ∀ (f : SchwartzBruhatStage e) y, Continuous (fun u : H ↦ ρ u f y) := by
+  classical
+  have hO (u : H) (x : R) := (hs u).1 (Multiplicative.ofAdd x)
+  have hK (u : H) (x : R) := (hs u).2 (Multiplicative.ofAdd x)
+  choose T heval using fixedStage_unitPullback a e H.toSubgroup hO hK
+  have hinj := fixedStage_realization_injective a e
+  let ρ : H →* (SchwartzBruhatStage e →L[ℂ] SchwartzBruhatStage e) :=
+    { toFun := T
+      map_one' := by
+        apply ContinuousLinearMap.ext
+        intro f
+        apply hinj
+        funext x
+        exact (heval 1 f x.toAdd).trans (congrArg (fun y ↦
+          schwartzBruhatStageRealization a e f (Multiplicative.ofAdd y)) (one_mul x.toAdd))
+      map_mul' := by
+        intro u v
+        apply ContinuousLinearMap.ext
+        intro f
+        apply hinj
+        funext x
+        change schwartzBruhatStageRealization a e (T (u * v) f) (Multiplicative.ofAdd x.toAdd) =
+          schwartzBruhatStageRealization a e (T u (T v f)) (Multiplicative.ofAdd x.toAdd)
+        exact (heval (u*v) f x.toAdd).trans ((congrArg (fun y ↦
+          schwartzBruhatStageRealization a e f (Multiplicative.ofAdd y))
+          (mul_assoc v.val.inv u.val.inv x.toAdd)).trans ((heval v f (u.val.inv * x.toAdd)).symm.trans
+          (heval u (T v f) x.toAdd).symm)) }
+  exact ⟨ρ, heval, fixedStage_unitOrbit_continuous_eval a e H.toSubgroup hO T heval⟩
+
+/-- Every elementary Schwartz–Bruhat stage admits a compatible complete separable metric. -/
+private theorem schwartzBruhatStage_polishSpace {A : Type*} [CommGroup A] [TopologicalSpace A]
+    (e : ElementaryLCAPresentation A) :
+    PolishSpace (SchwartzBruhatStage e) := by
+  let E := SchwartzBruhatStage e
+  have hF : IsFrechetTVS E := elementarySchwartz_isFrechet
+  have : MetrizableSpace E := hF.choose_spec.2.1
+  have : CompleteSpace E := by
+    have h := hF.choose_spec.2.2
+    rwa [IsUniformAddGroup.rightUniformSpace_eq] at h
+  have := IsUniformAddGroup.uniformity_countably_generated (α := E)
+  have : SeparableSpace E := separableSpace_of_withSeminorms_of_compact_bounded
+    elementarySchwartz_withSeminorms elementarySchwartz_isCompact_of_isClosed_isVonNBounded
+  exact inferInstanceAs (PolishSpace E)
+
+private theorem unitTranslate_barrelled (G : Type*) [CommGroup G] [TopologicalSpace G]
+    [IsTopologicalGroup G] [T2Space G] [LocallyCompactSpace G] : BarrelledSpace ℂ (SchwartzBruhat G) := by
+  constructor
+  intro p hp
+  apply schwartzBruhat_continuous_seminorm p
+  intro a e
+  let : ContinuousSMul ℂ (SchwartzBruhatStage e) := elementarySchwartz_withSeminorms.continuousSMul
+  let : BarrelledSpace ℂ (SchwartzBruhatStage e) := isFrechetTVS_barrelled elementarySchwartz_isFrechet
+  exact (p.comp (schwartzBruhatStageInclusion a e)).continuous_of_lowerSemicontinuous
+    (hp.comp (continuous_schwartzBruhatStageInclusion a e))
+
+/-- Vectors with continuous orbit form a submodule. It suffices to check the stage
+inclusions, and on each stage one may restrict to an open subgroup of units. -/
+private theorem unitTranslate_orbit_of_stages {R : Type*} [CommRing R] [TopologicalSpace R]
+    [IsTopologicalRing R] [LocallyCompactSpace R] [T2Space R]
+    (hs : ∀ (a : BruhatStructuralPair (Multiplicative R))
+      (e : ElementaryLCAPresentation a.quotient) (s : SchwartzBruhatStage e),
+      ∃ H : OpenSubgroup Rˣ, Continuous fun u : H ↦ schwartzBruhatUnitTranslate u.val
+        (schwartzBruhatStageInclusion a e s)) :
+    ∀ f : SchwartzBruhat (Multiplicative R), Continuous fun u ↦ schwartzBruhatUnitTranslate u f := by
+  let B := SchwartzBruhat (Multiplicative R)
+  let T := unitTranslateEnd (R := R)
+  have hc (u : Rˣ) : Continuous (T u) := continuous_unitTranslate u
+  let P : Submodule ℂ B :=
+    { carrier := {f | Continuous fun u ↦ T u f}
+      zero_mem' := continuous_const.congr fun u ↦ ((T u).map_zero).symm
+      add_mem' := fun hf hg ↦ (Continuous.add hf hg).congr fun u ↦ ((T u).map_add _ _).symm
+      smul_mem' := fun c f hf ↦ (hf.const_smul c).congr fun u ↦ ((T u).map_smul c f).symm }
+  have hall : schwartzBruhatSubmodule (Multiplicative R) ≤
+      P.map (schwartzBruhatSubmodule (Multiplicative R)).subtype := by
+    apply iSup_le
+    intro a
+    apply iSup_le
+    intro e
+    rintro _ ⟨s, rfl⟩
+    let f : B := schwartzBruhatStageInclusion a e s
+    refine ⟨f, ?_, rfl⟩
+    obtain ⟨H, hH⟩ := hs a e s
+    have h1 : ContinuousAt (fun u : Rˣ ↦ T u f) 1 :=
+      (H.isOpen.isOpenEmbedding_subtypeVal.continuousAt_iff (x := (1 : H))).mp hH.continuousAt
+    apply continuous_iff_continuousAt.mpr
+    intro g
+    have h := h1.comp_of_eq ((continuous_const.mul continuous_id).continuousAt (x := g))
+      (inv_mul_cancel g)
+    apply ((hc g).continuousAt.comp h).congr
+    filter_upwards with x
+    change T g (T (g⁻¹ * x) f) = T x f
+    exact (DFunLike.congr_fun (T.map_mul g (g⁻¹ * x)).symm f).trans
+      (congrArg (fun y ↦ T y f) (mul_inv_cancel_left g x))
+  intro f
+  obtain ⟨v,hv,h⟩ := Submodule.mem_map.mp (hall (x := f.val) f.property)
+  exact (Subtype.ext h : v = f) ▸ hv
+
+private theorem unitTranslate_joint_of_stage_orbits {R : Type*} [CommRing R] [TopologicalSpace R]
+    [IsTopologicalRing R] [LocallyCompactSpace R] [T2Space R] [WeaklyLocallyCompactSpace Rˣ]
+    (hs : ∀ (a : BruhatStructuralPair (Multiplicative R))
+      (e : ElementaryLCAPresentation a.quotient) (s : SchwartzBruhatStage e),
+      ∃ H : OpenSubgroup Rˣ, Continuous fun u : H ↦ schwartzBruhatUnitTranslate u.val
+        (schwartzBruhatStageInclusion a e s)) :
+    Continuous fun p : Rˣ × SchwartzBruhat (Multiplicative R) ↦
+      schwartzBruhatUnitTranslate p.1 p.2 := by
+  let B := SchwartzBruhat (Multiplicative R)
+  let T := unitTranslateEnd (R := R)
+  have hc (u : Rˣ) : Continuous (T u) := continuous_unitTranslate u
+  let : T2Space (Multiplicative R) := ‹T2Space R›
+  let : LocallyCompactSpace (Multiplicative R) := ‹LocallyCompactSpace R›
+  let : BarrelledSpace ℂ B := unitTranslate_barrelled (Multiplicative R)
+  let : PolynormableSpace ℂ B := (withGeneratingSeminorms_spec _ _).toPolynormableSpace
+  let : UniformSpace B := IsTopologicalAddGroup.rightUniformSpace B
+  let : IsUniformAddGroup B := isUniformAddGroup_of_addCommGroup
+  exact continuous_family_of_orbits (fun u ↦ (⟨T u, hc u⟩ : B →L[ℂ] B))
+    (unitTranslate_orbit_of_stages hs)
+
+private theorem continuous_elementary_unitOrbit {A H : Type*} [CommGroup A] [TopologicalSpace A]
+    [Group H] [TopologicalSpace H] [IsTopologicalGroup H] [SequentialSpace H] [BaireSpace H]
+    (e : ElementaryLCAPresentation A) (ρ : H →* (SchwartzBruhatStage e →L[ℂ] SchwartzBruhatStage e))
+    (s : SchwartzBruhatStage e) (he : ∀ y, Continuous (fun u : H ↦ ρ u s y)) :
+    Continuous (fun u : H ↦ ρ u s) := by
+  let : PolishSpace (SchwartzBruhatStage e) := schwartzBruhatStage_polishSpace e
+  exact continuous_equivariant_of_continuous_injective_comp (fun u : H ↦ ρ u s)
+    (fun b y ↦ ρ b y) (fun b ↦ (ρ b).continuous)
+    (fun b h ↦ DFunLike.congr_fun (ρ.map_mul b h).symm s)
+    (fun f : SchwartzBruhatStage e ↦ f.val) (continuous_pi (fixedStage_continuous_eval e))
+    Subtype.val_injective (continuous_pi he)
+
+/-- On the open stabilizer of a stage the orbit has continuous scalar evaluations.
+Automatic continuity upgrades this to continuity in the Polish stage topology;
+barrelledness then gives joint continuity of unit translation. -/
+private theorem unitTranslate_joint {R : Type*} [CommRing R] [TopologicalSpace R]
+    [IsTopologicalRing R] [LocallyCompactSpace R] [T2Space R] [FirstCountableTopology Rˣ]
+    [LocallyCompactSpace Rˣ] : Continuous fun p : Rˣ × SchwartzBruhat (Multiplicative R) ↦
+      schwartzBruhatUnitTranslate p.1 p.2 := by
+  apply unitTranslate_joint_of_stage_orbits
+  intro a e s
+  obtain ⟨H, hs⟩ := exists_open_unit_stabilizer a e
+  have A := fixedStage_exists_unitAction (R := R) a e H hs
+  let ρ := A.choose
+  have hr := A.choose_spec.1
+  have he := A.choose_spec.2
+  let : LocallyCompactSpace H := H.isOpen.isOpenEmbedding_subtypeVal.locallyCompactSpace
+  let : IsTopologicalGroup H := inferInstanceAs (IsTopologicalGroup H.toSubgroup)
+  have hρ := continuous_elementary_unitOrbit e ρ s (he s)
+  refine ⟨H, ((continuous_schwartzBruhatStageInclusion a e).comp hρ).congr fun u ↦ ?_⟩
+  exact Subtype.ext (funext fun x ↦ hr u s x.toAdd)
+
+private theorem sLocalHomogeneous_unitTranslate_joint :
+    Continuous fun p : (SAdeleRing F S)ˣ × ℬₛ(S) ↦ schwartzBruhatUnitTranslate p.1 p.2 := by
+  let (v : S) : ProperSpace (v.val.adicCompletion F) := properSpace_adicCompletion v.val
+  let : LocallyCompactSpace (SAdeleRing F S) :=
+    inferInstanceAs (LocallyCompactSpace (InfiniteAdeleRing F × ((v : S) → v.val.adicCompletion F)))
+  let : T2Space (SAdeleRing F S) := inferInstanceAs (T2Space (((w : InfinitePlace F) → w.Completion) ×
+    ((v : S) → v.val.adicCompletion F)))
+  let : FirstCountableTopology (SAdeleRing F S) := inferInstanceAs (FirstCountableTopology
+    (((w : InfinitePlace F) → w.Completion) × ((v : S) → v.val.adicCompletion F)))
+  let : FirstCountableTopology (SAdeleRing F S)ˣ := (sIdeleGroup_description F S).1.firstCountableTopology
+  let : LocallyCompactSpace (SAdeleRing F S)ˣ := (sIdeleGroup_description F S).2.2.1
+  exact unitTranslate_joint
+
+end
+
+private theorem sLocalTheta_translate_onClasses (g : (SAdeleRing F S)ˣ)
+    (f : SchwartzBruhat (Multiplicative (SAdeleRing F S))) (x : SIdeleQuotient F S) :
+    sLocalAdelicThetaOnClasses F S (schwartzBruhatUnitTranslate g f) x =
+      sLocalAdelicThetaOnClasses F S f ((QuotientGroup.mk g)⁻¹ * x) := by
+  induction x using QuotientGroup.induction_on with | H x =>
+    have hx : ((QuotientGroup.mk g : SIdeleQuotient F S)⁻¹ * QuotientGroup.mk x) =
+        QuotientGroup.mk (g⁻¹ * x) := by
+      change (QuotientGroup.mk' _) g ⁻¹ * (QuotientGroup.mk' _) x = _
+      exact (map_mul (QuotientGroup.mk' _) _ _).symm
+    rw [hx]
+    exact (sLocalAdelicThetaOnClasses_mk F S _ _).trans
+      ((localTheta_translate_apply g x f).trans (sLocalAdelicThetaOnClasses_mk F S f _).symm)
+
+private theorem sLocalHomogeneousTheta_translate_apply (χ : PontryaginDual (MonoidHom.ker (sIdeleQuotientNorm F S)))
+    (g : (SAdeleRing F S)ˣ) (f : SchwartzBruhat (Multiplicative (SAdeleRing F S)))
+    (x : SIdeleQuotient F S) :
+    sLocalHomogeneousAdelicThetaLinearMap F S χ (schwartzBruhatUnitTranslate g f) x =
+      sLocalHomogeneousAdelicThetaLinearMap F S χ f ((QuotientGroup.mk g)⁻¹ * x) := by
+  calc
+    _ = ∫ h : (sIdeleQuotientNorm F S).ker,
+        sLocalAdelicThetaOnClasses F S (schwartzBruhatUnitTranslate g f) (x * h.val) * (χ h : ℂ)
+        ∂sLocalNormOneQuotientMeasure F S := sLocalHomogeneousAdelicThetaLinearMap_apply χ _ _
+    _ = ∫ h : (sIdeleQuotientNorm F S).ker,
+        sLocalAdelicThetaOnClasses F S f (((QuotientGroup.mk g)⁻¹ * x) * h.val) * (χ h : ℂ)
+        ∂sLocalNormOneQuotientMeasure F S := ?_
+    _ = _ := (sLocalHomogeneousAdelicThetaLinearMap_apply χ _ _).symm
+  apply integral_congr_ae
+  filter_upwards with h
+  exact congrArg (fun z : ℂ ↦ z * (χ h : ℂ))
+    ((sLocalTheta_translate_onClasses g f (x * h.val)).trans (congrArg (sLocalAdelicThetaOnClasses F S f)
+      (show ((QuotientGroup.mk g : SIdeleQuotient F S)⁻¹ * (x * h.val)) =
+        ((QuotientGroup.mk g : SIdeleQuotient F S)⁻¹ * x) * h.val from
+          (mul_assoc ((QuotientGroup.mk g : SIdeleQuotient F S)⁻¹) x h.val).symm)))
+
 /-- Paper: Theorem 5.2.3.1(1), p. 233.
 The S-idele quotient acts jointly continuously on each homogeneous theta quotient.
 Translation by a representative induces the action on its test-function class. -/
@@ -441,7 +915,23 @@ theorem existsUnique_sLocalHomogeneousThetaAction (χ : PontryaginDual (J₁(S))
       Continuous (fun p : Jₛ(S) × Θₛω(S, χ) ↦ ρ p.1 p.2) ∧
       ∀ (g : (SAdeleRing F S)ˣ) (f : ℬₛ(S)),
         ρ (QuotientGroup.mk g) ((Kₛω(S, χ)).mkQ f) =
-          (Kₛω(S, χ)).mkQ (schwartzBruhatUnitTranslate g f) := by sorry
+          (Kₛω(S, χ)).mkQ (schwartzBruhatUnitTranslate g f) := by
+  let N := Subgroup.map (Units.map ((adeleProjection F S).comp (integralAdelesOutside F S).subtype).toMonoidHom)
+    (MonoidHom.range (Units.map (integralAdeleDiagonal F S).toMonoidHom))
+  let θ := sLocalHomogeneousAdelicThetaLinearMap F S χ
+  let Tt := unitTranslateEnd (R := SAdeleRing F S)
+  let t := schwartzBruhatUnitTranslate (R := SAdeleRing F S)
+  let r (g : (SAdeleRing F S)ˣ) (a : Jₛ(S)) := (QuotientGroup.mk g : Jₛ(S))⁻¹ * a
+  have ht : ∀ g f, Tt g f = t g f := fun _ _ ↦ rfl
+  have hr : ∀ g f a, θ (t g f) a = θ f (r g a) := sLocalHomogeneousTheta_translate_apply χ
+  have hN (g : (SAdeleRing F S)ˣ) (hg : g ∈ N) (f : ℬₛ(S)) (a : Jₛ(S)) :
+      θ f (r g a) = θ f a := by
+    have h : (QuotientGroup.mk g : (SAdeleRing F S)ˣ ⧸ N) = 1 := (QuotientGroup.eq_one_iff g).mpr hg
+    exact congrArg (θ f) ((congrArg (fun b : Jₛ(S) ↦ b⁻¹ * a) h).trans (by simp only [inv_one, one_mul]))
+  have result := thetaAction_of_translate (G := (SAdeleRing F S)ˣ) (E := ℬₛ(S)) (A := Jₛ(S))
+    N θ Tt t ht sLocalHomogeneous_unitTranslate_joint r hr hN
+  simp only [Submodule.mkQ_apply]
+  with_reducible exact result
 
 /-- Paper: Theorem 5.2.3.1(1), p. 233.
 The homogeneous transition intertwines the descended actions on theta classes.
