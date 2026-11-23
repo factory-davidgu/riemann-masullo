@@ -60,7 +60,10 @@ def introTraceTest (χ : U𝔽) (h : ℝ → ℂ) (g : C𝔽) : ℂ :=
 test by the conjugate character value on that class. -/
 theorem introTraceTest_mul_normOne (χ : U𝔽) (h : ℝ → ℂ)
     (g : C𝔽) (u : (ideleClassNorm F).ker) :
-    introTraceTest χ h (g * u.val) = star (χ u.val : ℂ) * introTraceTest χ h g := by sorry
+    introTraceTest χ h (g * u.val) = star (χ u.val : ℂ) * introTraceTest χ h g := by
+  have hu : ideleClassNorm F u.val = 1 := u.property
+  simp only [introTraceTest, map_mul, hu, mul_one, Circle.coe_mul, star_mul]
+  ac_rfl
 
 /-- Paper: §1.4.1, p. 28. Mathlib's Mellin moment of the radial profile uses the
 positive norm coordinate with Haar density `dt/t`. -/
@@ -119,7 +122,24 @@ def introTracePrimePower (χ : U𝔽) (h : ℝ → ℂ) (v : V) (k : ℕ) : ℂ 
 character have coefficient `log(q)/sqrt(q)`. -/
 theorem introTracePrimePower_one_first (h : ℝ → ℂ) (v : V) :
     introTracePrimePower (1 : U𝔽) h v 0 =
-      (Real.log q(v) : ℂ) * (h q(v) + h (q(v)⁻¹)) / (q(v) : ℂ) ^ (1 / 2 : ℂ) := by sorry
+      (Real.log q(v) : ℂ) * (h q(v) + h (q(v)⁻¹)) / (q(v) : ℂ) ^ (1 / 2 : ℂ) := by
+  classical
+  have htriv : ideleClassNormTwist (1 : U𝔽) 0 = 1 := by
+    ext1 g
+    change (1 : ℂ) * _ ^ (0 : ℂ) = 1
+    simp
+  have hunit (u : (v.adicCompletion F)ˣ) :
+      (1 : HeckeCharacter (𝓞 F) F).restrict v u = 1 := by
+    rw [HeckeCharacter.restrict, MulChar.ofUnitHom_coe]
+    rfl
+  have hur : (1 : HeckeCharacter (𝓞 F) F).IsUnramifiedAt v :=
+    HeckeCharacter.isUnramifiedAt_iff.mpr fun x ↦
+      hunit (Units.map (v.adicCompletionIntegers F).subtype.toMonoidHom x)
+  let val : Valuation (v.adicCompletion F) (WithZero (Multiplicative ℤ)) := Valued.v
+  let u := Units.mk0 (val.exists_isUniformizer_of_isCyclic_of_nontrivial.choose : v.adicCompletion F)
+    val.exists_isUniformizer_of_isCyclic_of_nontrivial.choose_spec.ne_zero
+  have hv : (1 : HeckeCharacter (𝓞 F) F).localValue v = 1 := hunit u
+  simp [introTracePrimePower, htriv, hur, hv]
 
 /-- Paper: §1.4.1, p. 28. The spectral side sums the full zero orders in the
 selected character and the open window centered at one half. -/
@@ -132,7 +152,10 @@ theorem introTraceSpectralSum_eq_single (χ : U𝔽) (h : ℝ → ℂ) (a : ℝ)
     (_hρ : 0 < zeroOrder(χ, ρ) ∧ |ρ.re - 1 / 2| < a)
     (_honly : ∀ w : windowZeros(χ, a), w.val = ρ) :
     introTraceSpectralSum χ h a =
-      (zeroOrder(χ, ρ) : ℂ) * introTraceMellin h (ρ - 1 / 2) := by sorry
+      (zeroOrder(χ, ρ) : ℂ) * introTraceMellin h (ρ - 1 / 2) := by
+  let w : windowZeros(χ, a) := ⟨ρ, _hρ⟩
+  unfold introTraceSpectralSum
+  exact tsum_eq_single w fun v hv ↦ (hv (Subtype.ext (_honly v))).elim
 
 open Classical in
 /-- Paper: §1.4.1, p. 28. In a single isotype, the local terms equal the

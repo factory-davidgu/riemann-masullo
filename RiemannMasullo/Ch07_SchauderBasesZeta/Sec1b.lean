@@ -6,7 +6,10 @@ public import RiemannMasullo.Ch05_ThetaZSpaces.Sec2
 public import Mathlib.NumberTheory.NumberField.DirichletDensity
 public import Mathlib.RingTheory.RamificationInertia.Inertia
 public import Mathlib.RingTheory.RamificationInertia.Ramification
+import RiemannMasullo.Ch06_LocalGlobal.Sec3
 import Mathlib.Analysis.Complex.LocallyUniformLimit
+import RiemannMasullo.ForMathlib.Analysis.LocallyConvex.Barrelled
+import RiemannMasullo.ForMathlib.Analysis.LocallyConvex.Bounded
 import RiemannMasullo.ForMathlib.Analysis.SpecialFunctions.Pow.Complex
 import RiemannMasullo.ForMathlib.NumberTheory.NumberField.Completion.FinitePlace
 
@@ -1214,7 +1217,35 @@ theorem exists_globalPolarThetaMellin (χ : U𝔽) (τ : ℝ≥0ˣ →ₜ* I𝔽
       (Z (Submodule.Quotient.mk f)).val s =
         homogeneousThetaMellinIntegral τ ω f.val (ideleClassNormTwist χ s) ∧
       (Z (Submodule.Quotient.mk f)).val s =
-        globalIdelicZFunction f.val (ideleClassNormTwist χ s) := by sorry
+        globalIdelicZFunction f.val (ideleClassNormTwist χ s) := by
+  intro ω P T
+  -- The polar section integral is entire, so it is already its own continuation.
+  have hM (f : P) : (fun s ↦ homogeneousThetaMellinIntegral τ ω f.val (ideleClassNormTwist χ s)) =
+      (fun s ↦ globalIdelicZFunction f.val (ideleClassNormTwist χ s)) := by
+    have h := homogeneousThetaMellinIntegral_entire_on_component τ ω f.val _hτ
+      (Or.inl f.property) χ (fun _ ↦ rfl)
+    exact (homogeneousThetaMellinIntegral_meromorphicContinuation τ ω f.val _hτ χ
+      (fun _ ↦ rfl) _).mp ⟨fun s _ ↦ (h.analyticAt s).meromorphicNFAt, fun _ _ ↦ rfl⟩
+  -- On the trivial component use the pole-free converse theorem. On every other
+  -- component restrict the transform on the full homogeneous quotient to polar tests.
+  have hex : ∃ M : P →L[ℂ] Aℂ, T.ker ≤ M.ker ∧
+      ∀ (f : P) (s : ℂ), (M f).val s = globalIdelicZFunction f.val (ideleClassNormTwist χ s) := by
+    by_cases hω : ω = 1
+    · have ht := (globalConverse_existsUnique_normTwist χ hω).exists
+      refine (globalConverse_normTwist χ ht.choose ht.choose_spec).elim fun M h ↦ ?_
+      refine ⟨M, ?_, h.2.2.1⟩
+      exact (congrArg (fun ψ ↦ (homogeneousAdelicThetaLinearMap F ψ).ker.comap P.subtype)
+        hω).le.trans h.2.2.2.2.ge
+    · refine (globalConverse_nontrivial χ hω).elim fun B h ↦ ?_
+      let K := (homogeneousAdelicThetaLinearMap F ω).ker
+      refine ⟨B.comp (K.mkQL.comp P.subtypeL), ?_, fun f s ↦ h.2.1 f.val s⟩
+      intro f hf
+      change B (K.mkQ f.val) = 0
+      exact (congrArg B ((Submodule.Quotient.mk_eq_zero K).mpr hf)).trans B.map_zero
+  refine hex.elim fun M h ↦ ?_
+  refine ⟨T.ker.liftQL M h.1, fun f s ↦ ?_⟩
+  change (M f).val s = _ ∧ (M f).val s = _
+  exact ⟨(h.2 f s).trans (congrFun (hM f) s).symm, h.2 f s⟩
 
 /-- Paper: §7.1.4, p. 326.
 The entire functions in the compact-open continuous function algebra are closed under
@@ -1539,10 +1570,73 @@ def schwartzBergmanDivisible (g : Entire) : Submodule ℂ Aℂ :=
   ((Ideal.span ({g} : Set Entire)).restrictScalars ℂ).comap
     schwartzBergmanEntireInclusion.toLinearMap
 
+/-- An entire function is divisible by `g` exactly when it vanishes to at least the order of
+`g` at every point. In that case the normalized quotient gives an entire factor. -/
+private theorem schwartzBergmanDivisible_isClosed_dvd (g f : Entire) :
+    g ∣ f ↔ ∀ z, analyticOrderAt (g.val : ℂ → ℂ) z ≤ analyticOrderAt (f.val : ℂ → ℂ) z := by
+  have ha (a : Entire) (z : ℂ) : AnalyticAt ℂ (a.val : ℂ → ℂ) z :=
+    (show Differentiable ℂ a.val from a.property).analyticAt z
+  constructor
+  · rintro ⟨k, rfl⟩ z
+    change _ ≤ analyticOrderAt ((g.val : ℂ → ℂ) * (k.val : ℂ → ℂ)) z
+    rw [analyticOrderAt_mul (ha g z) (ha k z)]
+    exact self_le_add_right _ _
+  · intro hord
+    let q := (f.val : ℂ → ℂ) / (g.val : ℂ → ℂ)
+    have hq : MeromorphicOn q univ := fun z _ ↦ (ha f z).meromorphicAt.div (ha g z).meromorphicAt
+    have hdiff : Differentiable ℂ (toMeromorphicNFOn q univ) := by
+      intro z
+      apply AnalyticAt.differentiableAt
+      have hnf := meromorphicNFOn_toMeromorphicNFOn q univ (mem_univ z)
+      apply hnf.meromorphicOrderAt_nonneg_iff_analyticAt.mp
+      rw [meromorphicOrderAt_toMeromorphicNFOn hq (mem_univ z),
+        meromorphicOrderAt_div (ha f z).meromorphicAt (ha g z).meromorphicAt,
+        (ha f z).meromorphicOrderAt_eq, (ha g z).meromorphicOrderAt_eq]
+      have hle := hord z
+      generalize analyticOrderAt (f.val : ℂ → ℂ) z = m at hle ⊢
+      generalize analyticOrderAt (g.val : ℂ → ℂ) z = n at hle ⊢
+      cases m using ENat.recTopCoe with
+      | top => simp
+      | coe m =>
+        cases n using ENat.recTopCoe with
+        | top => simp at hle
+        | coe n =>
+          exact WithTop.coe_le_coe.mpr (sub_nonneg.mpr (by exact_mod_cast hle : (n : ℤ) ≤ m))
+    refine ⟨⟨⟨_, hdiff.continuous⟩, hdiff⟩, Subtype.ext (ContinuousMap.ext fun z ↦ ?_)⟩
+    change f.val z = g.val z * toMeromorphicNFOn q univ z
+    by_cases hz : g.val z = 0
+    · have hpos := lt_of_lt_of_le (pos_iff_ne_zero.mpr ((ha g z).analyticOrderAt_ne_zero.mpr hz))
+          (hord z)
+      rw [hz, zero_mul]
+      exact (ha f z).analyticOrderAt_ne_zero.mp hpos.ne'
+    · rw [toMeromorphicNFOn_eq_toMeromorphicNFAt hq (mem_univ z),
+        toMeromorphicNFAt_eq_self.mpr ((ha f z).div (ha g z) hz).meromorphicNFAt]
+      exact (mul_div_cancel₀ _ hz).symm
+
+/-- A principal ideal of entire functions is the intersection of its vanishing jet kernels. -/
+private theorem schwartzBergmanDivisible_isClosed_span (g : Entire) :
+    IsClosed (Ideal.span ({g} : Set Entire) : Set Entire) := by
+  have heq : (Ideal.span ({g} : Set Entire) : Set Entire) =
+      ⋂ (z : ℂ) (n : ℕ) (_ : (n : ℕ∞) ≤ analyticOrderAt (g.val : ℂ → ℂ) z)
+        (i : ℕ) (_ : i < n), ((entireJet z i).ker : Set Entire) := by
+    ext f
+    simp only [SetLike.mem_coe, Ideal.mem_span_singleton,
+      schwartzBergmanDivisible_isClosed_dvd, mem_iInter, LinearMap.mem_ker,
+      ContinuousLinearMap.coe_coe, entireJet_apply]
+    apply forall_congr'
+    intro z
+    rw [← ENat.forall_natCast_le_iff_le]
+    simp_rw [natCast_le_analyticOrderAt_iff_iteratedDeriv_eq_zero
+      ((show Differentiable ℂ f.val from f.property).analyticAt z)]
+  rw [heq]
+  exact isClosed_iInter fun z ↦ isClosed_iInter fun n ↦ isClosed_iInter fun _ ↦
+    isClosed_iInter fun i ↦ isClosed_iInter fun _ ↦ (entireJet z i).isClosed_ker
+
 /-- Paper: Theorem 7.1.4.2(2), pp. 326–328. Divisibility defines a closed subspace,
 so its quotient with the Schwartz–Bergman quotient topology is Hausdorff. -/
 theorem schwartzBergmanDivisible_isClosed (g : Entire) :
-    IsClosed (schwartzBergmanDivisible g : Set Aℂ) := by sorry
+    IsClosed (schwartzBergmanDivisible g : Set Aℂ) :=
+  (schwartzBergmanDivisible_isClosed_span g).preimage schwartzBergmanEntireInclusion.continuous
 
 /-- Paper: Theorem 7.1.4.2(2), pp. 326–327 and Theorem 7.1.4.3(2), p. 331.
 Restriction to Schwartz–Bergman functions induces an injective map with dense image
@@ -1592,7 +1686,32 @@ theorem schwartzBergman_normalizedJets :
     let jets := fun i : {z : ℂ // z.re ∈ Icc 0 1} × ℕ ↦
       (i.2.factorial : ℂ)⁻¹ • (entireJet i.1.val i.2).comp schwartzBergmanEntireInclusion
     Equicontinuous (fun i (f : Aℂ) ↦ jets i f) ∧
-      Bornology.IsVonNBounded ℂ (range jets) := by sorry
+      Bornology.IsVonNBounded ℂ (range jets) := by
+  intro jets
+  have hb (f : Aℂ) : Bornology.IsVonNBounded ℂ (range fun i ↦ jets i f) := by
+    rw [NormedSpace.isVonNBounded_iff, isBounded_iff_forall_norm_le]
+    -- The unit circles about all jet centers lie in the same enlarged strip.
+    obtain ⟨M, hM⟩ := f.property.2.2 (-1) 2 (by norm_num) (subset_univ _) 0
+    refine ⟨M, forall_mem_range.mpr ?_⟩
+    rintro ⟨⟨z, hz⟩, m⟩
+    let g := schwartzBergmanEntireInclusion f
+    have hcircle (w : ℂ) (hw : w ∈ Metric.sphere z 1) : ‖g.val w‖ ≤ M := by
+      have hd := (Complex.abs_re_le_norm (w - z)).trans
+        (mem_closedBall_iff_norm.mp (Metric.sphere_subset_closedBall hw))
+      rw [Complex.sub_re, abs_le] at hd
+      have hs : w.re ∈ Icc (-1 : ℝ) 2 := ⟨by linarith [hd.1, hz.1], by linarith [hd.2, hz.2]⟩
+      simpa only [g, schwartzBergmanEntireInclusion_apply, pow_zero, one_mul] using hM ⟨w, hs, rfl⟩
+    have hd : Differentiable ℂ (g.val : ℂ → ℂ) := g.property
+    have h := Complex.norm_iteratedDeriv_le_of_forall_mem_sphere_norm_le m one_pos
+      hd.diffContOnCl hcircle
+    change ‖(m.factorial : ℂ)⁻¹ * iteratedDeriv m (g.val : ℂ → ℂ) z‖ ≤ M
+    rw [norm_mul, norm_inv, Complex.norm_natCast, inv_mul_le_iff₀ (by positivity)]
+    simpa only [one_pow, div_one] using h
+  have hF := schwartzBergman_frechet univ isOpen_univ inferInstance univ_nonempty
+  let : BarrelledSpace ℂ Aℂ := isFrechetTVS_barrelled hF
+  obtain ⟨_, _, hm, hc⟩ := hF
+  exact ⟨(PolynormableSpace.banach_steinhaus hb).equicontinuous,
+    isVonNBounded_range_clm_of_pointwise jets hb⟩
 
 -- TODO(paper-gap): Theorem 7.1.4.3(1) misses collisions across rational primes.
 -- At s = 0 for the trivial character of ℚ with 2 and 3 removed, the orbital
