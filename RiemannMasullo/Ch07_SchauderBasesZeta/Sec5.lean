@@ -243,12 +243,126 @@ theorem strongCoprimality (χ : U) (S : Finset V)
       ∀ x : StrongCoprimalityThetaSpace ω,
         e (Submodule.Quotient.mk x) = Submodule.Quotient.mk (j x) := by sorry
 
+private theorem strongCoprimalityDenominator_insert_le_conj_left {E G N : Type*} [AddCommGroup E]
+    [Module ℂ E] [TopologicalSpace E] [AddCommGroup G] [Module ℂ G] [TopologicalSpace G]
+    [AddCommGroup N] [Module ℂ N] [TopologicalSpace N]
+    (e : InductiveTensor E G ≃L[ℂ] N) (T₁ Q R : G →ₗ[ℂ] G) (h : T₁ = Q.comp R) :
+    e.toLinearMap.comp ((TensorProduct.map (LinearMap.id : E →ₗ[ℂ] E) T₁).comp
+      e.symm.toLinearMap) =
+    (e.toLinearMap.comp ((TensorProduct.map (LinearMap.id : E →ₗ[ℂ] E) Q).comp
+      e.symm.toLinearMap)).comp
+    (e.toLinearMap.comp ((TensorProduct.map (LinearMap.id : E →ₗ[ℂ] E) R).comp
+      e.symm.toLinearMap)) := by
+  subst h
+  refine LinearMap.ext fun x ↦ ?_
+  have h := LinearMap.congr_fun (TensorProduct.map_comp (R := ℂ)
+    (LinearMap.id : E →ₗ[ℂ] E) Q (LinearMap.id : E →ₗ[ℂ] E) R) (e.symm x)
+  rw [LinearMap.id_comp] at h
+  exact congrArg e (h.trans (congrArg (TensorProduct.map (LinearMap.id : E →ₗ[ℂ] E) Q)
+    (e.symm_apply_apply _).symm))
+
+open scoped TensorProduct in
+private theorem strongCoprimalityDenominator_insert_le_piMap {ι : Type*} [Fintype ι] {M : ι → Type*}
+    [∀ i, AddCommGroup (M i)] [∀ i, Module ℂ (M i)] {p₁ p₂ p₃ : ι → Prop}
+    {d₁ : ∀ i, Decidable (p₁ i)} {d₂ : ∀ i, Decidable (p₂ i)} {d₃ : ∀ i, Decidable (p₃ i)}
+    {T : ∀ i, M i →ₗ[ℂ] M i} (h : ∀ i, (p₁ i ↔ p₂ i ∨ p₃ i) ∧ ¬ (p₂ i ∧ p₃ i)) :
+    (PiTensorProduct.map (fun i ↦ if p₁ i then T i else LinearMap.id) :
+        FinestLocallyConvex (⨂[ℂ] i, M i) →ₗ[ℂ] FinestLocallyConvex (⨂[ℂ] i, M i)) =
+      (PiTensorProduct.map (fun i ↦ if p₂ i then T i else LinearMap.id) :
+        FinestLocallyConvex (⨂[ℂ] i, M i) →ₗ[ℂ] FinestLocallyConvex (⨂[ℂ] i, M i)).comp
+      (PiTensorProduct.map (fun i ↦ if p₃ i then T i else LinearMap.id) :
+        FinestLocallyConvex (⨂[ℂ] i, M i) →ₗ[ℂ] FinestLocallyConvex (⨂[ℂ] i, M i)) := by
+  have hf : (fun i ↦ if p₁ i then T i else LinearMap.id) = fun i ↦
+      (if p₂ i then T i else LinearMap.id) ∘ₗ (if p₃ i then T i else LinearMap.id) := by
+    funext i
+    obtain ⟨h1, h23⟩ := h i
+    by_cases a : p₂ i <;> by_cases b : p₃ i
+    · exact absurd ⟨a, b⟩ h23
+    · rw [ite_eq_left (h1.mpr (Or.inl a)), ite_eq_left a, ite_eq_right b, LinearMap.comp_id]
+    · rw [ite_eq_left (h1.mpr (Or.inr b)), ite_eq_right a, ite_eq_left b, LinearMap.id_comp]
+    · rw [ite_eq_right (fun c ↦ (h1.mp c).elim a b), ite_eq_right a, ite_eq_right b, LinearMap.id_comp]
+  exact (congrArg PiTensorProduct.map hf).trans (PiTensorProduct.map_comp _ _)
+
+open Classical in
+private theorem strongCoprimalityDenominator_insert_le_sPV {S' S₁ S₂ S₃ : Finset V}
+    (h₁ : S₁ ⊆ S') (h₂ : S₂ ⊆ S') (h₃ : S₃ ⊆ S')
+    (h : ∀ w ∈ S', (w ∈ S₁ ↔ w ∈ S₂ ∨ w ∈ S₃) ∧ ¬ (w ∈ S₂ ∧ w ∈ S₃)) :
+    sAdelePrincipalValue F h₁ = (sAdelePrincipalValue F h₂).comp (sAdelePrincipalValue F h₃) := by
+  unfold sAdelePrincipalValue
+  exact strongCoprimalityDenominator_insert_le_conj_left _ _ _ _ (strongCoprimalityDenominator_insert_le_piMap fun w ↦ h w.val w.2)
+
+open scoped TensorProduct in
+private theorem strongCoprimalityDenominator_insert_le_conj_right {E G N : Type*} [AddCommGroup E]
+    [Module ℂ E] [TopologicalSpace E] [AddCommGroup G] [Module ℂ G] [TopologicalSpace G]
+    [AddCommGroup N] [Module ℂ N] [TopologicalSpace N]
+    (e : InductiveTensor E G ≃L[ℂ] N) (T₁ Q R : E →ₗ[ℂ] E) (L₁ L₂ L₃ : N →ₗ[ℂ] N)
+    (h : T₁ = Q.comp R) (hA : ∀ f g, L₁ (e (f ⊗ₜ[ℂ] g)) = e (T₁ f ⊗ₜ[ℂ] g))
+    (hB : ∀ f g, L₂ (e (f ⊗ₜ[ℂ] g)) = e (Q f ⊗ₜ[ℂ] g))
+    (hC : ∀ f g, L₃ (e (f ⊗ₜ[ℂ] g)) = e (R f ⊗ₜ[ℂ] g)) :
+    L₁ = L₂.comp L₃ := by
+  have key : L₁.comp (e.toLinearMap : E ⊗[ℂ] G →ₗ[ℂ] N) =
+      (L₂.comp L₃).comp (e.toLinearMap : E ⊗[ℂ] G →ₗ[ℂ] N) := by
+    refine TensorProduct.ext' fun f g ↦ ?_
+    change L₁ (e (f ⊗ₜ[ℂ] g)) = L₂ (L₃ (e (f ⊗ₜ[ℂ] g)))
+    rw [hA, hC, hB, h]
+    rfl
+  refine LinearMap.ext fun x ↦ ?_
+  have hx := LinearMap.congr_fun key (e.symm x)
+  change L₁ (e (e.symm x)) = L₂ (L₃ (e (e.symm x))) at hx
+  rwa [e.apply_symm_apply] at hx
+
+private theorem strongCoprimalityDenominator_insert_le_PV {S' S₁ S₂ S₃ : Finset V}
+    (h₁ : S₁ ⊆ S') (h₂ : S₂ ⊆ S') (h₃ : S₃ ⊆ S')
+    (hs : sAdelePrincipalValue F h₁ = (sAdelePrincipalValue F h₂).comp (sAdelePrincipalValue F h₃)) :
+    adelePrincipalValue F S₁ = (adelePrincipalValue F S₂).comp (adelePrincipalValue F S₃) :=
+  strongCoprimalityDenominator_insert_le_conj_right (sAdeleTailSchwartz_inductiveTensor_equiv F S').choose _ _ _ _ _ _ hs
+    (fun f g ↦ adelePrincipalValue_tmul h₁ f g) (fun f g ↦ adelePrincipalValue_tmul h₂ f g)
+    (fun f g ↦ adelePrincipalValue_tmul h₃ f g)
+
+private theorem strongCoprimalityDenominator_insert_le_span_le {M X Y : Type*} [AddCommGroup M] [Module ℂ M]
+    (a : X → M) (b : Y → M) (h : ∀ x, ∃ y, a x = b y) :
+    Submodule.span ℂ (range a) ≤ Submodule.span ℂ (range b) :=
+  Submodule.span_mono (by rintro _ ⟨x, rfl⟩; obtain ⟨y, hy⟩ := h x; exact ⟨y, hy.symm⟩)
+
+private theorem strongCoprimalityDenominator_insert_le_final {E M : Type*} [AddCommGroup E]
+    [Module ℂ E] [AddCommGroup M] [Module ℂ M] (W : Submodule ℂ E) (π : W → M)
+    (L₁ L₂ L₃ : E →ₗ[ℂ] E) (hABC : L₁ = L₂.comp L₃)
+    (hA : ∀ f : W, L₁ f.val ∈ W) (hB : ∀ f : W, L₂ f.val ∈ W) (hC : ∀ f : W, L₃ f.val ∈ W) :
+    Submodule.span ℂ (range fun f : W ↦ π ⟨L₁ f.val, hA f⟩) ≤
+      Submodule.span ℂ (range fun f : W ↦ π ⟨L₂ f.val, hB f⟩) :=
+  strongCoprimalityDenominator_insert_le_span_le _ _ fun f ↦
+    ⟨⟨L₃ f.val, hC f⟩, congrArg π (Subtype.ext (LinearMap.congr_fun hABC f.val))⟩
+
 open Classical in
 /-- Paper: Equation (7.5.0.4), p. 375.
 Adding one place shrinks the image of principal value, so its image is a submodule
 of the image for the original set of places. -/
 theorem strongCoprimalityDenominator_insert_le (ω : PontryaginDual C₁) (S : Finset V) (v : V) :
-    strongCoprimalityDenominator ω (insert v S) ≤ strongCoprimalityDenominator ω S := by sorry
+    strongCoprimalityDenominator ω (insert v S) ≤ strongCoprimalityDenominator ω S := by
+  have hPV : ∃ C : _ →ₗ[ℂ] _,
+      adelePrincipalValue F (insert v S) = (adelePrincipalValue F S).comp C ∧
+      ∀ f : P, C f.val ∈ P := by
+    by_cases hv : v ∈ S
+    · exact ⟨LinearMap.id, (congrArg (adelePrincipalValue F) (Finset.insert_eq_of_mem hv)).trans
+        (LinearMap.comp_id _).symm, fun f ↦ f.2⟩
+    · have hdis : ∀ w ∈ insert v S, (w ∈ insert v S ↔ w ∈ S ∨ w ∈ ({v} : Finset V)) ∧
+          ¬ (w ∈ S ∧ w ∈ ({v} : Finset V)) := fun w _ ↦
+        ⟨by rw [Finset.mem_insert, Finset.mem_singleton, or_comm], fun ⟨a, b⟩ ↦
+          hv (Finset.mem_singleton.mp b ▸ a)⟩
+      have h₁ : insert v S ⊆ insert v S := Finset.Subset.refl _
+      have h₂ : S ⊆ insert v S := Finset.subset_insert v S
+      have h₃ : ({v} : Finset V) ⊆ insert v S :=
+        Finset.singleton_subset_iff.mpr (Finset.mem_insert_self v S)
+      have hs := strongCoprimalityDenominator_insert_le_sPV (F := F) h₁ h₂ h₃ hdis
+      have hPV := strongCoprimalityDenominator_insert_le_PV h₁ h₂ h₃ hs
+      exact ⟨adelePrincipalValue F {v}, hPV, strongCoprimalityPrincipalValue_mem_polar {v}⟩
+  obtain ⟨C, hC, hCP⟩ := hPV
+  unfold strongCoprimalityDenominator
+  have key := strongCoprimalityDenominator_insert_le_final (P)
+    (Submodule.Quotient.mk : _ → StrongCoprimalityThetaSpace ω) _ _ C hC
+    (strongCoprimalityPrincipalValue_mem_polar (insert v S))
+    (strongCoprimalityPrincipalValue_mem_polar S) hCP
+  with_reducible_and_instances exact key
 
 open Classical in
 /-- Paper: Equation (7.5.0.4), p. 375.

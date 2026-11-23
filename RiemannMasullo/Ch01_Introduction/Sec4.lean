@@ -256,7 +256,94 @@ theorem introTraceApprox_tendsto (h ρ : ℕ → ℝ → ℝ)
 depends holomorphically on the complex parameter. -/
 theorem introTraceApprox_differentiable (h ρ : ℕ → ℝ → ℝ)
     (_hA : IsIntroTraceApproximation h ρ) (n : ℕ) (t : ℝ) :
-    Differentiable ℂ (fun z ↦ introTraceApprox (h n) (ρ n) z t) := by sorry
+    Differentiable ℂ (fun z ↦ introTraceApprox (h n) (ρ n) z t) := by
+  obtain ⟨-, -, -, ε, -, hε⟩ := _hA
+  obtain ⟨-, hρc, -, hρs, -⟩ := hε n
+  have hρint : Integrable (ρ n) := hρc.continuous.integrable_of_hasCompactSupport
+    (isCompact_Icc.of_isClosed_subset (isClosed_tsupport _) hρs)
+  have hρm : Measurable fun u ↦ (ρ n u : ℂ) :=
+    Complex.measurable_ofReal.comp hρc.continuous.measurable
+  have hPm : ∀ z : ℂ, Measurable (introTracePower z) := fun z ↦
+    Measurable.ite measurableSet_Ioi (by fun_prop)
+      (Measurable.ite (measurableSet_singleton 1) measurable_const measurable_const)
+  have hu : ∀ u, ρ n u ≠ 0 → t - u ≤ t + ε n := fun u hu ↦ by
+    have := hρs (subset_tsupport _ hu)
+    linarith [this.1]
+  intro z₀
+  set K : ℝ := |z₀.re| + 1
+  set C : ℝ := |Real.log (t + ε n)| * |t + ε n| ^ K
+  set M : ℝ := max 1 (|t + ε n| ^ K)
+  have hpow : ∀ u, ∀ z ∈ Metric.ball z₀ 1, ρ n u ≠ 0 → 1 < t - u →
+      (t - u) ^ (-z.re) ≤ |t + ε n| ^ K := by
+    intro u z hz hρ h1
+    have hz' : |z.re - z₀.re| < 1 :=
+      (Complex.abs_re_le_norm (z - z₀)).trans_lt (by simpa [dist_eq_norm] using hz)
+    calc (t - u) ^ (-z.re) ≤ (t - u) ^ K := Real.rpow_le_rpow_of_exponent_le h1.le
+          (by linarith [(abs_lt.1 hz').1, neg_abs_le z₀.re])
+      _ ≤ |t + ε n| ^ K := Real.rpow_le_rpow (by linarith)
+          ((hu u hρ).trans (le_abs_self _)) (by positivity)
+  have hF_int : Integrable (fun u ↦ (ρ n u : ℂ) * introTracePower z₀ (t - u)) := by
+    refine Integrable.mono' (hρint.norm.mul_const M)
+      (hρm.mul ((hPm z₀).comp (measurable_const.sub measurable_id))).aestronglyMeasurable
+      (Eventually.of_forall fun u ↦ ?_)
+    by_cases hρ : ρ n u = 0
+    · simp [hρ]
+    rw [norm_mul, Complex.norm_real]
+    refine mul_le_mul_of_nonneg_left ?_ (norm_nonneg _)
+    unfold introTracePower
+    split_ifs with h1 h2
+    · rw [Complex.norm_cpow_eq_rpow_re_of_pos (by linarith), Complex.neg_re]
+      exact (hpow u z₀ (Metric.mem_ball_self one_pos) hρ h1).trans (le_max_right _ _)
+    · exact le_trans (by norm_num) (le_max_left _ _)
+    · simpa using (zero_le_one.trans (le_max_left _ _) : (0 : ℝ) ≤ M)
+  have hF'_meas : AEStronglyMeasurable (fun u : ℝ ↦ (ρ n u : ℂ) *
+      if 1 < t - u then ((t - u : ℝ) : ℂ) ^ (-z₀) * Complex.log ((t - u : ℝ) : ℂ) * (-1)
+      else 0) volume :=
+    (hρm.mul (Measurable.ite (measurableSet_lt measurable_const
+      (measurable_const.sub measurable_id)) (by fun_prop) measurable_const)).aestronglyMeasurable
+  have h_bound : ∀ᵐ u ∂volume, ∀ z ∈ Metric.ball z₀ 1, ‖(ρ n u : ℂ) *
+      (if 1 < t - u then ((t - u : ℝ) : ℂ) ^ (-z) * Complex.log ((t - u : ℝ) : ℂ) * (-1)
+        else 0)‖ ≤ ‖ρ n u‖ * C := by
+    refine Eventually.of_forall fun u z hz ↦ ?_
+    rw [norm_mul, Complex.norm_real]
+    by_cases hρ : ρ n u = 0
+    · simp [hρ]
+    refine mul_le_mul_of_nonneg_left ?_ (norm_nonneg _)
+    split_ifs with h1
+    · have hc : 0 < t - u := by linarith
+      rw [norm_mul, norm_mul, norm_neg, norm_one, mul_one,
+        Complex.norm_cpow_eq_rpow_re_of_pos hc, Complex.neg_re, ← Complex.ofReal_log hc.le,
+        Complex.norm_real, Real.norm_eq_abs, mul_comm]
+      refine mul_le_mul ?_ (hpow u z hz hρ h1) (by positivity) (abs_nonneg _)
+      rw [abs_of_nonneg (Real.log_nonneg h1.le)]
+      exact (Real.log_le_log hc (hu u hρ)).trans (le_abs_self _)
+    · simp only [norm_zero]
+      positivity
+  have h_diff : ∀ᵐ u ∂volume, ∀ z ∈ Metric.ball z₀ 1,
+      HasDerivAt (fun z ↦ (ρ n u : ℂ) * introTracePower z (t - u)) ((ρ n u : ℂ) *
+        (if 1 < t - u then ((t - u : ℝ) : ℂ) ^ (-z) * Complex.log ((t - u : ℝ) : ℂ) * (-1)
+          else 0)) z := by
+    refine Eventually.of_forall fun u z _ ↦ ?_
+    split_ifs with h1
+    · have hfun : (fun z ↦ (ρ n u : ℂ) * introTracePower z (t - u)) =
+          fun z ↦ (ρ n u : ℂ) * ((t - u : ℝ) : ℂ) ^ (-z) := by
+        funext z
+        simp [introTracePower, h1]
+      rw [hfun]
+      exact ((hasDerivAt_neg z).const_cpow
+        (Or.inl (Complex.ofReal_ne_zero.2 (by linarith)))).const_mul _
+    · have hfun : (fun z ↦ (ρ n u : ℂ) * introTracePower z (t - u)) =
+          fun _ ↦ (ρ n u : ℂ) * introTracePower 0 (t - u) := by
+        funext z
+        simp [introTracePower, h1]
+      rw [hfun]
+      exact (hasDerivAt_const z _).const_mul _
+  have key := hasDerivAt_integral_of_dominated_loc_of_deriv_le
+    (Metric.ball_mem_nhds z₀ one_pos)
+    (Eventually.of_forall fun z ↦ (hρm.mul
+      ((hPm z).comp (measurable_const.sub measurable_id))).aestronglyMeasurable)
+    hF_int hF'_meas h_bound (hρint.norm.mul_const C) h_diff
+  exact (differentiableAt_const _).mul key.2.differentiableAt
 
 /-- Paper: §1.4.2, pp. 28–29. After twisting by the conjugate character
 the approximant is a compactly supported Bruhat test on the idele classes. -/

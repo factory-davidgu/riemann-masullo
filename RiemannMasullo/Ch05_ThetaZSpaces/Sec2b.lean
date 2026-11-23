@@ -1366,12 +1366,58 @@ local instance normOneSIdeleQuotientMeasurableSpaceSec2b (F : Type*) [Field F]
 -- equicontinuity. Use the jointly continuous action on the theta quotient and compactness.
 -- The Tamagawa averages act on their isotypes by Haar mass.
 
+/-- On a compact group the character twist is itself a jointly continuous action,
+and compactness makes its operators equicontinuous at zero. -/
+private theorem existsUnique_globalThetaIsotypicAverage_of_compact {H E : Type*}
+    [CommGroup H] [TopologicalSpace H] [IsTopologicalGroup H] (G : Subgroup H)
+    [T2Space G] [CompactSpace G] [MeasurableSpace G] [BorelSpace G]
+    [AddCommGroup E] [Module ℂ E] [TopologicalSpace E] [IsTopologicalAddGroup E]
+    [T2Space E] [ContinuousSMul ℂ E] [PolynormableSpace ℂ E]
+    (hc : @CompleteSpace E (IsTopologicalAddGroup.rightUniformSpace E))
+    (μ : Measure G) [μ.IsHaarMeasure] (ρ : H →* (E →L[ℂ] E))
+    (hρ : Continuous fun p : H × E ↦ ρ p.1 p.2) (ω : PontryaginDual G) :
+    ∃! P : E →L[ℂ] E, IsPettisIsotypicAverageOn μ Set.univ (ρ.comp G.subtype) ω P := by
+  let : UniformSpace E := IsTopologicalAddGroup.rightUniformSpace E
+  let : IsUniformAddGroup E := isUniformAddGroup_of_addCommGroup
+  let : CompleteSpace E := hc
+  let : Module ℝ E := Module.restrictScalars ℝ ℂ E
+  let : IsScalarTower ℝ ℂ E := IsScalarTower.restrictScalars ℝ ℂ E
+  let : LocallyConvexSpace ℝ E := (PolynormableSpace.withSeminorms ℂ E).toLocallyConvexSpace
+  let τ : G →* (E →L[ℂ] E) :=
+    { toFun := fun g ↦ star (ω g : ℂ) • (ρ.comp G.subtype) g
+      map_one' := by simp
+      map_mul' := fun g h ↦ by simp only [map_mul, Circle.coe_mul, star_mul', smul_mul_smul_comm] }
+  have hτ : Continuous (fun p : G × E ↦ τ p.1 p.2) :=
+    (show Continuous (fun p : G × E ↦ star (ω p.1 : ℂ)) from by fun_prop).smul
+      (hρ.comp ((continuous_subtype_val.comp continuous_fst).prodMk continuous_snd))
+  have heq : EquicontinuousAt (fun g : G ↦ (τ g : E → E)) 0 := by
+    intro U hU
+    obtain ⟨W, hW, h⟩ := (isCompact_univ (X := G)).mem_uniformity_of_prod
+      (f := fun x g ↦ τ g x) (s := Set.univ) (q := (0 : E))
+      (hτ.comp continuous_swap).continuousOn (Set.mem_univ _) (symm_le_uniformity hU)
+    rw [nhdsWithin_univ] at hW
+    exact Filter.mem_of_superset hW fun x hx g ↦ h x hx g (Set.mem_univ g)
+  have hτ_apply (g : G) (x : E) : τ g x = star (ω g : ℂ) • (ρ.comp G.subtype) g x := rfl
+  simpa only [IsPettisIsotypicAverageOn, PontryaginDual.one_apply, Circle.coe_one,
+    star_one, one_smul, hτ_apply] using existsUnique_compactActionAverage μ τ hτ (Or.inl heq)
+
 /-- Paper: Proposition 5.2.3.2(1), p. 236.
 There is a unique continuous linear global Pettis average with the norm-one
 Tamagawa measure and the conjugate character weight. -/
 theorem existsUnique_globalThetaIsotypicAverage (ω : PontryaginDual C₁) :
     ∃! P : Θ𝔽 →L[ℂ] Θ𝔽,
-      IsPettisIsotypicAverageOn μ𝔽₁ Set.univ ρ𝔽₁ ω P := by sorry
+      IsPettisIsotypicAverageOn μ𝔽₁ Set.univ ρ𝔽₁ ω P := by
+  let : BorelSpace C𝔽 := ⟨rfl⟩
+  let : T2Space C₁ := (ideleClassGroup_finiteness F).2.2.1
+  let : CompactSpace C₁ := (ideleClassGroup_finiteness F).2.1
+  let : (μ𝔽₁).IsHaarMeasure :=
+    (multiplicativeTamagawaMeasures_existsUnique F).exists.choose_spec.2.2.2.1
+  let : T2Space Θ𝔽 := globalAdelicThetaSpace_t2_of_isClosed (adelicTheta_ker_isClosed (F := F))
+  let : PolynormableSpace ℂ Θ𝔽 := globalAdelicThetaSpace_polynormable (F := F)
+  with_reducible_and_instances
+    exact existsUnique_globalThetaIsotypicAverage_of_compact (H := C𝔽) (E := Θ𝔽) (ideleClassNorm F).ker
+      (globalAdelicThetaSpace_complete (F := F)) μ𝔽₁ ρ𝔽
+      (existsUnique_globalThetaAction (F := F)).exists.choose_spec.1 ω
 
 /-- Paper: Proposition 5.2.3.2(1), p. 236.
 There is a unique continuous linear S-local Pettis average with the norm-one

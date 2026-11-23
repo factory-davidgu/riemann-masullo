@@ -1432,16 +1432,6 @@ local notation "Loutside" => (fun s : ℂ ↦ (∏ v ∈ S, (finiteHeckeEulerFac
 
 include hL hSeries
 
-/-- Paper: Theorem B.6.1.7, p. 641. Each sufficiently high open unit interval
-contains a height at which the Euler product outside `S` has a polynomial
-lower bound on the whole horizontal segment from real part `-1` to `2`.
-Deviation: The finite set records only finite places. All archimedean factors
-have already been removed from `L`. -/
-theorem finiteHeckeL_outside_exists_horizontal_lower_bound :
-    ∃ A : ℝ, 0 < A ∧ ∀ᶠ T : ℝ in atTop, ∃ t ∈ Ioo T (T + 1),
-      ∀ σ ∈ Icc (-1 : ℝ) 2, |t| ^ (-A) < ‖Loutside ⟨σ, t⟩‖ := by
-  sorry
-
 /-- Paper: Theorem B.6.1.7, p. 641. The polynomial lower bound holds on a
 closed unit interval outside a measurable set of length `1 / B`, with the
 large-height threshold independent of `B > 1`.
@@ -1454,6 +1444,33 @@ theorem finiteHeckeL_outside_horizontal_lower_bound_off_small_set :
         ∀ t ∈ Icc T (T + 1) \ E, ∀ σ ∈ Icc (-1 : ℝ) 2,
           T ^ (-(A * B)) < ‖Loutside ⟨σ, t⟩‖ := by
   sorry
+
+/-- Paper: Theorem B.6.1.7, p. 641. Each sufficiently high open unit interval
+contains a height at which the Euler product outside `S` has a polynomial
+lower bound on the whole horizontal segment from real part `-1` to `2`.
+Deviation: The finite set records only finite places. All archimedean factors
+have already been removed from `L`. -/
+theorem finiteHeckeL_outside_exists_horizontal_lower_bound :
+    ∃ A : ℝ, 0 < A ∧ ∀ᶠ T : ℝ in atTop, ∃ t ∈ Ioo T (T + 1),
+      ∀ σ ∈ Icc (-1 : ℝ) 2, |t| ^ (-A) < ‖Loutside ⟨σ, t⟩‖ := by
+  obtain ⟨A, hA, hev⟩ :=
+    finiteHeckeL_outside_horizontal_lower_bound_off_small_set χ L S hL hSeries
+  refine ⟨A * 2, by positivity, ?_⟩
+  filter_upwards [hev, eventually_ge_atTop (1 : ℝ)] with T hT hT1
+  obtain ⟨E, -, -, hEvol, hE⟩ := hT 2 one_lt_two
+  have hne : (Ioo T (T + 1) \ E).Nonempty := by
+    by_contra h
+    have hsub : Ioo T (T + 1) ⊆ E := fun x hx ↦ by
+      by_contra hxE
+      exact h ⟨x, hx, hxE⟩
+    have h1 := measure_mono (μ := volume) hsub
+    rw [Real.volume_Ioo, hEvol] at h1
+    have h2 := (ENNReal.ofReal_le_ofReal_iff (by norm_num)).mp h1
+    norm_num at h2
+  obtain ⟨t, ht, htE⟩ := hne
+  refine ⟨t, ht, fun σ hσ ↦ lt_of_le_of_lt ?_ (hE t ⟨Ioo_subset_Icc_self ht, htE⟩ σ hσ)⟩
+  rw [abs_of_pos (by linarith [ht.1])]
+  exact Real.rpow_le_rpow_of_nonpos (by linarith) ht.1.le (by nlinarith)
 
 -- TODO(paper-gap): The exponent in (B.6.1.38) must account for the left edge
 -- of the strip. The basepoint for the integration in (B.6.1.43) is log Loutside(2 + it).

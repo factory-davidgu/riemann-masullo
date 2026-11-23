@@ -301,6 +301,61 @@ theorem finitePlaceDifference_eq_of_unitInvariant (v : V) (π π' : Fᵥ(v)ˣ)
     rw [mul_inv_rev, inv_inv, mul_right_comm, mul_inv_cancel, one_mul]] at h
   exact congrArg (fun a ↦ f x - a) h
 
+/-- A test vanishing at zero meets only finitely many valuation shells in its support. -/
+private theorem finitePlaceDifference_range_on_unitInvariants_finite (v : V) (f : ℬ(Fᵥ(v)))
+    (h₀ : f (Multiplicative.ofAdd 0) = 0) :
+    ∃ I : Finset ℤ, ∀ x : Fᵥ(v), f (Multiplicative.ofAdd x) ≠ 0 → (vval(v) x).log ∈ I := by
+  classical
+  let k (x : Fᵥ(v)) := f (Multiplicative.ofAdd x)
+  obtain ⟨hl, hc⟩ := (mem_finitePlaceSchwartz_iff F v k).1 ⟨f, fun _ ↦ rfl⟩
+  have hclosed : IsClosed (support k) := (hl.isClopen_fiber 0).isOpen.isClosed_compl
+  have hcomp : IsCompact (support k) := hclosed.closure_eq ▸ hc
+  let : CompactSpace (support k) := isCompact_iff_compactSpace.mp hcomp
+  let a (x : support k) := (vval(v) x.val).log
+  have ha : IsLocallyConstant a := by
+    apply (IsLocallyConstant.iff_eventually_eq _).mpr
+    intro x
+    have hx : x.val ≠ 0 := fun h ↦ x.property (h ▸ h₀)
+    have hv := Valued.locally_const ((Valuation.ne_zero_iff vval(v)).mpr hx)
+    filter_upwards [continuous_subtype_val.continuousAt hv] with y hy
+    exact congrArg WithZero.log hy
+  exact ⟨ha.range_finite.toFinset, fun x hx ↦ ha.range_finite.mem_toFinset.mpr ⟨⟨x, hx⟩, rfl⟩⟩
+
+private theorem finitePlaceDifference_range_on_unitInvariants_radial (v : V) (f : ℬ(Fᵥ(v)))
+    (hf : ∀ u ∈ Uᵥ(v), schwartzBruhatUnitTranslate u f = f) (x y : Fᵥ(v))
+    (hx : x ≠ 0) (hy : y ≠ 0) (he : vval(v) x = vval(v) y) :
+    f (Multiplicative.ofAdd x) = f (Multiplicative.ofAdd y) := by
+  let u := Units.mk0 x hx / Units.mk0 y hy
+  have hu : u ∈ Uᵥ(v) := HeightOneSpectrum.adicCompletionIntegers.mem_units_iff_valued_eq_one.mpr
+    (show vval(v) (x / y) = 1 by rw [map_div₀, he, div_self ((Valuation.ne_zero_iff _).mpr hy)])
+  have h := congrArg (fun g : ℬ(Fᵥ(v)) ↦ g (Multiplicative.ofAdd y)) (hf u⁻¹ (Uᵥ(v).inv_mem hu))
+  simpa only [schwartzBruhatUnitTranslate_apply, inv_inv, Units.val_div_eq_div_val,
+    Units.val_mk0, div_mul_cancel₀ _ hy, u] using h
+
+private theorem finitePlaceDifference_range_on_unitInvariants_ball (v : V) (n : ℤ) (c : ℂ) :
+    ∃ g : ℬ(Fᵥ(v)), ∀ x : Fᵥ(v), g (Multiplicative.ofAdd x) =
+      if vval(v) x ≤ WithZero.exp n then c else 0 := by
+  classical
+  obtain ⟨t, ht⟩ := v.valuedAdicCompletion_surjective F (WithZero.exp n)
+  have ht₀ : t ≠ 0 := fun h ↦ WithZero.exp_ne_zero (ht.symm.trans (h ▸ map_zero _))
+  refine ⟨c • schwartzBruhatUnitTranslate (Units.mk0 t ht₀) (finiteStandardGaussian v 1), fun x ↦ ?_⟩
+  have hx : t⁻¹ * x ∈ v.adicCompletionIntegers F ↔ vval(v) x ≤ WithZero.exp n := by
+    rw [HeightOneSpectrum.mem_adicCompletionIntegers, map_mul, map_inv₀, ht, inv_mul_le_one₀]
+    exact zero_lt_iff.mpr WithZero.exp_ne_zero
+  change c * finiteStandardGaussianValue v 1 (t⁻¹ * x) = _
+  unfold finiteStandardGaussianValue
+  rw [ite_eq_left (show ∀ u ∈ Uᵥ(v), (1 : QuasiCharacter Fᵥ(v)ˣ) u = 1 from fun _ _ ↦ rfl)]
+  by_cases h : t⁻¹ * x ∈ v.adicCompletionIntegers F
+  · rw [indicator_of_mem h, mul_one, ite_eq_left (hx.mp h)]
+  · rw [indicator_of_notMem h, mul_zero, ite_eq_right (fun hv ↦ h (hx.mpr hv))]
+
+private theorem finitePlaceDifference_range_on_unitInvariants_step (m n : ℤ) (c : ℂ) :
+    (if WithZero.exp m ≤ WithZero.exp n then c else 0) -
+      (if WithZero.exp 1 * WithZero.exp m ≤ WithZero.exp n then c else 0) =
+      if n = m then c else 0 := by
+  simp only [← WithZero.exp_add, WithZero.exp_le_exp]
+  split_ifs <;> first | omega | simp_all
+
 /-- Paper: Lemma 5.3.1.1, p. 240.
 The image of the integer-unit-invariant subspace under the local difference consists of the
 integer-unit-invariant functions vanishing at zero.
@@ -309,7 +364,70 @@ theorem finitePlaceDifference_range_on_unitInvariants (v : V) (π : Fᵥ(v)ˣ)
     (hπ : vval(v).IsUniformizer π.val) :
     finitePlaceDifference v π '' {f | ∀ u ∈ Uᵥ(v), schwartzBruhatUnitTranslate u f = f} =
       {f | (∀ u ∈ Uᵥ(v), schwartzBruhatUnitTranslate u f = f) ∧
-        f (Multiplicative.ofAdd 0) = 0} := by sorry
+        f (Multiplicative.ofAdd 0) = 0} := by
+  classical
+  apply Set.Subset.antisymm
+  · rintro _ ⟨f, hf, rfl⟩
+    have h (u : Fᵥ(v)ˣ) (hu : u ∈ Uᵥ(v)) (y : Fᵥ(v)) :
+        f (Multiplicative.ofAdd ((↑u⁻¹ : Fᵥ(v)) * y)) = f (Multiplicative.ofAdd y) :=
+      congrArg (fun k : ℬ(Fᵥ(v)) ↦ k (Multiplicative.ofAdd y)) (hf u hu)
+    constructor
+    · intro u hu
+      apply Subtype.ext
+      funext x
+      change f (Multiplicative.ofAdd ((↑u⁻¹ : Fᵥ(v)) * x.toAdd)) -
+        f (Multiplicative.ofAdd ((↑π⁻¹ : Fᵥ(v)) * ((↑u⁻¹ : Fᵥ(v)) * x.toAdd))) = _
+      exact congrArg₂ (· - ·) (h u hu x.toAdd)
+        ((congrArg (fun z ↦ f (Multiplicative.ofAdd z))
+          (mul_left_comm (↑π⁻¹ : Fᵥ(v)) (↑u⁻¹ : Fᵥ(v)) x.toAdd)).trans
+            (h u hu ((↑π⁻¹ : Fᵥ(v)) * x.toAdd)))
+    · change f (Multiplicative.ofAdd 0) - f (Multiplicative.ofAdd ((↑π⁻¹ : Fᵥ(v)) * 0)) = 0
+      simp
+  · rintro f ⟨hf, h₀⟩
+    have H := finitePlaceDifference_range_on_unitInvariants_finite (F := F) v f h₀
+    let I := H.choose
+    have hI := H.choose_spec
+    choose t ht using fun n : ℤ ↦ v.valuedAdicCompletion_surjective F (WithZero.exp n)
+    let c (n : ℤ) := f (Multiplicative.ofAdd (t n))
+    choose b hb using fun n : ℤ ↦ finitePlaceDifference_range_on_unitInvariants_ball (F := F) v n (c n)
+    -- Each weighted ball contributes its boundary shell under the difference.
+    let g := ∑ n ∈ I, b n
+    have hg (x : Fᵥ(v)) : g (Multiplicative.ofAdd x) =
+        ∑ n ∈ I, if vval(v) x ≤ WithZero.exp n then c n else 0 := by
+      calc
+        _ = ∑ n ∈ I, b n (Multiplicative.ofAdd x) :=
+          map_sum ((LinearMap.proj (Multiplicative.ofAdd x)).comp
+            (schwartzBruhatSubmodule (Multiplicative Fᵥ(v))).subtype) b I
+        _ = _ := Finset.sum_congr rfl fun i _ ↦ hb i x
+    refine ⟨g, ?_, ?_⟩
+    · intro u hu
+      have hu₁ := HeightOneSpectrum.adicCompletionIntegers.mem_units_iff_valued_eq_one.mp
+        (Uᵥ(v).inv_mem hu)
+      apply Subtype.ext
+      funext x
+      change g (Multiplicative.ofAdd ((↑u⁻¹ : Fᵥ(v)) * x.toAdd)) = g (Multiplicative.ofAdd x.toAdd)
+      rw [hg, hg, map_mul, hu₁, one_mul]
+    · have hπv : vval(v) π.val = WithZero.exp (-1 : ℤ) := hπ.trans
+        (congrArg Units.val (Valuation.IsRankOneDiscrete.generator_eq_exp_neg_one_of_surjective
+          (v.valuedAdicCompletion_surjective F)))
+      have hπi : vval(v) (↑π⁻¹ : Fᵥ(v)) = WithZero.exp 1 := by
+        rw [Units.val_inv_eq_inv_val, map_inv₀, hπv, ← WithZero.exp_neg, neg_neg]
+      apply Subtype.ext
+      funext x
+      change g (Multiplicative.ofAdd x.toAdd) -
+        g (Multiplicative.ofAdd ((↑π⁻¹ : Fᵥ(v)) * x.toAdd)) = f (Multiplicative.ofAdd x.toAdd)
+      by_cases hx : x.toAdd = 0
+      · simp only [hx, mul_zero, sub_self, h₀]
+      let m := (vval(v) x.toAdd).log
+      have hm : WithZero.exp m = vval(v) x.toAdd :=
+        WithZero.exp_log ((Valuation.ne_zero_iff _).mpr hx)
+      rw [hg, hg, map_mul, hπi, ← hm, ← Finset.sum_sub_distrib]
+      simp only [finitePlaceDifference_range_on_unitInvariants_step, Finset.sum_ite_eq']
+      by_cases hi : m ∈ I
+      · rw [ite_eq_left hi]
+        have htm : t m ≠ 0 := fun e ↦ WithZero.exp_ne_zero ((ht m).symm.trans (e ▸ map_zero _))
+        exact finitePlaceDifference_range_on_unitInvariants_radial (F := F) v f hf _ _ htm hx ((ht m).trans hm)
+      · exact (ite_eq_right hi).trans (not_ne_iff.mp (fun h ↦ hi (hI _ h))).symm
 
 -- TODO(paper-gap): At the trivial quasi-character, the eigendistribution in (5.3.1.3)
 -- is a multiple of Dirac evaluation and vanishes on the integer-unit indicator.
